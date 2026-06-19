@@ -1,0 +1,19 @@
+# FlightWatch configuration
+# Scan the SAME itineraries every day so we build booking curves over time.
+# Tip: keep this list small and dense (a handful of date-pairs) rather than a
+# huge grid -- daily depth on a few routes beats sparse coverage of many.
+
+currency: NZD
+adults: 1
+max_offers_per_search: 5
+delay_seconds: 1.0          # polite pause between API calls
+
+itineraries:
+  # Seeded from the June fare analysis (cheapest observed windows).
+  - {origin: CHC, destination: CMB, depart_date: 2026-09-01, return_date: 2026-09-22}
+  - {origin: CHC, destination: CMB, depart_date: 2026-09-03, return_date: 2026-09-24}
+  - {origin: CHC, destination: CMB, depart_date: 2026-08-27, return_date: 2026-09-17}
+  - {origin: CHC, destination: CMB, depart_date: 2026-09-08, return_date: 2026-10-15}
+  - {origin: CHC, destination: CMB, depart_date: 2026-09-15, return_date: 2026-10-24}
+  # Add more routes here to grow the public dataset, e.g.:
+  # - {origin: AKL, destination: CMB, depart_date: 2026-09-01, return_date: 2026-09-22}

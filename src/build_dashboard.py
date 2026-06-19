@@ -1,0 +1,146 @@
+"""
+Generates docs/index.html (served free by GitHub Pages) from the accumulated data.
+Self-contained: embeds the data as JSON and loads Chart.js from a CDN.
+Handles the empty / early-days case gracefully.
+"""
+
+import os
+import sys
+import json
+from datetime import datetime
+
+import pandas as pd
+
+sys.path.insert(0, os.path.dirname(__file__))
+import storage
+import predict
+
+DOCS = os.path.join(os.path.dirname(__file__), "..", "docs")
+
+
+def build():
+    df = storage.load_all()
+    recs = predict.recommendations(df)
+
+    # Per-itinerary price history for sparklines/charts
+    history = {}
+    if not df.empty:
+        ok = df[df["status"] == "ok"].copy()
+        ok["itin"] = ok["origin"] + "-" + ok["destination"] + " " + \
+                     ok["depart_date"].astype(str) + " -> " + ok["return_date"].astype(str)
+        for itin, h in ok.sort_values("scan_date").groupby("itin"):
+            history[itin] = [{"d": d.strftime("%Y-%m-%d"), "p": float(p)}
+                             for d, p in zip(h["scan_date"], h["price"])]
+
+    model = predict.train_model(df) if not df.empty else None
+    payload = {
+        "generated": datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC"),
+        "recs": recs,
+        "history": history,
+        "total_obs": int((df["status"] == "ok").sum()) if not df.empty else 0,
+        "scans": int(df["scan_date"].nunique()) if not df.empty else 0,
+        "model": {"mae": round(model["mae"]), "n": model["n"]} if model else None,
+        "currency": (df[df["status"] == "ok"]["currency"].iloc[0]
+                     if not df.empty and (df["status"] == "ok").any() else "NZD"),
+    }
+
+    os.makedirs(DOCS, exist_ok=True)
+    with open(os.path.join(DOCS, "index.html"), "w") as f:
+        f.write(_html(payload))
+    print(f"Dashboard built: {payload['scans']} scans, {payload['total_obs']} priced observations.")
+
+
+def _np(o):
+    """Make numpy scalar types JSON-serializable."""
+    if hasattr(o, "item"):
+        return o.item()
+    raise TypeError(f"not serializable: {type(o)}")
+
+
+def _html(p):
+    data = json.dumps(p, default=_np)
+    return r'''<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FlightWatch &middot; CHC &harr; CMB fare tracker</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0E1525;--panel:#161F38;--line:#2A375C;--ink:#EAEFFA;--muted:#8B9AC0;--dim:#5E6E94;
+--buy:#3FD0C9;--wait:#FFB347;--watch:#7E8DB5;--gold:#F5C451}
+*{margin:0;box-sizing:border-box}body{background:var(--bg);color:var(--ink);
+font-family:'Space Grotesk',system-ui,sans-serif;line-height:1.5}
+.mono{font-family:'IBM Plex Mono',monospace}
+.wrap{max-width:1000px;margin:0 auto;padding:36px 20px 80px}
+.eyebrow{font-family:'IBM Plex Mono',monospace;letter-spacing:.3em;color:var(--buy);font-size:12px}
+h1{font-size:30px;font-weight:700;margin:6px 0;letter-spacing:-.5px}
+.sub{color:var(--muted);font-size:14px}
+.meta{color:var(--dim);font-size:12px;font-family:'IBM Plex Mono',monospace;margin-top:8px}
+.empty{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:40px;text-align:center;margin-top:28px}
+.empty h2{font-size:20px;margin-bottom:8px}.empty p{color:var(--muted);max-width:520px;margin:0 auto}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px 20px;margin-top:14px;
+display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+.sig{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:13px;padding:5px 12px;border-radius:20px;white-space:nowrap}
+.BUY{background:rgba(63,208,201,.15);color:var(--buy);border:1px solid var(--buy)}
+.WAIT{background:rgba(255,179,71,.12);color:var(--wait);border:1px solid var(--wait)}
+.WATCH{background:rgba(126,141,181,.12);color:var(--watch);border:1px solid var(--watch)}
+.itin{font-weight:600;font-size:15px}.reason{color:var(--muted);font-size:13px;margin-top:2px}
+.price{font-family:'IBM Plex Mono',monospace;font-size:24px;font-weight:600;margin-left:auto}
+.pricelbl{color:var(--dim);font-size:11px;font-family:'IBM Plex Mono',monospace;text-align:right}
+.spark{width:120px;height:40px}
+.section{font-family:'IBM Plex Mono',monospace;letter-spacing:.2em;color:var(--dim);font-size:12px;
+text-transform:uppercase;margin:36px 0 10px;display:flex;gap:12px;align-items:center}
+.section:after{content:"";flex:1;height:1px;background:var(--line)}
+.foot{color:var(--dim);font-size:12px;margin-top:40px;border-top:1px solid var(--line);padding-top:16px;line-height:1.7}
+a{color:var(--buy)}
+</style></head><body><div class="wrap">
+<div class="eyebrow">CHC &#8644; CMB &middot; OPEN FARE TRACKER</div>
+<h1>FlightWatch</h1>
+<div class="sub">Daily fares for the Christchurch &harr; Colombo corridor, with a buy / wait signal.</div>
+<div class="meta" id="meta"></div>
+<div id="body"></div>
+<div class="foot">
+Updated automatically once a day via GitHub Actions. Signals are derived from each route's own
+observed price history and are informational only &mdash; verify the live fare before booking.
+Data is open: see the <code>data/</code> folder in the repository.
+</div>
+</div>
+<script>
+const D = ''' + data + r''';
+const fmt = n => D.currency + Math.round(n).toLocaleString();
+const meta = document.getElementById('meta');
+meta.textContent = D.scans + ' daily scans \u00b7 ' + D.total_obs + ' priced observations \u00b7 built ' + D.generated +
+  (D.model ? ' \u00b7 model \u00b1' + fmt(D.model.mae) : '');
+const body = document.getElementById('body');
+
+if(!D.recs.length){
+  body.innerHTML = '<div class="empty"><h2>Collecting data\u2026</h2>'+
+    '<p>The tracker has just started. Recommendations appear once each route has a few days of '+
+    'price history (usually within a week). Come back soon \u2014 or check the data folder in the repo.</p></div>';
+}else{
+  body.innerHTML = '<div class="section">Today\u2019s recommendations</div>';
+  D.recs.forEach((r,i)=>{
+    const id='spark'+i;
+    body.insertAdjacentHTML('beforeend',
+      '<div class="card">'+
+        '<span class="sig '+r.signal+'">'+r.signal+'</span>'+
+        '<div><div class="itin">'+r.itinerary+'</div><div class="reason">'+r.reason+'</div></div>'+
+        '<canvas class="spark" id="'+id+'"></canvas>'+
+        '<div><div class="price">'+fmt(r.price)+'</div>'+
+          '<div class="pricelbl">low '+fmt(r.trailing_min)+' \u00b7 '+r.points+' pts</div></div>'+
+      '</div>');
+  });
+  // sparklines
+  D.recs.forEach((r,i)=>{
+    const h = D.history[r.itinerary]||[];
+    const c = document.getElementById('spark'+i); if(!c||h.length<2) return;
+    new Chart(c,{type:'line',data:{labels:h.map(x=>x.d),
+      datasets:[{data:h.map(x=>x.p),borderColor:'#3FD0C9',borderWidth:2,pointRadius:0,tension:.3,fill:false}]},
+      options:{responsive:false,plugins:{legend:{display:false},tooltip:{enabled:false}},
+        scales:{x:{display:false},y:{display:false}}}});
+  });
+}
+</script></body></html>'''
+
+
+if __name__ == "__main__":
+    build()

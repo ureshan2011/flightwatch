@@ -1,0 +1,42 @@
+name: daily-scan
+
+on:
+  schedule:
+    - cron: "0 19 * * *"      # 19:00 UTC daily (~7am NZ standard time). Adjust as you like.
+  workflow_dispatch:           # lets you trigger a run manually from the Actions tab
+
+permissions:
+  contents: write              # needed to commit the new data + dashboard back to the repo
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Collect fares
+        env:
+          AMADEUS_CLIENT_ID: ${{ secrets.AMADEUS_CLIENT_ID }}
+          AMADEUS_CLIENT_SECRET: ${{ secrets.AMADEUS_CLIENT_SECRET }}
+          AMADEUS_ENV: ${{ vars.AMADEUS_ENV || 'test' }}
+        run: python src/collect.py
+
+      - name: Build dashboard
+        run: python src/build_dashboard.py
+
+      - name: Commit data and dashboard
+        run: |
+          git config user.name  "flightwatch-bot"
+          git config user.email "actions@github.com"
+          git add data/ docs/
+          git diff --staged --quiet || git commit -m "Daily scan: $(date -u +%Y-%m-%d)"
+          git push
