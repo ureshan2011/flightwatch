@@ -396,19 +396,6 @@ h1 .grad{background:linear-gradient(100deg,var(--brand),var(--brand2) 46%,var(--
 .lchip b{font-family:'IBM Plex Mono',monospace;font-weight:600;display:block;color:var(--ink)}
 .lchip small{color:var(--dim);font-size:11px;display:block}
 
-/* vector flight arc accent (no image) */
-.arc{position:relative;height:120px;margin:0 6px 4px}
-.arc svg{width:100%;height:100%;overflow:visible}
-.arc .path{fill:none;stroke:url(#ag);stroke-width:2.4;stroke-dasharray:6 8;stroke-linecap:round;
-  animation:dash 16s linear infinite}
-@keyframes dash{to{stroke-dashoffset:-280}}
-.arc .ep{fill:#fff;stroke:var(--brand);stroke-width:3}
-.arc .ep2{stroke:var(--brand3)}
-.arc .pl{offset-path:path('M14 100 Q210 -16 406 64');offset-rotate:auto;animation:flyarc 6s ease-in-out infinite;
-  fill:var(--brand)}
-@keyframes flyarc{0%{offset-distance:0%}100%{offset-distance:100%}}
-.arc .lab{font-family:'IBM Plex Mono',monospace;font-size:11px;fill:var(--dim)}
-
 /* hero scroll cue */
 .cue{position:relative;z-index:1;display:flex;justify-content:center;margin-top:46px}
 .cue a{display:flex;flex-direction:column;align-items:center;gap:6px;color:var(--dim);
@@ -577,7 +564,7 @@ tr.best td{background:var(--buy-bg)}
 @media(prefers-reduced-motion:reduce){
   .reveal,.reveal-l,.reveal-r,.reveal-sc{opacity:1;transform:none;transition:none}
   .cbar>i,.bp-bar>i,.bp-plane{transition:none}
-  .blob,.bp.float,.arc .path,.arc .pl,.cue .ch,.tilt,.bp.tilt-3d,h1 .grad{animation:none}
+  .blob,.bp.float,.cue .ch,.tilt,.bp.tilt-3d,h1 .grad{animation:none}
 }
 </style></head><body>
 
@@ -602,13 +589,6 @@ tr.best td{background:var(--buy-bg)}
         <div class="chips" id="hchips"></div>
       </div>
       <div class="reveal-r">
-        <div class="arc"><svg viewBox="0 0 420 120" preserveAspectRatio="none">
-          <defs><linearGradient id="ag" x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0" stop-color="#2f6bff"/><stop offset="1" stop-color="#00b6d4"/></linearGradient></defs>
-          <path class="path" d="M14 100 Q210 -16 406 64"/>
-          <circle class="ep" cx="14" cy="100" r="6"/><circle class="ep ep2" cx="406" cy="64" r="6"/>
-          <g class="pl"><path d="M-9 0 L9 0 M0 -6 L11 0 L0 6" fill="none" stroke="#2f6bff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></g>
-        </svg></div>
         <div class="bpwrap"><div id="deal"></div></div>
       </div>
     </div>
