@@ -39,6 +39,7 @@ import os
 import re
 import random
 import time
+import asyncio
 
 from . import ROOT_DIR
 
@@ -82,6 +83,11 @@ _LAUNCH_ARGS = [
     "--disable-blink-features=AutomationControlled",
     "--disable-dev-shm-usage",
 ]
+
+
+def headless_mode() -> bool:
+    """Headless unless FLIGHTWATCH_HEADFUL=1 (CI runs headful under xvfb)."""
+    return os.environ.get("FLIGHTWATCH_HEADFUL", "") != "1"
 
 
 def _stealth_js(fp):
@@ -307,6 +313,11 @@ def search_flight_offers(origin, destination, depart_date, return_date,
     if not raw and last_err is not None:
         raise last_err
 
+    return _normalize_offers(raw, cur, max_offers)
+
+
+def _normalize_offers(raw, currency, max_offers):
+    """De-dupe, clean, price-sort and cap a list of raw scraped offers."""
     offers = []
     for o in _dedupe(raw):
         try:
@@ -317,13 +328,145 @@ def search_flight_offers(origin, destination, depart_date, return_date,
             continue
         offers.append({
             "price": price,
-            "currency": cur,
+            "currency": currency,
             "airline": (o.get("airline") or "")[:60],
             "stops": int(o.get("stops", 0) or 0),
             "duration_minutes": int(o.get("duration_minutes", 0) or 0),
         })
     offers.sort(key=lambda x: x["price"])
     return offers[:max_offers] if max_offers else offers
+
+
+# --------------------------------------------------------------------------- #
+# Async path: one shared browser, one lightweight context per itinerary.
+#
+# The collector drives this. Reusing a single Chromium across all itineraries --
+# instead of launching a whole browser per scrape -- cuts memory and start-up
+# cost dramatically, so we can run far more itineraries concurrently (and more
+# often) on the same free CI runner. Each context still gets its own rotating
+# fingerprint + stealth script, so Google sees varied browsers as before.
+# --------------------------------------------------------------------------- #
+async def _dismiss_consent_async(page):
+    for sel in ("button[aria-label*='Accept all' i]",
+                "button:has-text('Accept all')",
+                "button:has-text('I agree')",
+                "form[action*='consent'] button"):
+        try:
+            btn = await page.query_selector(sel)
+            if btn:
+                await btn.click()
+                await page.wait_for_timeout(1500)
+                return
+        except Exception:
+            pass
+
+
+async def _load_full_list_async(page):
+    """Async twin of _load_full_list: expand the whole results list into the DOM."""
+    more_selectors = (
+        "button:has-text('View more flights')",
+        "button:has-text('Show more flights')",
+        "button:has-text('More flights')",
+        "[aria-label*='more flights' i]",
+    )
+    last = -1
+    for _ in range(12):
+        for sel in more_selectors:
+            try:
+                btn = await page.query_selector(sel)
+                if btn and await btn.is_visible():
+                    await btn.click()
+                    await page.wait_for_timeout(1200)
+            except Exception:
+                pass
+        try:
+            await page.evaluate("() => window.scrollBy(0, document.body.scrollHeight)")
+        except Exception:
+            pass
+        await page.wait_for_timeout(800)
+        try:
+            count = await page.evaluate(
+                "() => document.querySelectorAll("
+                "'li [aria-label*=\"trip total\" i]').length")
+        except Exception:
+            count = last
+        if count <= last:
+            break
+        last = count
+
+
+async def _save_debug_async(page, tag):
+    try:
+        os.makedirs(DEBUG_DIR, exist_ok=True)
+        await page.screenshot(path=os.path.join(DEBUG_DIR, f"{tag}.png"), full_page=True)
+        html = await page.content()
+        with open(os.path.join(DEBUG_DIR, f"{tag}.html"), "w", encoding="utf-8") as f:
+            f.write(html)
+    except Exception:
+        pass
+
+
+async def _scrape_async(browser, url, fingerprint=None, debug_tag=None):
+    """Open one URL in a fresh context on the SHARED browser; return raw offers."""
+    fp = fingerprint or random.choice(_FINGERPRINTS)
+    vw, vh = fp["viewport"]
+    ctx = await browser.new_context(
+        user_agent=fp["ua"], locale=fp["locale"], timezone_id=fp["tz"],
+        viewport={"width": vw, "height": vh},
+        extra_http_headers={"Accept-Language": fp["lang"]},
+    )
+    await ctx.add_init_script(_stealth_js(fp))
+    page = await ctx.new_page()
+    offers = []
+    try:
+        await page.goto(url, wait_until="domcontentloaded", timeout=60000)
+        await _dismiss_consent_async(page)
+        try:
+            await page.wait_for_function(
+                "() => !!document.querySelector('[aria-label*=\"trip total\" i]')",
+                timeout=45000)
+        except Exception:
+            pass
+        await page.wait_for_timeout(1500)
+        await _load_full_list_async(page)
+        offers = await page.evaluate(_EXTRACT_JS) or []
+        if not offers and debug_tag:
+            await _save_debug_async(page, debug_tag)
+    finally:
+        await ctx.close()
+    return offers
+
+
+async def search_flight_offers_async(browser, origin, destination, depart_date,
+                                     return_date, adults=1, currency="NZD",
+                                     max_offers=50, market="nz", retries=3):
+    """Async twin of search_flight_offers that reuses a shared browser.
+
+    Returns the same normalised offer dicts. Each retry uses a different
+    fingerprint so a soft-block on one browser tag doesn't poison the rest.
+    """
+    url = _build_url(origin, destination, depart_date, return_date,
+                     adults, currency, market)
+    cur = (currency or "NZD").upper()
+    tag = f"{origin}-{destination}-{depart_date}"
+
+    fps = random.sample(_FINGERPRINTS, k=min(retries, len(_FINGERPRINTS)))
+    while len(fps) < retries:
+        fps.append(random.choice(_FINGERPRINTS))
+
+    raw, last_err = [], None
+    for attempt in range(max(retries, 1)):
+        try:
+            raw = await _scrape_async(browser, url, fingerprint=fps[attempt],
+                                      debug_tag=tag if attempt == retries - 1 else None)
+            if raw:
+                break
+        except Exception as e:
+            last_err = e
+        await asyncio.sleep(2 * (attempt + 1))
+    if not raw and last_err is not None:
+        raise last_err
+    return _normalize_offers(raw, cur, max_offers)
 
 
 def cheapest_offer(offers):

@@ -1,9 +1,19 @@
-name: daily-scan
+name: scan
 
 on:
   schedule:
-    - cron: "0 19 * * *"      # 19:00 UTC daily (~7am NZ standard time). Adjust as you like.
+    # Every 6 hours -> 4 intraday slots a day. Rows carry an hourly scan_slot, so
+    # these accumulate into an intraday booking curve instead of overwriting.
+    # NOTE: scheduled workflows only run on the DEFAULT branch -- this new cadence
+    # takes effect once merged there. Tune the frequency to taste (free for public
+    # repos); spacing runs >1h apart keeps each in its own slot.
+    - cron: "0 */6 * * *"
   workflow_dispatch:           # lets you trigger a run manually from the Actions tab
+
+# Queue overlapping runs instead of letting two jobs push at once.
+concurrency:
+  group: scan
+  cancel-in-progress: false
 
 permissions:
   contents: write              # needed to commit the new data + dashboard back to the repo
@@ -33,6 +43,17 @@ jobs:
           FLIGHTWATCH_HEADFUL: "1"
         run: xvfb-run -a python -m flightwatch all
 
+      - name: Send alerts (no-op unless secrets are set)
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          ALERT_EMAIL_TO: ${{ secrets.ALERT_EMAIL_TO }}
+        run: python -m flightwatch alert
+
       - name: Upload scrape debug artifacts (if any)
         if: always()
         uses: actions/upload-artifact@v4
@@ -47,5 +68,8 @@ jobs:
           git config user.name  "flightwatch-bot"
           git config user.email "actions@github.com"
           git add data/ docs/
-          git diff --staged --quiet || git commit -m "Daily scan: $(date -u +%Y-%m-%d)"
+          git diff --staged --quiet && { echo "no changes"; exit 0; }
+          git commit -m "Scan: $(date -u +%Y-%m-%dT%H:%MZ)"
+          # Land cleanly even if another slot's run pushed while we scraped.
+          git pull --rebase --autostash origin "${GITHUB_REF_NAME}" || true
           git push
