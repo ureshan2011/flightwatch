@@ -5,7 +5,7 @@ An open, free, self-hosting fare tracker for the **Christchurch ↔ Colombo** co
 a simple **buy / wait** signal on a public dashboard — all running for **$0** on
 GitHub's free tier.
 
-- **Data:** [Travelpayouts (Aviasales) Data API](https://www.travelpayouts.com/developers/api) (free, token only)
+- **Data:** [Travelpayouts (Aviasales) Data API](https://support.travelpayouts.com/hc/en-us/articles/203956163-Aviasales-Data-API) (free, token only)
 - **Automation:** GitHub Actions (free & unlimited for public repos)
 - **Hosting:** GitHub Pages (free)
 - **Dataset:** every observation is committed as plain CSV in `data/` — open for anyone
@@ -61,9 +61,17 @@ functions (`search_flight_offers` and `cheapest_offer`) and the rest is unchange
 ## Setup (about 15 minutes, all free)
 
 ### 1. Get a free Travelpayouts API token
-1. Sign up at <https://www.travelpayouts.com/developers/api>.
-2. Open your profile and copy your **API token** from the *API token* section.
+1. Sign up at <https://www.travelpayouts.com/> (free, no credit card — it's their
+   travel affiliate network, which is what gates API access).
+2. In your dashboard, open your profile and copy your **API token** from the
+   *API token* section. If you can't find it, follow their short guide:
+   [Where to find API token](https://support.travelpayouts.com/hc/en-us/articles/13024069738386-Where-to-find-API-token).
    That single token is all FlightWatch needs — there's no OAuth step or paid upgrade.
+
+> The token authorises the **Data API** (`aviasales/v3/prices_for_dates`), which
+> returns cheapest cached fares per route + date. It's available to every account;
+> only the separate real-time *Flights Search API* has a high traffic requirement,
+> and FlightWatch doesn't use it.
 
 ### 2. Create the repo
 1. Make a **public** GitHub repository (public = free Actions + Pages).

@@ -9,8 +9,10 @@ Why Travelpayouts instead of Amadeus?
     signal FlightWatch needs to build booking curves over time.
   - It is a plain HTTPS GET, so it runs comfortably inside a free GitHub Actions job.
 
-Get a free token at https://www.travelpayouts.com/developers/api and store it as
-the TRAVELPAYOUTS_TOKEN environment variable -- it is never committed.
+Get a free token by signing up at https://www.travelpayouts.com/ (free, no credit
+card) and copying the token from your dashboard's *API token* section -- see
+https://support.travelpayouts.com/hc/en-us/articles/13024069738386-Where-to-find-API-token
+Store it as the TRAVELPAYOUTS_TOKEN environment variable -- it is never committed.
 
 Docs: https://support.travelpayouts.com/hc/en-us/articles/203956163-Aviasales-Data-API
 
@@ -31,7 +33,8 @@ def _token() -> str:
     if not token:
         raise RuntimeError(
             "Missing TRAVELPAYOUTS_TOKEN environment variable. "
-            "Get a free token at https://www.travelpayouts.com/developers/api"
+            "Sign up free at https://www.travelpayouts.com/ and copy your token "
+            "from the dashboard's 'API token' section."
         )
     return token
 
