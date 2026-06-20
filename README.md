@@ -1,13 +1,17 @@
 # FlightWatch ✈
 
 An open, free, self-hosting fare tracker for the **Christchurch ↔ Colombo** corridor
-(and any route you add). It scrapes the **full** fare list once a day, builds a price
-history, forecasts where the fare is heading, and shows a **buy / wait** decision with
-a **confidence rate** on a public dashboard — all running for **$0** on GitHub's free tier.
+(and any route you add). It scrapes the **full** fare list **several times a day**,
+builds an **intraday** price history, forecasts where the fare is heading with a
+calibrated model, and shows a **buy / wait** decision with a **confidence rate** —
+plus deal scores, a predicted booking curve, a cheapest-day heatmap and free push
+alerts — all running for **$0** on GitHub's free tier.
 
-- **Data:** **Google Flights**, scraped with real headless browsers (Playwright) — no API key, no token, no paid proxy. It rotates several **browser fingerprints** and runs **multiple browsers in parallel**, harvesting **every** offer per scan (not just the cheapest) to build a large open dataset
-- **Automation:** GitHub Actions (free & unlimited for public repos)
-- **Hosting:** GitHub Pages (free)
+- **Data:** **Google Flights**, scraped with real headless browsers (Playwright) — no API key, no token, no paid proxy. One **shared** Chromium runs every itinerary concurrently (a lightweight context + rotating **fingerprint** each), harvesting **every** offer per scan to build a large open dataset
+- **Cadence:** multiple scans/day; rows carry an hourly `scan_slot` so intraday moves accumulate instead of overwriting
+- **Intelligence (100% offline):** quantile gradient-boosting + **split-conformal** bands, seasonality features, a walk-forward **backtest**, deal scores, anomaly detection, best-time-to-book and templated natural-language summaries — no LLM, no API cost
+- **Alerts:** optional free **Telegram / email** pushes for new lows, price drops and BUY calls
+- **Automation:** GitHub Actions (free & unlimited for public repos) · **Hosting:** GitHub Pages (free)
 - **Dataset:** every observation is committed as plain CSV in `data/` — open for anyone
 
 > Fares are informational. Always confirm the live price before booking.
@@ -28,17 +32,21 @@ a **confidence rate** on a public dashboard — all running for **$0** on GitHub
 ## How it works
 
 ```
-config.yaml ──► flightwatch/collect.py ──► data/flights_YYYY_MM.csv (append-only, time-stamped)
-                                                  │
-                     flightwatch/dashboard.py ──► docs/index.html  (GitHub Pages)
-                     flightwatch/predict.py ──────┘  (buy/wait signal)
+config.yaml ──► flightwatch/collect.py ──► data/flights_YYYY_MM.csv (append-only, intraday slots)
+                     (async, shared browser)        │
+                     flightwatch/predict.py ───►  model + backtest ┐
+                     flightwatch/analytics.py ─►  offline AI layer ┤
+                     flightwatch/dashboard.py ─►  docs/index.html  │ (GitHub Pages)
+                     flightwatch/alerts.py ────►  Telegram / email ┘ (optional)
 ```
 
-A GitHub Actions cron runs the collector daily. It scrapes each itinerary in parallel
-(each browser using a different fingerprint to dodge soft-blocks), appends **every**
-fare found as its own CSV row, retrains the forecast model, regenerates the dashboard,
-and commits everything back to the repo. Over weeks, the per-itinerary history becomes
-a *booking curve* — which is what makes a real "should I book now?" prediction possible.
+A GitHub Actions cron runs the collector several times a day. A single shared Chromium
+scrapes every itinerary concurrently (each context using a different fingerprint to
+dodge soft-blocks), appends **every** fare found as its own CSV row stamped with an
+hourly `scan_slot`, retrains the forecast model, regenerates the dashboard, sends any
+fresh alerts, and commits everything back to the repo. Over weeks, the per-itinerary
+history becomes an intraday *booking curve* — which is what makes a real "should I book
+now?" prediction (and an honest backtest of it) possible.
 
 ---
 
@@ -47,21 +55,24 @@ a *booking curve* — which is what makes a real "should I book now?" prediction
 ```
 flightwatch/            # the Python package (importable, no path hacks)
   __init__.py           #   shared paths (repo root, data/, docs/, config.yaml)
-  provider.py           #   fare source — Google Flights scraper (swap providers here)
-  collect.py            #   daily scan -> appends to data/
-  storage.py            #   append-only monthly CSVs with de-duplication
-  predict.py            #   forecast + buy/wait/watch decision with confidence (heuristic + quantile ML)
+  provider.py           #   fare source — Google Flights scraper, sync + async (swap providers here)
+  collect.py            #   async shared-browser scan -> appends to data/
+  storage.py            #   append-only monthly CSVs, intraday scan_slot de-duplication
+  predict.py            #   forecast + buy/wait/watch with conformal bands, seasonality, backtest
+  analytics.py          #   offline AI: deal scores, anomalies, heatmap, digest, narratives
   dashboard.py          #   renders docs/index.html
-  __main__.py           #   CLI:  python -m flightwatch [collect|build|all|diag]
-config.yaml             # what to track
+  alerts.py             #   optional free Telegram / email pushes
+  __main__.py           #   CLI:  python -m flightwatch [collect|build|all|alert|backtest|diag]
+config.yaml             # what to track + concurrency
 data/                   # the open dataset (monthly CSVs)
 docs/                   # the published dashboard (GitHub Pages)
-.github/workflows/      # the daily cron
+.github/workflows/      # the scan cron
+tests/                  # pytest suite (storage, model, analytics, alerts)
 ```
 
 Everything runs through the package, so the provider lives in exactly one file
-(`flightwatch/provider.py`). To use a different fare source later, keep its two
-functions (`search_flight_offers` and `cheapest_offer`) and the rest is unchanged.
+(`flightwatch/provider.py`). To use a different fare source later, keep its
+`search_flight_offers` / `search_flight_offers_async` shape and the rest is unchanged.
 
 ---
 
@@ -83,10 +94,10 @@ Folder: `/docs` → Save. Your dashboard will be at
 `https://<your-username>.github.io/<repo-name>/`.
 
 ### 4. Run it once
-Repo → **Actions** tab → **daily-scan** → **Run workflow**. The workflow installs a
+Repo → **Actions** tab → **scan** → **Run workflow**. The workflow installs a
 headless Chromium, scrapes each route, and commits the first data point to `data/`.
-From then on it runs automatically every day. If a run scrapes 0 fares, download the
-**scrape-debug** artifact from that run to see exactly what Google returned.
+From then on it runs automatically several times a day. If a run scrapes 0 fares,
+download the **scrape-debug** artifact from that run to see exactly what Google returned.
 
 ---
 
@@ -99,9 +110,13 @@ python -m playwright install --with-deps chromium   # one-time browser download
 python -m flightwatch collect    # one scrape -> appends to data/
 python -m flightwatch build      # regenerate docs/index.html
 python -m flightwatch all        # both at once
+python -m flightwatch alert      # push fresh signals (dry-prints if no secrets set)
+python -m flightwatch backtest   # how the engine's past calls actually fared
 python -m flightwatch diag       # scrape one route verbosely + save debug screenshot
 open docs/index.html
 ```
+
+Run the tests with `pytest` (they use synthetic data — no network or browser needed).
 
 Set `FLIGHTWATCH_HEADFUL=1` (the CI default, via `xvfb-run`) to drive a non-headless
 Chromium, which Google is less likely to soft-block than pure headless.
@@ -119,32 +134,55 @@ itineraries:
   - {origin: AKL, destination: CMB, depart_date: 2026-09-01, return_date: 2026-09-22}
 ```
 
-Change the scan time in `.github/workflows/daily-scan.yml` (`cron`, in UTC).
+Tune `concurrency` / `jitter_seconds` here too. Change the scan frequency in
+`.github/workflows/daily-scan.yml` (the `cron`, in UTC — currently every 6 hours).
+Scheduled runs only fire on the **default branch**, so a new cadence takes effect once
+it's merged there.
 
 ---
 
 ## The buy / wait decision (with confidence)
 
-`flightwatch/predict.py` is a small decision engine. While history is thin it uses a
+`flightwatch/predict.py` is the decision engine. While history is thin it uses a
 transparent **heuristic** (today's price vs the route's own min/median and days left)
 and honestly reports **low confidence**. Once there are enough cheapest-per-day
-observations (~120) it trains a **quantile gradient-boosting model** — 10th / 50th /
-90th percentile of the booking curve — so every call carries an uncertainty band, not
-just a point estimate.
+observations (~120) it trains gradient-boosting models over the booking curve with:
 
-Each recommendation exposes its full reasoning:
+- **Honest validation** — error is **time-series cross-validated** (`TimeSeriesSplit`,
+  forward-chaining), never a shuffled split that would leak the future and overstate skill.
+- **Calibrated bands** — a **split-conformal** interval whose width is learned from real
+  held-out residuals, so an "80% band" actually covers ~80% of outcomes.
+- **Seasonality features** — cyclical day-of-week / month / week-of-year encodings,
+  peak-season flags, lead-time buckets and a per-route price level.
 
-- **Signal** — **BUY** / **WAIT** / **WATCH**
-- **Confidence** — 0–100%, combining how much data exists with how decisive the signal is
-- **Forecast low** — the model's expected cheapest fare over the remaining window
-- **Expected savings** — how much waiting is predicted to save (for WAIT)
-- **Drop probability** — the chance the fare falls below today's price
+Each recommendation exposes its full reasoning — **signal** (BUY / WAIT / WATCH),
+**confidence** (0–100%), the **whole predicted forward curve** with bands, the expected
+**forecast low**, **expected savings** from waiting and the **drop probability**.
 
-The dashboard also renders **market insights** (cheapest / typical / range, airlines,
-nonstop availability per route) and the **latest cheapest offers** from each scan.
-The model's cross-validated error (±MAE) is shown so you can judge how much to trust it;
-expect it to sharpen as history accumulates and inside ~6–8 weeks of departure, when
-fares actually start moving.
+**Offline AI layer** (`flightwatch/analytics.py`, no LLM or API) adds, on the dashboard:
+
+- **Deal score** (0–100) for each route's current cheapest fare
+- **Predicted booking curve** fan chart + **best time to book**
+- **Cheapest day to fly** heatmap (which departure/return weekday is cheapest)
+- **What changed** since the last scan, and **anomaly** drop/spike detection
+- **Model accuracy** — a walk-forward **backtest** of whether past BUY/WAIT calls paid off
+- A per-route **natural-language summary** generated purely from the numbers
+
+…alongside the existing market insights and latest-offers tables.
+
+### Free push alerts (optional)
+
+`flightwatch/alerts.py` turns the freshest signals into Telegram / email notifications,
+de-duplicated via `data/alert_state.json`. It is a **no-op until you add secrets**, so
+the project stays free and runnable by anyone:
+
+- **Telegram** — message `@BotFather` to create a bot, then set repo **Settings → Secrets
+  and variables → Actions** secrets `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`.
+- **Email** (optional) — set `SMTP_HOST`, `SMTP_USER`, `SMTP_PASS`, `ALERT_EMAIL_TO`
+  (e.g. a Gmail address + app password).
+
+Alerts fire on a fresh all-time low, an unusual price drop, a new BUY call, or a
+"book now — window closing" nudge.
 
 ---
 
@@ -183,13 +221,15 @@ the run, so you can debug a remote run without reproducing it locally.
 
 | Piece | Service | Cost |
 |---|---|---|
-| Daily automation | GitHub Actions (public repo, standard runner) | Free, unlimited |
+| Automation (several runs/day) | GitHub Actions (public repo, standard runner) | Free, unlimited |
 | Dashboard hosting | GitHub Pages | Free |
 | Data storage | CSV in the repo | Free |
 | Fare data | Google Flights scrape (headless Chromium) | Free, no key |
+| Alerts | Telegram Bot API / SMTP | Free |
+| Forecasts & AI features | scikit-learn, offline (no LLM) | Free |
 
-A daily run uses ~2–3 Actions minutes (most of it installing Chromium) — comfortably
-inside every free limit.
+Each run uses ~2–3 Actions minutes (most of it installing Chromium); a few runs a day
+stays comfortably inside the free **unlimited** allowance for public repos.
 
 ---
 

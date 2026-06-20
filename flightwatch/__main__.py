@@ -1,9 +1,12 @@
 """
 Command-line entry point so the project runs as a package:
 
-    python -m flightwatch collect    # one scan -> appends to data/
-    python -m flightwatch build      # regenerate docs/index.html
-    python -m flightwatch diag       # show what the fare API holds (debugging)
+    python -m flightwatch collect     # one scan -> appends to data/
+    python -m flightwatch build       # regenerate docs/index.html
+    python -m flightwatch all         # collect, then build (CI default)
+    python -m flightwatch alert        # push fresh signals (Telegram/email)
+    python -m flightwatch backtest     # print how the engine's calls have fared
+    python -m flightwatch diag         # show what the scraper returns (debugging)
 
 With no argument it runs a collect followed by a dashboard build, which is handy
 locally and keeps the GitHub Actions workflow simple.
@@ -13,8 +16,22 @@ import sys
 
 from . import collect as collect_mod
 from . import dashboard as dashboard_mod
+from . import alerts as alerts_mod
 
-USAGE = "usage: python -m flightwatch [collect|build|all|diag]"
+USAGE = "usage: python -m flightwatch [collect|build|all|alert|backtest|diag]"
+
+
+def _print_backtest():
+    from . import storage, predict
+    bt = predict.backtest(storage.load_all())
+    if not bt:
+        print("Not enough history to backtest yet (need 4+ daily points on a route).")
+        return
+    print(f"Backtest: {bt['hit_rate']}% of {bt['n']} graded calls were right.")
+    for sig, v in bt.get("by_signal", {}).items():
+        print(f"  {sig:5s} {v['hit_rate']:3d}% over {v['n']} calls")
+    if bt.get("avg_buy_regret"):
+        print(f"  avg missed saving on a BUY: {bt['avg_buy_regret']}")
 
 
 def main(argv=None):
@@ -28,6 +45,10 @@ def main(argv=None):
     elif cmd == "all":
         collect_mod.collect()
         dashboard_mod.build()
+    elif cmd == "alert":
+        alerts_mod.run(dry_run="--dry-run" in argv)
+    elif cmd == "backtest":
+        _print_backtest()
     elif cmd in ("diag", "diagnose"):
         collect_mod.diagnose()
     else:

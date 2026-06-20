@@ -226,6 +226,37 @@ tr.best td{background:var(--buy-bg)}
 .reveal{opacity:0;transform:translateY(26px);transition:opacity .7s ease,transform .7s cubic-bezier(.2,.7,.2,1)}
 .reveal.in{opacity:1;transform:none}
 @media(prefers-reduced-motion:reduce){.reveal{opacity:1;transform:none;transition:none}.bar>i{transition:none}.blob,.fb .planet,.fb .pl{animation:none}.tilt,.deal{transition:none}}
+
+/* ---- AI layer ---- */
+.dealbadge{font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;padding:4px 9px;border-radius:9px;white-space:nowrap}
+.dealbadge.great{background:var(--buy-bg);color:var(--buy)}.dealbadge.good{background:rgba(59,110,245,.1);color:var(--brand)}
+.dealbadge.fair{background:var(--watch-bg);color:var(--watch)}.dealbadge.high{background:var(--wait-bg);color:var(--wait)}
+.narr{color:var(--muted);font-size:13px;line-height:1.6;margin-top:9px;border-left:3px solid var(--brand);padding-left:11px}
+.alertbar{display:flex;align-items:flex-start;gap:12px;background:linear-gradient(120deg,#fff6ec,#ffeef4);border:1px solid var(--line);
+  border-radius:16px;padding:14px 18px;margin-top:18px;box-shadow:var(--shadow)}
+.alertbar .ab-ic{font-size:20px;line-height:1}
+.alertbar .ab-t{font-weight:700;font-size:14px}.alertbar .ab-s{color:var(--muted);font-size:12.5px;margin-top:2px}
+.cols3{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:16px;margin-top:16px}
+.bookcard{background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:18px;box-shadow:var(--shadow)}
+.bookcard .rt{font-weight:700;font-size:14.5px}.bookcard .when{font-size:12px;color:var(--dim);font-family:'IBM Plex Mono',monospace;margin-top:2px}
+.bookcard .verdict{font-family:'IBM Plex Mono',monospace;font-weight:600;margin-top:12px;font-size:14px}
+.bookcard .verdict.now{color:var(--buy)}.bookcard .verdict.wait{color:var(--wait)}
+.bookcard .sub{color:var(--muted);font-size:12.5px;margin-top:6px}
+.heat{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.heat .cell{flex:1;min-width:42px;text-align:center;border-radius:10px;padding:9px 4px;border:1px solid var(--line);background:var(--bg)}
+.heat .cell .d{font-size:11px;color:var(--dim);font-family:'IBM Plex Mono',monospace}
+.heat .cell .p{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:12.5px;margin-top:3px}
+.heat .cell.best{background:var(--buy-bg);border-color:#bfe9d8}.heat .cell.best .p{color:var(--buy)}
+.digest{display:flex;flex-direction:column;gap:9px;margin-top:6px}
+.digest .row{display:flex;align-items:center;gap:10px;font-size:13px;padding:8px 0;border-top:1px solid var(--line)}
+.digest .row:first-child{border-top:0}
+.digest .mv{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:12.5px;margin-left:auto}
+.mv.down{color:var(--buy)}.mv.up{color:var(--wait)}
+.bigstat{display:flex;align-items:baseline;gap:8px;margin:4px 0 2px}
+.bigstat .v{font-family:'IBM Plex Mono',monospace;font-size:34px;font-weight:600;letter-spacing:-1px}
+.bigstat .u{color:var(--dim);font-size:13px}
+.sigrow{display:flex;gap:16px;flex-wrap:wrap;margin-top:12px;font-size:12.5px;color:var(--muted)}
+.sigrow b{font-family:'IBM Plex Mono',monospace;color:var(--ink)}
 </style></head><body>
 
 <div class="aurora"><span class="blob b1"></span><span class="blob b2"></span></div>
@@ -270,7 +301,7 @@ tr.best td{background:var(--buy-bg)}
 </div>
 
 <script>
-const D = {"generated": "2026-06-20 09:54 UTC", "recs": [{"signal": "WATCH", "confidence": 25, "reason": "Still collecting history for this route.", "price": 1344.0, "predicted_low": 1344.0, "expected_savings": 0.0, "prob_drop": null, "trailing_min": 1344.0, "percentile": 0, "days_to_departure": 73, "method": "heuristic", "itinerary": "CHC-CMB 2026-09-01 -> 2026-09-22", "points": 1}, {"signal": "WATCH", "confidence": 25, "reason": "Still collecting history for this route.", "price": 1425.0, "predicted_low": 1425.0, "expected_savings": 0.0, "prob_drop": null, "trailing_min": 1425.0, "percentile": 0, "days_to_departure": 75, "method": "heuristic", "itinerary": "CHC-CMB 2026-09-03 -> 2026-09-24", "points": 1}, {"signal": "WATCH", "confidence": 25, "reason": "Still collecting history for this route.", "price": 1465.0, "predicted_low": 1465.0, "expected_savings": 0.0, "prob_drop": null, "trailing_min": 1465.0, "percentile": 0, "days_to_departure": 80, "method": "heuristic", "itinerary": "CHC-CMB 2026-09-08 -> 2026-10-15", "points": 1}, {"signal": "WATCH", "confidence": 25, "reason": "Still collecting history for this route.", "price": 1480.0, "predicted_low": 1480.0, "expected_savings": 0.0, "prob_drop": null, "trailing_min": 1480.0, "percentile": 0, "days_to_departure": 68, "method": "heuristic", "itinerary": "CHC-CMB 2026-08-27 -> 2026-09-17", "points": 1}, {"signal": "WATCH", "confidence": 25, "reason": "Still collecting history for this route.", "price": 1481.0, "predicted_low": 1481.0, "expected_savings": 0.0, "prob_drop": null, "trailing_min": 1481.0, "percentile": 0, "days_to_departure": 87, "method": "heuristic", "itinerary": "CHC-CMB 2026-09-15 -> 2026-10-24", "points": 1}], "history": {"CHC-CMB 2026-08-27 -> 2026-09-17": [{"d": "2026-06-20", "p": 1480.0}], "CHC-CMB 2026-09-01 -> 2026-09-22": [{"d": "2026-06-20", "p": 1344.0}], "CHC-CMB 2026-09-03 -> 2026-09-24": [{"d": "2026-06-20", "p": 1425.0}], "CHC-CMB 2026-09-08 -> 2026-10-15": [{"d": "2026-06-20", "p": 1465.0}], "CHC-CMB 2026-09-15 -> 2026-10-24": [{"d": "2026-06-20", "p": 1481.0}]}, "insights": [{"itinerary": "CHC-CMB 2026-09-01 -> 2026-09-22", "offers": 2, "min": 1344.0, "median": 1344.0, "max": 1344.0, "nonstop": false, "stops": {"nonstop": 0, "one": 2, "two_plus": 0}, "fastest": 960, "typical_duration": 960, "airlines": ["Jetstar"], "airline_prices": [{"name": "Jetstar", "price": 1344.0, "iata": "JQ"}], "cheapest_airline": "Jetstar", "cheapest_iata": "JQ", "days_to_departure": 73, "scan_date": "2026-06-20"}, {"itinerary": "CHC-CMB 2026-09-03 -> 2026-09-24", "offers": 2, "min": 1425.0, "median": 1425.0, "max": 1425.0, "nonstop": false, "stops": {"nonstop": 0, "one": 2, "two_plus": 0}, "fastest": 960, "typical_duration": 960, "airlines": ["Jetstar"], "airline_prices": [{"name": "Jetstar", "price": 1425.0, "iata": "JQ"}], "cheapest_airline": "Jetstar", "cheapest_iata": "JQ", "days_to_departure": 75, "scan_date": "2026-06-20"}, {"itinerary": "CHC-CMB 2026-09-08 -> 2026-10-15", "offers": 2, "min": 1465.0, "median": 1465.0, "max": 1465.0, "nonstop": false, "stops": {"nonstop": 0, "one": 2, "two_plus": 0}, "fastest": 960, "typical_duration": 960, "airlines": ["Jetstar"], "airline_prices": [{"name": "Jetstar", "price": 1465.0, "iata": "JQ"}], "cheapest_airline": "Jetstar", "cheapest_iata": "JQ", "days_to_departure": 80, "scan_date": "2026-06-20"}, {"itinerary": "CHC-CMB 2026-08-27 -> 2026-09-17", "offers": 2, "min": 1480.0, "median": 1480.0, "max": 1480.0, "nonstop": false, "stops": {"nonstop": 0, "one": 2, "two_plus": 0}, "fastest": 960, "typical_duration": 960, "airlines": ["Jetstar"], "airline_prices": [{"name": "Jetstar", "price": 1480.0, "iata": "JQ"}], "cheapest_airline": "Jetstar", "cheapest_iata": "JQ", "days_to_departure": 68, "scan_date": "2026-06-20"}, {"itinerary": "CHC-CMB 2026-09-15 -> 2026-10-24", "offers": 2, "min": 1481.0, "median": 1481.0, "max": 1481.0, "nonstop": false, "stops": {"nonstop": 0, "one": 2, "two_plus": 0}, "fastest": 960, "typical_duration": 960, "airlines": ["Jetstar"], "airline_prices": [{"name": "Jetstar", "price": 1481.0, "iata": "JQ"}], "cheapest_airline": "Jetstar", "cheapest_iata": "JQ", "days_to_departure": 87, "scan_date": "2026-06-20"}], "latest_offers": {"CHC-CMB 2026-08-27 -> 2026-09-17": [{"price": 1480.0, "airline": "Jetstar", "iata": "JQ", "stops": 1, "duration": 960}, {"price": 1480.0, "airline": "", "iata": "", "stops": 1, "duration": 960}], "CHC-CMB 2026-09-01 -> 2026-09-22": [{"price": 1344.0, "airline": "Jetstar", "iata": "JQ", "stops": 1, "duration": 960}, {"price": 1344.0, "airline": "", "iata": "", "stops": 1, "duration": 960}], "CHC-CMB 2026-09-03 -> 2026-09-24": [{"price": 1425.0, "airline": "Jetstar", "iata": "JQ", "stops": 1, "duration": 960}, {"price": 1425.0, "airline": "", "iata": "", "stops": 1, "duration": 960}], "CHC-CMB 2026-09-08 -> 2026-10-15": [{"price": 1465.0, "airline": "Jetstar", "iata": "JQ", "stops": 1, "duration": 960}, {"price": 1465.0, "airline": "", "iata": "", "stops": 1, "duration": 960}], "CHC-CMB 2026-09-15 -> 2026-10-24": [{"price": 1481.0, "airline": "Jetstar", "iata": "JQ", "stops": 1, "duration": 960}, {"price": 1481.0, "airline": "", "iata": "", "stops": 1, "duration": 960}]}, "airline_market": [{"name": "Jetstar", "iata": "JQ", "offers": 5, "min": 1344.0}], "stats": {"scans": 2, "total_offers": 10, "routes": 5, "airlines": 1, "avg_price": 1439.0, "fastest": 960, "cheapest_ever": {"price": 1344.0, "itinerary": "CHC-CMB 2026-09-01 -> 2026-09-22", "airline": "Jetstar", "iata": "JQ", "date": "2026-06-20"}}, "cities": {"CHC": "Christchurch", "CMB": "Colombo"}, "primary": {"origin": {"code": "CHC", "name": "Christchurch", "lat": -43.489, "lon": 172.532, "tz": "Pacific/Auckland"}, "dest": {"code": "CMB", "name": "Colombo", "lat": 7.181, "lon": 79.884, "tz": "Asia/Colombo"}}, "model": null, "currency": "NZD"};
+const D = {"generated": "2026-06-20 19:25 UTC", "recs": [{"signal": "WATCH", "confidence": 25, "reason": "Still collecting history for this route.", "price": 1344.0, "predicted_low": 1344.0, "expected_savings": 0.0, "prob_drop": null, "trailing_min": 1344.0, "percentile": 0, "days_to_departure": 73, "curve": [], "method": "heuristic", "itinerary": "CHC-CMB 2026-09-01 -> 2026-09-22", "points": 1}, {"signal": "WATCH", "confidence": 25, "reason": "Still collecting history for this route.", "price": 1425.0, "predicted_low": 1425.0, "expected_savings": 0.0, "prob_drop": null, "trailing_min": 1425.0, "percentile": 0, "days_to_departure": 75, "curve": [], "method": "heuristic", "itinerary": "CHC-CMB 2026-09-03 -> 2026-09-24", "points": 1}, {"signal": "WATCH", "confidence": 25, "reason": "Still collecting history for this route.", "price": 1465.0, "predicted_low": 1465.0, "expected_savings": 0.0, "prob_drop": null, "trailing_min": 1465.0, "percentile": 0, "days_to_departure": 80, "curve": [], "method": "heuristic", "itinerary": "CHC-CMB 2026-09-08 -> 2026-10-15", "points": 1}, {"signal": "WATCH", "confidence": 25, "reason": "Still collecting history for this route.", "price": 1480.0, "predicted_low": 1480.0, "expected_savings": 0.0, "prob_drop": null, "trailing_min": 1480.0, "percentile": 0, "days_to_departure": 68, "curve": [], "method": "heuristic", "itinerary": "CHC-CMB 2026-08-27 -> 2026-09-17", "points": 1}, {"signal": "WATCH", "confidence": 25, "reason": "Still collecting history for this route.", "price": 1481.0, "predicted_low": 1481.0, "expected_savings": 0.0, "prob_drop": null, "trailing_min": 1481.0, "percentile": 0, "days_to_departure": 87, "curve": [], "method": "heuristic", "itinerary": "CHC-CMB 2026-09-15 -> 2026-10-24", "points": 1}], "history": {"CHC-CMB 2026-08-27 -> 2026-09-17": [{"d": "2026-06-20", "p": 1480.0}], "CHC-CMB 2026-09-01 -> 2026-09-22": [{"d": "2026-06-20", "p": 1344.0}], "CHC-CMB 2026-09-03 -> 2026-09-24": [{"d": "2026-06-20", "p": 1425.0}], "CHC-CMB 2026-09-08 -> 2026-10-15": [{"d": "2026-06-20", "p": 1465.0}], "CHC-CMB 2026-09-15 -> 2026-10-24": [{"d": "2026-06-20", "p": 1481.0}]}, "insights": [{"itinerary": "CHC-CMB 2026-09-01 -> 2026-09-22", "offers": 2, "min": 1344.0, "median": 1344.0, "max": 1344.0, "nonstop": false, "stops": {"nonstop": 0, "one": 2, "two_plus": 0}, "fastest": 960, "typical_duration": 960, "airlines": ["Jetstar"], "airline_prices": [{"name": "Jetstar", "price": 1344.0, "iata": "JQ"}], "cheapest_airline": "Jetstar", "cheapest_iata": "JQ", "days_to_departure": 73, "scan_date": "2026-06-20"}, {"itinerary": "CHC-CMB 2026-09-03 -> 2026-09-24", "offers": 2, "min": 1425.0, "median": 1425.0, "max": 1425.0, "nonstop": false, "stops": {"nonstop": 0, "one": 2, "two_plus": 0}, "fastest": 960, "typical_duration": 960, "airlines": ["Jetstar"], "airline_prices": [{"name": "Jetstar", "price": 1425.0, "iata": "JQ"}], "cheapest_airline": "Jetstar", "cheapest_iata": "JQ", "days_to_departure": 75, "scan_date": "2026-06-20"}, {"itinerary": "CHC-CMB 2026-09-08 -> 2026-10-15", "offers": 2, "min": 1465.0, "median": 1465.0, "max": 1465.0, "nonstop": false, "stops": {"nonstop": 0, "one": 2, "two_plus": 0}, "fastest": 960, "typical_duration": 960, "airlines": ["Jetstar"], "airline_prices": [{"name": "Jetstar", "price": 1465.0, "iata": "JQ"}], "cheapest_airline": "Jetstar", "cheapest_iata": "JQ", "days_to_departure": 80, "scan_date": "2026-06-20"}, {"itinerary": "CHC-CMB 2026-08-27 -> 2026-09-17", "offers": 2, "min": 1480.0, "median": 1480.0, "max": 1480.0, "nonstop": false, "stops": {"nonstop": 0, "one": 2, "two_plus": 0}, "fastest": 960, "typical_duration": 960, "airlines": ["Jetstar"], "airline_prices": [{"name": "Jetstar", "price": 1480.0, "iata": "JQ"}], "cheapest_airline": "Jetstar", "cheapest_iata": "JQ", "days_to_departure": 68, "scan_date": "2026-06-20"}, {"itinerary": "CHC-CMB 2026-09-15 -> 2026-10-24", "offers": 2, "min": 1481.0, "median": 1481.0, "max": 1481.0, "nonstop": false, "stops": {"nonstop": 0, "one": 2, "two_plus": 0}, "fastest": 960, "typical_duration": 960, "airlines": ["Jetstar"], "airline_prices": [{"name": "Jetstar", "price": 1481.0, "iata": "JQ"}], "cheapest_airline": "Jetstar", "cheapest_iata": "JQ", "days_to_departure": 87, "scan_date": "2026-06-20"}], "latest_offers": {"CHC-CMB 2026-08-27 -> 2026-09-17": [{"price": 1480.0, "airline": "Jetstar", "iata": "JQ", "stops": 1, "duration": 960}, {"price": 1480.0, "airline": "", "iata": "", "stops": 1, "duration": 960}], "CHC-CMB 2026-09-01 -> 2026-09-22": [{"price": 1344.0, "airline": "Jetstar", "iata": "JQ", "stops": 1, "duration": 960}, {"price": 1344.0, "airline": "", "iata": "", "stops": 1, "duration": 960}], "CHC-CMB 2026-09-03 -> 2026-09-24": [{"price": 1425.0, "airline": "Jetstar", "iata": "JQ", "stops": 1, "duration": 960}, {"price": 1425.0, "airline": "", "iata": "", "stops": 1, "duration": 960}], "CHC-CMB 2026-09-08 -> 2026-10-15": [{"price": 1465.0, "airline": "Jetstar", "iata": "JQ", "stops": 1, "duration": 960}, {"price": 1465.0, "airline": "", "iata": "", "stops": 1, "duration": 960}], "CHC-CMB 2026-09-15 -> 2026-10-24": [{"price": 1481.0, "airline": "Jetstar", "iata": "JQ", "stops": 1, "duration": 960}, {"price": 1481.0, "airline": "", "iata": "", "stops": 1, "duration": 960}]}, "airline_market": [{"name": "Jetstar", "iata": "JQ", "offers": 5, "min": 1344.0}], "stats": {"scans": 2, "total_offers": 10, "routes": 5, "airlines": 1, "avg_price": 1439.0, "fastest": 960, "cheapest_ever": {"price": 1344.0, "itinerary": "CHC-CMB 2026-09-01 -> 2026-09-22", "airline": "Jetstar", "iata": "JQ", "date": "2026-06-20"}}, "cities": {"CHC": "Christchurch", "CMB": "Colombo"}, "primary": {"origin": {"code": "CHC", "name": "Christchurch", "lat": -43.489, "lon": 172.532, "tz": "Pacific/Auckland"}, "dest": {"code": "CMB", "name": "Colombo", "lat": 7.181, "lon": 79.884, "tz": "Asia/Colombo"}}, "ai": {"deals": {"CHC-CMB 2026-08-27 -> 2026-09-17": {"score": 50, "label": "Fair", "price": 1480, "vs_median_pct": 0, "vs_min_pct": 0}, "CHC-CMB 2026-09-01 -> 2026-09-22": {"score": 50, "label": "Fair", "price": 1344, "vs_median_pct": 0, "vs_min_pct": 0}, "CHC-CMB 2026-09-03 -> 2026-09-24": {"score": 50, "label": "Fair", "price": 1425, "vs_median_pct": 0, "vs_min_pct": 0}, "CHC-CMB 2026-09-08 -> 2026-10-15": {"score": 50, "label": "Fair", "price": 1465, "vs_median_pct": 0, "vs_min_pct": 0}, "CHC-CMB 2026-09-15 -> 2026-10-24": {"score": 50, "label": "Fair", "price": 1481, "vs_median_pct": 0, "vs_min_pct": 0}}, "anomalies": [], "cheapest_day": {"dep_dow": [{"dow": 1, "label": "Tue", "min": 1344}, {"dow": 3, "label": "Thu", "min": 1425}], "ret_dow": [{"dow": 1, "label": "Tue", "min": 1344}, {"dow": 3, "label": "Thu", "min": 1425}, {"dow": 5, "label": "Sat", "min": 1481}], "date_pairs": [{"depart": "2026-09-01", "return": "2026-09-22", "min": 1344, "save_vs_dearest": 137}, {"depart": "2026-09-03", "return": "2026-09-24", "min": 1425, "save_vs_dearest": 56}, {"depart": "2026-09-08", "return": "2026-10-15", "min": 1465, "save_vs_dearest": 16}, {"depart": "2026-08-27", "return": "2026-09-17", "min": 1480, "save_vs_dearest": 1}, {"depart": "2026-09-15", "return": "2026-10-24", "min": 1481, "save_vs_dearest": 0}], "best_dep": {"dow": 1, "label": "Tue", "min": 1344}, "best_ret": {"dow": 1, "label": "Tue", "min": 1344}}, "best_time_to_book": [], "what_changed": {"since": "2026-06-20T09:00Z", "movers": [], "new_lows": []}, "airline_intel": [{"route": "CHC-CMB", "cheapest_airline": "Jetstar", "cheapest_iata": "JQ", "nonstop_available": false, "nonstop_premium": null, "carriers": 1}], "narratives": {"CHC-CMB 2026-09-01 -> 2026-09-22": "CHC-CMB: cheapest is NZD 1,344, right around its typical price. Keep watching (25% confidence).", "CHC-CMB 2026-09-03 -> 2026-09-24": "CHC-CMB: cheapest is NZD 1,425, right around its typical price. Keep watching (25% confidence).", "CHC-CMB 2026-09-08 -> 2026-10-15": "CHC-CMB: cheapest is NZD 1,465, right around its typical price. Keep watching (25% confidence).", "CHC-CMB 2026-08-27 -> 2026-09-17": "CHC-CMB: cheapest is NZD 1,480, right around its typical price. Keep watching (25% confidence).", "CHC-CMB 2026-09-15 -> 2026-10-24": "CHC-CMB: cheapest is NZD 1,481, right around its typical price. Keep watching (25% confidence)."}, "backtest": null}, "model": null, "currency": "NZD"};
 const CUR = D.currency || 'NZD';
 const fmt = (n,c)=> (c||CUR)+' '+Math.round(n).toLocaleString();
 const fmtv = n => Math.round(n).toLocaleString();
@@ -395,15 +426,26 @@ if(!D.recs.length){
   add('<div class="empty reveal"><h2>Collecting data…</h2><p>Faro has just started watching this route. Signals, trends and the '+
     'airline breakdown appear once there are a few days of price history — usually within a week.</p></div>');
 }else{
+  /* price-drop / new-low alert bar (the dashboard echo of the push alerts) */
+  (function(){const ai=D.ai||{},drops=(ai.anomalies||[]).filter(a=>a.kind==='drop'),nl=((ai.what_changed||{}).new_lows||[]);
+    if(!drops.length&&!nl.length)return;let t,s;
+    if(drops.length){const pi=parseItin(drops[0].itin);t=drops.length+' price drop'+(drops.length>1?'s':'')+' detected';
+      s=esc(pi.title)+' fell to '+fmt(drops[0].price)+' — '+Math.abs(drops[0].pct)+'% below its recent norm.';}
+    else{const pi=parseItin(nl[0].itin);t=nl.length+' new low'+(nl.length>1?'s':'');s=esc(pi.title)+' just hit a fresh low of '+fmt(nl[0].price)+'.';}
+    add('<div class="alertbar reveal"><span class="ab-ic">📉</span><div><div class="ab-t">'+t+'</div><div class="ab-s">'+s+'</div></div></div>');})();
   add('<div class="section reveal" id="deals"><h2>Today’s signals</h2><span class="hint">act-now first</span></div>');
   D.recs.forEach((r,i)=>{const pi=parseItin(r.itinerary),conf=r.confidence||0,tags=[];
+    const deal=(D.ai&&D.ai.deals&&D.ai.deals[r.itinerary])||null;
+    const narr=(D.ai&&D.ai.narratives&&D.ai.narratives[r.itinerary])||'';
     if(r.predicted_low)tags.push(['forecast low '+fmt(r.predicted_low),1]);
     if(r.signal==='WAIT'&&r.expected_savings)tags.push(['save ~'+fmt(r.expected_savings)+' by waiting',1]);
     if(r.prob_drop!=null)tags.push([r.prob_drop+'% chance of a drop',0]);
     if(r.days_to_departure!=null)tags.push([r.days_to_departure+' days to go',0]);
+    const db=deal?'<span class="dealbadge '+esc(deal.label.toLowerCase())+'">'+deal.score+' · '+esc(deal.label)+' deal</span>':'';
     add('<div class="rec reveal"><span class="sig '+r.signal+'">'+r.signal+'</span>'+
-      '<div><div class="route">'+esc(pi.title)+'</div><div class="dates">'+esc(pi.dates)+(pi.nights?' · '+pi.nights+' nights':'')+'</div>'+
+      '<div><div class="route">'+esc(pi.title)+' '+db+'</div><div class="dates">'+esc(pi.dates)+(pi.nights?' · '+pi.nights+' nights':'')+'</div>'+
         '<div class="reason">'+esc(r.reason)+'</div>'+
+        (narr?'<div class="narr">'+esc(narr)+'</div>':'')+
         '<div class="conf"><div class="lab"><span>confidence</span><span>'+conf+'%</span></div><div class="bar"><i data-w="'+conf+'"></i></div></div>'+
         '<div class="tags">'+tags.map(t=>'<span class="tag'+(t[1]?' b':'')+'">'+esc(t[0])+'</span>').join('')+'</div></div>'+
       '<canvas class="spark" id="spark'+i+'"></canvas>'+
@@ -415,14 +457,56 @@ if(!D.recs.length){
     '<div class="panel reveal"><h3>Best fare by airline</h3><div class="ph">lowest fare each carrier offered in the latest scan</div>'+
       '<div class="canvas-wrap"><canvas id="airChart"></canvas></div></div></div>');
 
+  /* ---- AI layer: when to book, cheapest day, what changed, accuracy ---- */
+  const AI=D.ai;
+  if(AI){
+    const btb=AI.best_time_to_book||[],modelRec=D.recs.find(r=>r.curve&&r.curve.length);
+    if(btb.length||modelRec){
+      add('<div class="section reveal" id="plan"><h2>When to book</h2><span class="hint">model forecast</span></div>');
+      add('<div class="grid2"><div class="panel reveal"><h3>Predicted booking curve</h3><div class="ph">expected cheapest fare vs days before departure, with a '+(D.model?D.model.coverage:80)+'% band</div>'+
+        '<div class="canvas-wrap"><canvas id="fanChart"></canvas></div></div>'+
+        '<div class="panel reveal"><h3>Best moment to lock it in</h3><div class="ph">when the model expects the low</div><div class="cols3" style="grid-template-columns:1fr">'+
+        (btb.length?btb.map(b=>{const pi=parseItin(b.itin);return '<div class="bookcard reveal"><div class="rt">'+esc(pi.title)+'</div><div class="when">'+esc(pi.dates)+'</div>'+
+          '<div class="verdict '+(b.book_now?'now':'wait')+'">'+(b.book_now?'Book now':'Wait ~'+b.days_from_now+' days')+'</div>'+
+          '<div class="sub">'+(b.book_now?'Already near the expected low of '+fmt(b.predicted_low)+'.':'Model expects a low near '+fmt(b.predicted_low)+(b.save>0?' — about '+fmt(b.save)+' under today.':'.'))+'</div></div>';}).join('')
+          :'<div class="sub" style="color:var(--dim)">Forecasts appear once the model has trained on ~4 months of history.</div>')+
+        '</div></div></div>');
+    }
+    const cd=AI.cheapest_day||{};
+    if(cd.dep_dow&&cd.dep_dow.length){
+      add('<div class="section reveal"><h2>Cheapest day to fly</h2><span class="hint">latest scan</span></div>');
+      const cells=(arr,best)=>arr.map(c=>'<div class="cell'+(best&&c.dow===best.dow?' best':'')+'"><div class="d">'+c.label+'</div><div class="p">'+fmt(c.min)+'</div></div>').join('');
+      add('<div class="grid2"><div class="panel reveal"><h3>By departure weekday</h3><div class="ph">cheapest return fare seen for each outbound day</div><div class="heat">'+cells(cd.dep_dow,cd.best_dep)+'</div></div>'+
+        '<div class="panel reveal"><h3>By return weekday</h3><div class="ph">cheapest fare for each inbound day</div><div class="heat">'+cells(cd.ret_dow,cd.best_ret)+'</div></div></div>');
+    }
+    const wc=AI.what_changed||{},mv=(wc.movers||[]);
+    if(mv.length){
+      add('<div class="section reveal"><h2>What changed</h2><span class="hint">since the previous scan</span></div>');
+      let h='<div class="panel reveal"><div class="digest">';
+      mv.slice(0,6).forEach(m=>{const pi=parseItin(m.itin),dn=m.delta<0;
+        h+='<div class="row"><span>'+esc(pi.title)+'</span><span class="mv '+(dn?'down':'up')+'">'+(dn?'▼ ':'▲ ')+fmt(Math.abs(m.delta))+' ('+(dn?'':'+')+m.pct+'%)</span></div>';});
+      add(h+'</div></div>');
+    }
+    const bt=AI.backtest;
+    if(bt&&bt.n>=10){
+      add('<div class="section reveal"><h2>Model accuracy</h2><span class="hint">backtested on our own history</span></div>');
+      const bs=bt.by_signal||{},part=k=>bs[k]?'<span><b>'+bs[k].hit_rate+'%</b> of '+k+' calls ('+bs[k].n+')</span>':'';
+      add('<div class="panel reveal"><div class="bigstat"><span class="v">'+bt.hit_rate+'%</span><span class="u">of past calls were right ('+bt.n+' graded)</span></div>'+
+        '<div class="sigrow">'+part('BUY')+part('WAIT')+part('WATCH')+(bt.avg_buy_regret?'<span>avg missed saving on a BUY: <b>'+fmt(bt.avg_buy_regret)+'</b></span>':'')+'</div>'+
+        '<div class="canvas-wrap" style="height:160px;margin-top:14px"><canvas id="accChart"></canvas></div></div>');
+    }
+  }
+
   if(D.insights&&D.insights.length){
     add('<div class="section reveal" id="insights"><h2>Market insights</h2><span class="hint">latest scan</span></div>');
     let h='<div class="icards">';
     D.insights.forEach(r=>{const pi=parseItin(r.itinerary),sb=r.stops,tot=Math.max(1,sb.nonstop+sb.one+sb.two_plus);
       const seg=(n,c)=>n?'<i style="width:'+(n/tot*100)+'%;background:'+c+'"></i>':'';
+      const deal=(D.ai&&D.ai.deals&&D.ai.deals[r.itinerary])||null;
+      const db=deal?' <span class="dealbadge '+esc(deal.label.toLowerCase())+'">'+deal.score+'</span>':'';
       const alist=(r.airline_prices||[]).map(a=>'<div class="aline">'+avatar(a.name,a.iata,28)+'<span class="nm">'+esc(a.name)+'</span><span class="pr">'+fmt(a.price)+'</span></div>').join('')
         ||'<div class="aline" style="color:var(--dim)">airline not reported</div>';
-      h+='<div class="icard reveal"><div class="top"><div><div class="rt">'+esc(pi.title)+'</div><div class="when">'+esc(pi.dates)+' · '+r.offers+' offers</div></div>'+
+      h+='<div class="icard reveal"><div class="top"><div><div class="rt">'+esc(pi.title)+db+'</div><div class="when">'+esc(pi.dates)+' · '+r.offers+' offers</div></div>'+
         '<div style="text-align:right"><div class="big">'+fmt(r.min)+'</div><small>cheapest</small></div></div>'+
         '<div class="facts"><div class="fact"><div class="k">Typical</div><div class="v">'+fmt(r.median)+'</div></div>'+
           '<div class="fact"><div class="k">Highest</div><div class="v">'+fmt(r.max)+'</div></div>'+
@@ -472,7 +556,24 @@ function drawCharts(){if(charted)return;charted=true;
   const ac=document.getElementById('airChart');
   if(ac&&D.airline_market&&D.airline_market.length){const m=D.airline_market;
     new Chart(ac,{type:'bar',data:{labels:m.map(a=>a.name),datasets:[{label:'Lowest fare ('+CUR+')',data:m.map(a=>a.min),backgroundColor:m.map(a=>acolor(a.name)),borderRadius:8,maxBarThickness:30}]},
-      options:Object.assign(gridOpts(),{indexAxis:'y',plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+fmt(c.raw)+' · '+m[c.dataIndex].offers+' offers'}}}})});}}
+      options:Object.assign(gridOpts(),{indexAxis:'y',plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+fmt(c.raw)+' · '+m[c.dataIndex].offers+' offers'}}}})});}
+  /* predicted booking-curve fan chart (median + calibrated band) */
+  const fcx=document.getElementById('fanChart'),mr=D.recs.find(r=>r.curve&&r.curve.length);
+  if(fcx&&mr){const cv=mr.curve;
+    new Chart(fcx,{type:'line',data:{labels:cv.map(c=>c.dtd),datasets:[
+      {data:cv.map(c=>c.hi),borderColor:'rgba(59,110,245,0)',backgroundColor:'rgba(59,110,245,.12)',pointRadius:0,fill:'+1',tension:.3},
+      {data:cv.map(c=>c.lo),borderColor:'rgba(59,110,245,0)',pointRadius:0,fill:false,tension:.3},
+      {data:cv.map(c=>c.p),borderColor:'#3b6ef5',borderWidth:2,pointRadius:0,tension:.3}]},
+      options:Object.assign(gridOpts(),{plugins:{legend:{display:false},tooltip:{callbacks:{title:it=>it[0].label+' days before departure',label:c=>' '+fmt(c.raw)}}},
+        scales:{x:{title:{display:true,text:'days before departure',color:'#8a99b8',font:{family:'IBM Plex Mono',size:10}},grid:{color:'#eef2f9'},ticks:{color:'#8a99b8',font:{family:'IBM Plex Mono',size:9},maxTicksLimit:8}},
+                y:{grid:{color:'#eef2f9'},ticks:{color:'#8a99b8',font:{family:'IBM Plex Mono',size:10}}}}})});}
+  else if(fcx)placeholder('fanChart','The predicted booking curve appears once the model has trained (~4 months of daily history).');
+  /* model accuracy over time (from the offline backtest) */
+  const acc=document.getElementById('accChart');
+  if(acc&&D.ai&&D.ai.backtest&&(D.ai.backtest.series||[]).length>=2){const s=D.ai.backtest.series;
+    new Chart(acc,{type:'line',data:{labels:s.map(x=>x.d),datasets:[{data:s.map(x=>x.acc),borderColor:'#12b07c',backgroundColor:'rgba(18,176,124,.14)',borderWidth:2,pointRadius:0,tension:.3,fill:true}]},
+      options:Object.assign(gridOpts(),{plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+c.raw+'% right'}}},scales:{x:{display:false},y:{min:0,max:100,grid:{color:'#eef2f9'},ticks:{color:'#8a99b8',font:{family:'IBM Plex Mono',size:10},callback:v=>v+'%'}}}})});}
+  else if(acc)placeholder('accChart','Accuracy history builds as more calls can be graded.');}
 
 /* ---- 3D globe (Three.js) with graceful CSS fallback ---- */
 function ll2v(lat,lon,r){const phi=(90-lat)*Math.PI/180,th=(lon+180)*Math.PI/180;

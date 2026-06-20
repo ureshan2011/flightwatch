@@ -1,21 +1,32 @@
 # FlightWatch configuration
-# Scan the SAME itineraries every day so we build booking curves over time.
-# Tip: keep this list small and dense (a handful of date-pairs) rather than a
-# huge grid -- daily depth on a few routes beats sparse coverage of many.
+# Scan the SAME itineraries on every run so we build booking curves over time.
+# Tip: keep this list dense (a handful of date-pairs on a corridor) rather than a
+# huge sparse grid -- intraday depth on a few routes beats thin coverage of many.
 
 currency: NZD
 market: nz                  # Google Flights region (gl=) -- match the route's country
 adults: 1
 max_offers_per_search: 50   # store up to this many fares per itinerary per scan (0 = all)
-concurrency: 3              # headless browsers to run in parallel (each with its own
-                            # rotating fingerprint). Raise for more volume/speed.
+
+# A single shared Chromium runs all itineraries; `concurrency` caps how many
+# scrape at once (one lightweight context each). The async, shared-browser path
+# is cheap, so this can go higher than the old browser-per-scrape model.
+concurrency: 5
+jitter_seconds: 6           # random 0-N s stagger before each scrape (less robotic)
+
+# Cadence is set by the workflow cron (currently every 6h -> 4 intraday slots a
+# day). Rows are stamped with an hourly scan_slot, so slots accumulate instead of
+# overwriting -- that is what makes intraday volatility visible.
 
 itineraries:
-  # Seeded from the June fare analysis (cheapest observed windows).
+  # Christchurch <-> Colombo, dense around the cheap September/October windows.
+  - {origin: CHC, destination: CMB, depart_date: 2026-08-27, return_date: 2026-09-17}
   - {origin: CHC, destination: CMB, depart_date: 2026-09-01, return_date: 2026-09-22}
   - {origin: CHC, destination: CMB, depart_date: 2026-09-03, return_date: 2026-09-24}
-  - {origin: CHC, destination: CMB, depart_date: 2026-08-27, return_date: 2026-09-17}
+  - {origin: CHC, destination: CMB, depart_date: 2026-09-05, return_date: 2026-09-26}
   - {origin: CHC, destination: CMB, depart_date: 2026-09-08, return_date: 2026-10-15}
+  - {origin: CHC, destination: CMB, depart_date: 2026-09-10, return_date: 2026-10-01}
   - {origin: CHC, destination: CMB, depart_date: 2026-09-15, return_date: 2026-10-24}
+  - {origin: CHC, destination: CMB, depart_date: 2026-09-22, return_date: 2026-10-13}
   # Add more routes here to grow the public dataset, e.g.:
   # - {origin: AKL, destination: CMB, depart_date: 2026-09-01, return_date: 2026-09-22}

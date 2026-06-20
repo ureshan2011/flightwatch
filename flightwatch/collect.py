@@ -1,10 +1,16 @@
 """
-Daily collector. Reads config.yaml, scrapes each itinerary, and appends EVERY
-fare found (one row per offer) to the monthly CSV -- so the dataset grows fast.
+Collector. Reads config.yaml, scrapes each itinerary, and appends EVERY fare
+found (one row per offer) to the monthly CSV -- so the dataset grows fast.
 
-Scrapes run concurrently: several headless browsers, each with its own rotating
-fingerprint, work different itineraries at the same time. That is what makes
-volume scraping practical on the free tier without tripping Google's blocks.
+Scrapes run concurrently and efficiently: a SINGLE headless Chromium is shared
+across the whole run, and each itinerary gets its own lightweight browser
+*context* (with its own rotating fingerprint). An asyncio semaphore caps how
+many scrape at once, and a little random jitter staggers their starts. Reusing
+one browser instead of launching one per itinerary is what makes high
+concurrency -- and running several times a day -- practical on the free tier.
+
+Intraday: every run stamps rows with an hourly `scan_slot`, so scans at
+different times of day accumulate instead of overwriting each other.
 
 Run locally:
     python -m flightwatch collect
@@ -12,9 +18,9 @@ Run locally:
 In CI this is invoked by .github/workflows/daily-scan.yml.
 """
 
-import time
+import asyncio
+import random
 import traceback
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, date
 
 from . import CONFIG_PATH, provider, storage
@@ -27,84 +33,106 @@ def load_config():
         return yaml.safe_load(f)
 
 
-def _scan_one(it, cfg, now, scan_date, market):
-    """Scrape a single itinerary and return its list of CSV rows (one per offer)."""
+def _base_row(it, cfg, now, scan_date, slot):
+    """Build the shared row fields for one itinerary and its days-to-departure."""
     origin, dest = it["origin"], it["destination"]
     dep, ret = str(it["depart_date"]), str(it["return_date"])
     dep_d = datetime.strptime(dep, "%Y-%m-%d").date()
     ret_d = datetime.strptime(ret, "%Y-%m-%d").date()
-    trip_len = (ret_d - dep_d).days
-    dtd = (dep_d - date.today()).days
-
     base = {
         "scan_datetime": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
         "scan_date": scan_date,
+        "scan_slot": slot,
         "origin": origin, "destination": dest,
         "depart_date": dep, "return_date": ret,
-        "trip_length": trip_len, "days_to_departure": dtd,
+        "trip_length": (ret_d - dep_d).days,
+        "days_to_departure": (dep_d - date.today()).days,
         "currency": cfg.get("currency", "NZD"),
         "source": "googleflights",
     }
+    return base, base["days_to_departure"]
 
-    # Skip itineraries whose departure has already passed.
-    if dtd < 0:
+
+def _empty(base, status):
+    return [{**base, "offer_index": "", "price": "", "airline": "",
+             "stops": "", "duration_minutes": "", "status": status}]
+
+
+async def _scan_one_async(browser, sem, it, cfg, now, scan_date, slot, market):
+    """Scrape one itinerary on the shared browser; return its list of CSV rows."""
+    base, dtd = _base_row(it, cfg, now, scan_date, slot)
+    origin, dest = base["origin"], base["destination"]
+    dep, ret = base["depart_date"], base["return_date"]
+
+    if dtd < 0:                       # departure already passed -- skip
         return []
 
-    def empty(status):
-        return [{**base, "offer_index": "", "price": "", "airline": "",
-                 "stops": "", "duration_minutes": "", "status": status}]
+    async with sem:
+        # Stagger starts so concurrent scrapes don't all hit Google at once.
+        await asyncio.sleep(random.uniform(0, float(cfg.get("jitter_seconds", 6) or 0)))
+        try:
+            offers = await provider.search_flight_offers_async(
+                browser, origin, dest, dep, ret,
+                adults=cfg.get("adults", 1),
+                currency=cfg.get("currency", "NZD"),
+                max_offers=cfg.get("max_offers_per_search", 50),
+                market=market,
+            )
+        except Exception as e:
+            print(f"  ERR  {origin}->{dest} {dep}->{ret}  {e}")
+            traceback.print_exc()
+            return _empty(base, "error")
 
-    try:
-        offers = provider.search_flight_offers(
-            origin, dest, dep, ret,
-            adults=cfg.get("adults", 1),
-            currency=cfg.get("currency", "NZD"),
-            max_offers=cfg.get("max_offers_per_search", 50),
-            market=market,
-        )
-        if offers:
-            rows = [{**base, "offer_index": i, **o, "status": "ok"}
-                    for i, o in enumerate(offers)]
-            best = min(offers, key=lambda o: o["price"])
-            print(f"  OK   {origin}->{dest} {dep}->{ret}  "
-                  f"{len(offers)} offers, low {best['currency']}{best['price']:.0f}")
-            return rows
-        print(f"  --   {origin}->{dest} {dep}->{ret}  no offers")
-        return empty("no_results")
-    except Exception as e:
-        print(f"  ERR  {origin}->{dest} {dep}->{ret}  {e}")
-        traceback.print_exc()
-        return empty("error")
+    if offers:
+        rows = [{**base, "offer_index": i, **o, "status": "ok"}
+                for i, o in enumerate(offers)]
+        best = min(offers, key=lambda o: o["price"])
+        print(f"  OK   {origin}->{dest} {dep}->{ret}  "
+              f"{len(offers)} offers, low {best['currency']}{best['price']:.0f}")
+        return rows
+    print(f"  --   {origin}->{dest} {dep}->{ret}  no offers")
+    return _empty(base, "no_results")
+
+
+async def _collect_async(cfg, now, scan_date, slot, market):
+    from playwright.async_api import async_playwright
+
+    workers = max(int(cfg.get("concurrency", 3) or 1), 1)
+    sem = asyncio.Semaphore(workers)
+    itineraries = cfg["itineraries"]
+    rows = []
+
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(
+            headless=provider.headless_mode(), args=provider._LAUNCH_ARGS)
+        try:
+            tasks = [_scan_one_async(browser, sem, it, cfg, now, scan_date, slot, market)
+                     for it in itineraries]
+            for res in await asyncio.gather(*tasks, return_exceptions=True):
+                if isinstance(res, Exception):
+                    traceback.print_exception(type(res), res, res.__traceback__)
+                else:
+                    rows.extend(res)
+        finally:
+            await browser.close()
+    return rows
 
 
 def collect():
     cfg = load_config()
     now = datetime.utcnow()
     scan_date = now.strftime("%Y-%m-%d")
+    slot = storage.slot_from_datetime(now.strftime("%Y-%m-%dT%H:%M:%SZ"))
     market = cfg.get("market", "nz")
-    itineraries = cfg["itineraries"]
-    # How many browsers to run at once. Modest by default to stay polite and fit
-    # the free-tier runner's memory; bump `concurrency` in config.yaml to go wider.
-    workers = max(int(cfg.get("concurrency", 3) or 1), 1)
 
-    rows = []
-    with ThreadPoolExecutor(max_workers=workers) as pool:
-        futures = {
-            pool.submit(_scan_one, it, cfg, now, scan_date, market): it
-            for it in itineraries
-        }
-        for fut in as_completed(futures):
-            try:
-                rows.extend(fut.result())
-            except Exception:
-                traceback.print_exc()
+    rows = asyncio.run(_collect_async(cfg, now, scan_date, slot, market))
 
     storage.append_rows(rows)
     ok_offers = sum(1 for r in rows if r.get("status") == "ok")
     priced_itins = len({(r["origin"], r["destination"], r["depart_date"],
                          r["return_date"]) for r in rows if r.get("status") == "ok"})
     print(f"\nCollected {ok_offers} fare rows across {priced_itins} itineraries "
-          f"on {scan_date}.")
+          f"on {scan_date} (slot {slot}).")
     if ok_offers == 0:
         print("No fares scraped. Run `python -m flightwatch diag` and inspect the "
               "screenshot/HTML written to debug/ to see what Google Flights returned.")
