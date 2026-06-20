@@ -1,9 +1,8 @@
 <!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="theme-color" content="#0d0f13">
+<meta name="theme-color" content="#f4f7fd">
 <title>Faro &middot; know when to book</title>
 <meta name="description" content="Faro tracks daily fares and tells you the perfect moment to book — boarding-pass style cards with real airline logos, stops, flight times, live weather and currency.">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -11,13 +10,12 @@
 <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Sora:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
 :root{
-  --bg:#0c0e12;--bg2:#101319;--card:#161a22;--card2:#1b202a;--ink:#f3efe6;--soft:#cdd3df;
-  --muted:#99a1b1;--dim:#6a7280;--line:#242a35;--line2:#2e3441;
-  --gold:#e8b552;--gold2:#f2cf86;--gold-dim:#8a6e2f;--amber:#e8902a;
-  --buy:#2ecb8f;--buy-bg:rgba(46,203,143,.14);--wait:#e8a33a;--wait-bg:rgba(232,163,58,.15);
-  --watch:#8a93a6;--watch-bg:rgba(138,147,166,.14);
-  --shadow:0 18px 44px -22px rgba(0,0,0,.8);--shadow-lg:0 40px 80px -30px rgba(0,0,0,.85);
-  --glow:0 0 0 1px rgba(232,181,82,.18),0 18px 50px -20px rgba(232,181,82,.25);
+  --bg:#eef2fb;--bg2:#f6f9ff;--card:#ffffff;--ink:#0b1734;--soft:#33415c;
+  --muted:#5d6b86;--dim:#8a96ad;--line:#e7edf8;--line2:#dae3f3;
+  --brand:#2f6bff;--brand2:#6b54ff;--brand3:#00b6d4;
+  --buy:#10b981;--buy-bg:#e6faf2;--wait:#f59e0b;--wait-bg:#fdf3e2;--watch:#7c8aa5;--watch-bg:#eef1f8;
+  --shadow:0 14px 38px -20px rgba(28,52,110,.28);--shadow-lg:0 38px 80px -34px rgba(28,52,110,.42);
+  --glow:0 0 0 1px rgba(47,107,255,.16),0 24px 60px -26px rgba(47,107,255,.4);
   --radius:20px;
 }
 *{margin:0;box-sizing:border-box}
@@ -27,118 +25,114 @@ body{background:var(--bg);color:var(--ink);overflow-x:hidden;
 .mono{font-family:'IBM Plex Mono',monospace}
 .osw{font-family:'Oswald',sans-serif}
 .wrap{max-width:1180px;margin:0 auto;padding:0 22px 120px}
-a{color:var(--gold2);text-decoration:none}
+a{color:var(--brand);text-decoration:none}
 img,canvas{max-width:100%}
 
-/* ---------- parallax background ---------- */
-.bgwrap{position:fixed;inset:0;z-index:-3;overflow:hidden;background:
-  radial-gradient(1200px 720px at 82% -10%,#1c2436 0,transparent 60%),
-  radial-gradient(900px 560px at -6% 4%,#15110a 0,transparent 55%),
-  linear-gradient(180deg,#0c0e12,#0a0c10 60%,#0c0e12)}
-.bg-glow{position:absolute;width:760px;height:760px;right:-180px;top:-220px;border-radius:50%;
-  background:radial-gradient(circle,rgba(232,181,82,.20),transparent 62%);filter:blur(20px);will-change:transform}
-.bg-glow.g2{left:-220px;top:30%;right:auto;width:620px;height:620px;
-  background:radial-gradient(circle,rgba(46,203,143,.10),transparent 62%)}
-.bg-grid{position:absolute;inset:-2px;opacity:.5;will-change:transform;
-  background-image:linear-gradient(rgba(255,255,255,.035) 1px,transparent 1px),
-    linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px);
-  background-size:46px 46px;mask:radial-gradient(120% 90% at 50% 0,#000 30%,transparent 80%)}
-.bg-plane{position:absolute;right:-60px;top:160px;width:560px;color:rgba(232,181,82,.05);
-  will-change:transform;transform:rotate(-14deg)}
-.bg-plane svg{width:100%;height:auto;display:block;fill:currentColor}
-.grain{position:fixed;inset:0;z-index:-2;pointer-events:none;opacity:.04;mix-blend-mode:overlay;
-  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
-/* a plane that drifts across as you scroll */
-.flyplane{position:fixed;top:18%;left:0;z-index:-1;width:120px;color:rgba(232,181,82,.10);pointer-events:none;
-  transition:transform .1s linear;will-change:transform}
-.flyplane svg{width:100%;fill:currentColor}
+/* ---------- animated gradient mesh (no images) ---------- */
+.mesh{position:fixed;inset:0;z-index:-3;overflow:hidden;background:
+  radial-gradient(1000px 680px at 10% -8%,rgba(47,107,255,.18),transparent 58%),
+  radial-gradient(900px 640px at 96% 2%,rgba(107,84,255,.16),transparent 56%),
+  radial-gradient(820px 680px at 50% 116%,rgba(0,182,212,.14),transparent 58%),var(--bg)}
+.mesh:after{content:"";position:absolute;inset:-2px;opacity:.6;
+  background-image:radial-gradient(rgba(47,107,255,.10) 1px,transparent 1.4px);background-size:30px 30px;
+  -webkit-mask:radial-gradient(120% 80% at 50% 0,#000 28%,transparent 78%);mask:radial-gradient(120% 80% at 50% 0,#000 28%,transparent 78%)}
+.blob{position:absolute;border-radius:50%;filter:blur(72px);opacity:.55;will-change:transform}
+.b1{width:540px;height:540px;left:-150px;top:-120px;background:#9db9ff;animation:fl1 22s ease-in-out infinite}
+.b2{width:480px;height:480px;right:-150px;top:40px;background:#c3b6ff;animation:fl2 26s ease-in-out infinite}
+.b3{width:420px;height:420px;left:36%;bottom:-160px;background:#a6ecf6;animation:fl1 30s ease-in-out infinite}
+@keyframes fl1{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(44px,34px) scale(1.08)}}
+@keyframes fl2{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(-52px,42px) scale(1.12)}}
 
 /* ---------- nav ---------- */
-.nav{position:sticky;top:0;z-index:60;backdrop-filter:saturate(150%) blur(16px);
-  background:rgba(12,14,18,.66);border-bottom:1px solid var(--line)}
+.nav{position:sticky;top:0;z-index:60;backdrop-filter:saturate(160%) blur(16px);
+  background:rgba(238,242,251,.72);border-bottom:1px solid var(--line)}
 .nav .row{max-width:1180px;margin:0 auto;padding:12px 22px;display:flex;align-items:center;gap:14px}
 .brand{font-weight:800;letter-spacing:-.4px;display:flex;align-items:center;gap:11px;font-size:19px}
 .mark{width:32px;height:32px;border-radius:10px;display:grid;place-items:center;flex:none;
-  background:linear-gradient(140deg,var(--gold),#c8902f);box-shadow:0 8px 20px -8px rgba(232,181,82,.7)}
+  background:linear-gradient(140deg,var(--brand),var(--brand2));box-shadow:0 8px 20px -8px rgba(47,107,255,.7)}
 .mark svg{width:18px;height:18px}
 .nav .links{margin-left:auto;display:flex;gap:4px;flex-wrap:wrap}
 .nav .links a{font-size:13px;color:var(--muted);padding:7px 13px;border-radius:20px;transition:.2s}
-.nav .links a:hover{color:var(--ink);background:rgba(255,255,255,.05)}
+.nav .links a:hover{color:var(--ink);background:#fff;box-shadow:var(--shadow)}
 .ctx{display:flex;align-items:center;gap:8px;font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:var(--muted)}
 .ctx .pulse{width:8px;height:8px;border-radius:50%;background:var(--buy);animation:pulse 2s infinite}
-@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(46,203,143,.5)}70%{box-shadow:0 0 0 8px rgba(46,203,143,0)}100%{box-shadow:0 0 0 0 rgba(46,203,143,0)}}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(16,185,129,.5)}70%{box-shadow:0 0 0 8px rgba(16,185,129,0)}100%{box-shadow:0 0 0 0 rgba(16,185,129,0)}}
 @media(max-width:760px){.nav .links{display:none}}
 
-/* ---------- hero ---------- */
-.hero{padding:56px 0 6px;display:grid;grid-template-columns:1.05fr .95fr;gap:40px;align-items:center}
-@media(max-width:960px){.hero{grid-template-columns:1fr;padding-top:38px}}
-.eyebrow{font-family:'IBM Plex Mono',monospace;letter-spacing:.26em;color:var(--gold);font-size:12px;font-weight:600;text-transform:uppercase}
-h1{font-size:clamp(40px,6.4vw,72px);font-weight:800;letter-spacing:-2px;margin:16px 0 16px;line-height:.98}
-h1 .grad{background:linear-gradient(100deg,var(--gold2),var(--gold) 45%,#c8902f);
-  -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
-.lead{color:var(--muted);font-size:17.5px;max-width:540px}
+/* ---------- epic hero ---------- */
+.hero{position:relative;padding:70px 0 64px}
+.ghost{position:absolute;top:-6%;left:50%;transform:translateX(-50%);z-index:0;pointer-events:none;
+  font-family:'Oswald',sans-serif;font-weight:700;font-size:clamp(120px,26vw,360px);line-height:.8;letter-spacing:6px;
+  white-space:nowrap;color:transparent;-webkit-text-stroke:1.5px rgba(47,107,255,.10);opacity:.7;
+  -webkit-mask:linear-gradient(180deg,#000,transparent 92%);mask:linear-gradient(180deg,#000,transparent 92%)}
+.hero-inner{position:relative;z-index:1;display:grid;grid-template-columns:1.06fr .94fr;gap:44px;align-items:center}
+@media(max-width:960px){.hero-inner{grid-template-columns:1fr;gap:30px}.hero{padding-top:48px}}
+.eyebrow{display:inline-flex;align-items:center;gap:9px;font-family:'IBM Plex Mono',monospace;letter-spacing:.18em;
+  color:var(--brand);font-size:11.5px;font-weight:600;text-transform:uppercase;background:#fff;border:1px solid var(--line2);
+  padding:7px 14px;border-radius:30px;box-shadow:var(--shadow)}
+.eyebrow .dot{width:7px;height:7px;border-radius:50%;background:var(--brand);box-shadow:0 0 0 4px rgba(47,107,255,.16)}
+h1{font-size:clamp(44px,7vw,86px);font-weight:800;letter-spacing:-2.4px;margin:20px 0 18px;line-height:.96}
+h1 .grad{background:linear-gradient(100deg,var(--brand),var(--brand2) 46%,var(--brand3));background-size:200% 100%;
+  -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;animation:shine 7s linear infinite}
+@keyframes shine{to{background-position:200% 0}}
+.lead{color:var(--muted);font-size:18px;max-width:520px}
 .lead b{color:var(--soft)}
-.chips{display:flex;gap:10px;flex-wrap:wrap;margin-top:24px}
-.lchip{display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--line);
+.chips{display:flex;gap:10px;flex-wrap:wrap;margin-top:26px}
+.lchip{display:flex;align-items:center;gap:10px;background:#fff;border:1px solid var(--line);
   border-radius:14px;padding:9px 13px;box-shadow:var(--shadow);font-size:13px}
 .lchip .ico{font-size:16px;line-height:1;width:18px;text-align:center}
 .lchip b{font-family:'IBM Plex Mono',monospace;font-weight:600;display:block;color:var(--ink)}
 .lchip small{color:var(--dim);font-size:11px;display:block}
 
-/* dynamic-island style notification (from the iOS mock) */
-.island{position:absolute;top:14px;left:50%;transform:translateX(-50%);z-index:5;
-  display:flex;align-items:center;gap:10px;background:#05070b;border:1px solid #20252f;
-  color:#eef2f8;font-family:'IBM Plex Mono',monospace;font-size:12px;padding:8px 16px;border-radius:22px;
-  box-shadow:0 14px 30px -14px rgba(0,0,0,.9);white-space:nowrap}
-.island .pl{color:var(--gold)}
-.island .t{margin-left:6px;color:#cfd6e2}
+/* vector flight arc accent (no image) */
+.arc{position:relative;height:120px;margin:0 6px 4px}
+.arc svg{width:100%;height:100%;overflow:visible}
+.arc .path{fill:none;stroke:url(#ag);stroke-width:2.4;stroke-dasharray:6 8;stroke-linecap:round;
+  animation:dash 16s linear infinite}
+@keyframes dash{to{stroke-dashoffset:-280}}
+.arc .ep{fill:#fff;stroke:var(--brand);stroke-width:3}
+.arc .ep2{stroke:var(--brand3)}
+.arc .pl{offset-path:path('M14 100 Q210 -16 406 64');offset-rotate:auto;animation:flyarc 6s ease-in-out infinite;
+  fill:var(--brand)}
+@keyframes flyarc{0%{offset-distance:0%}100%{offset-distance:100%}}
+.arc .lab{font-family:'IBM Plex Mono',monospace;font-size:11px;fill:var(--dim)}
 
-/* 3D scene */
-.scene{position:relative;width:100%;height:480px;border-radius:28px;overflow:hidden;
-  background:radial-gradient(120% 120% at 70% 16%,#11203f 0,#0a1124 55%,#06080f 100%);
-  box-shadow:var(--shadow-lg),inset 0 0 0 1px rgba(232,181,82,.14);cursor:grab}
-.scene canvas{display:block;width:100%;height:100%}
-@media(max-width:960px){.scene{height:380px}}
-@media(max-width:520px){.scene{height:320px}}
-.fb{position:absolute;inset:0;display:grid;place-items:center}
-.fb .planet{width:60%;aspect-ratio:1;border-radius:50%;
-  background:radial-gradient(circle at 34% 30%,#5b86c8 0,#274a86 42%,#11254e 72%,#0a1730 100%);
-  box-shadow:inset -22px -18px 60px rgba(0,0,0,.6),0 0 70px rgba(232,181,82,.22);animation:spin 26s linear infinite}
-.fb .ring{position:absolute;width:84%;aspect-ratio:1;border:1px dashed rgba(232,181,82,.32);border-radius:50%;transform:rotate(28deg)}
-.fb .pl{position:absolute;font-size:26px;animation:orbit 9s linear infinite}
-@keyframes spin{to{transform:rotate(360deg)}}
-@keyframes orbit{from{transform:rotate(0) translateX(150px) rotate(0)}to{transform:rotate(360deg) translateX(150px) rotate(-360deg)}}
-.routeover{position:absolute;left:18px;bottom:16px;display:flex;gap:8px;align-items:center;
-  font-family:'IBM Plex Mono',monospace;font-size:12px;color:#e9eefb;
-  background:rgba(6,9,16,.55);backdrop-filter:blur(6px);padding:8px 12px;border-radius:12px;border:1px solid rgba(232,181,82,.25)}
-.routeover .leg{width:7px;height:7px;border-radius:50%}
+/* hero scroll cue */
+.cue{position:relative;z-index:1;display:flex;justify-content:center;margin-top:46px}
+.cue a{display:flex;flex-direction:column;align-items:center;gap:6px;color:var(--dim);
+  font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.2em;text-transform:uppercase}
+.cue .ch{width:24px;height:24px;border-radius:50%;border:1px solid var(--line2);background:#fff;display:grid;place-items:center;
+  box-shadow:var(--shadow);animation:bob 1.8s ease-in-out infinite}
+.cue .ch svg{width:13px;height:13px;stroke:var(--brand);fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+@keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(5px)}}
 
 /* ---------- boarding pass card ---------- */
-.bpwrap{perspective:1400px;margin-top:28px}
-.bp{position:relative;background:linear-gradient(165deg,#13161d,#0d1015);border:1px solid var(--line2);
+.bpwrap{perspective:1400px}
+.bp{position:relative;background:linear-gradient(168deg,#ffffff,#f3f7ff);border:1px solid var(--line2);
   border-radius:24px;padding:22px 24px;box-shadow:var(--shadow-lg);overflow:hidden}
 .bp:before{content:"";position:absolute;inset:0;border-radius:24px;pointer-events:none;
-  background:radial-gradient(520px 220px at 84% -10%,rgba(232,181,82,.16),transparent 60%)}
+  background:radial-gradient(520px 220px at 86% -12%,rgba(47,107,255,.12),transparent 60%)}
+.bp.float{animation:floaty 7s ease-in-out infinite}
+@keyframes floaty{0%,100%{transform:translateY(0)}50%{transform:translateY(-9px)}}
 .bp.tilt-3d{transform-style:preserve-3d;transform:rotateX(var(--rx,0deg)) rotateY(var(--ry,0deg));transition:transform .2s ease}
 .bp .bp-top{display:flex;align-items:center;gap:10px;position:relative}
 .bp-tag{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim)}
 .bp-mid{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:16px;margin:14px 0 4px;position:relative}
-.bp-code{font-family:'Oswald',sans-serif;font-weight:700;font-size:clamp(34px,6vw,58px);line-height:.9;letter-spacing:.5px;color:#fff}
+.bp-code{font-family:'Oswald',sans-serif;font-weight:700;font-size:clamp(34px,6vw,58px);line-height:.9;letter-spacing:.5px;color:var(--ink)}
 .bp-code small{display:block;font-family:'Sora',sans-serif;font-weight:500;font-size:11.5px;letter-spacing:.02em;color:var(--dim);margin-top:6px}
 .bp-code.r{text-align:right}
 .bp-track{min-width:0}
 .bp-arr{text-align:center;font-size:13px;color:var(--muted);margin-bottom:9px}
-.bp-arr b{color:var(--gold);font-family:'IBM Plex Mono',monospace;font-weight:600}
-.bp-bar{position:relative;height:12px;border-radius:7px;background:rgba(232,181,82,.13);display:flex;align-items:center}
-.bp-bar>i{display:block;height:100%;border-radius:7px;background:linear-gradient(90deg,#c8902f,var(--gold));box-shadow:0 0 16px -2px rgba(232,181,82,.6);transition:width 1.3s cubic-bezier(.2,.7,.2,1)}
-.bp-dot{position:absolute;width:11px;height:11px;border-radius:50%;background:var(--gold);top:50%;transform:translateY(-50%);box-shadow:0 0 0 3px rgba(232,181,82,.18)}
-.bp-dot.l{left:-1px}.bp-dot.r{right:-1px;background:#0d1015;border:2px solid var(--gold)}
-.bp-plane{position:absolute;top:50%;transform:translate(-50%,-50%);color:#0c0e12;display:grid;place-items:center;z-index:2;transition:left 1.3s cubic-bezier(.2,.7,.2,1)}
-.bp-plane svg{width:17px;height:17px;fill:#0c0e12;filter:drop-shadow(0 1px 2px rgba(0,0,0,.4))}
+.bp-arr b{color:var(--brand);font-family:'IBM Plex Mono',monospace;font-weight:600}
+.bp-bar{position:relative;height:12px;border-radius:7px;background:#e7eefc;display:flex;align-items:center}
+.bp-bar>i{display:block;height:100%;border-radius:7px;background:linear-gradient(90deg,var(--brand),var(--brand2));box-shadow:0 4px 12px -2px rgba(47,107,255,.5);transition:width 1.3s cubic-bezier(.2,.7,.2,1)}
+.bp-dot{position:absolute;width:11px;height:11px;border-radius:50%;background:var(--brand);top:50%;transform:translateY(-50%);box-shadow:0 0 0 3px rgba(47,107,255,.16)}
+.bp-dot.l{left:-1px}.bp-dot.r{right:-1px;background:#fff;border:2px solid var(--brand3)}
+.bp-plane{position:absolute;top:50%;transform:translate(-50%,-50%);z-index:2;display:grid;place-items:center;transition:left 1.3s cubic-bezier(.2,.7,.2,1)}
+.bp-plane svg{width:17px;height:17px;fill:#fff;filter:drop-shadow(0 1px 2px rgba(0,0,0,.25))}
 .bp-stop{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:3;
-  font-family:'IBM Plex Mono',monospace;font-size:9.5px;font-weight:600;letter-spacing:.08em;color:#0c0e12;
-  background:repeating-linear-gradient(45deg,#e8b552,#e8b552 4px,#d6a23f 4px,#d6a23f 8px);
-  padding:3px 8px;border-radius:7px;border:2px solid #0d1015}
+  font-family:'IBM Plex Mono',monospace;font-size:9.5px;font-weight:600;letter-spacing:.08em;color:#fff;
+  background:linear-gradient(90deg,var(--brand2),var(--brand));padding:3px 8px;border-radius:7px;border:2px solid #fff;box-shadow:var(--shadow)}
 .bp-sub{text-align:center;font-size:11.5px;color:var(--dim);margin-top:9px}
 .bp-foot{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-top:18px;
   padding-top:16px;border-top:1px dashed var(--line2)}
@@ -146,14 +140,14 @@ h1 .grad{background:linear-gradient(100deg,var(--gold2),var(--gold) 45%,#c8902f)
 .bp-leg .v{font-family:'Oswald',sans-serif;font-weight:600;font-size:21px;color:var(--ink);letter-spacing:.3px}
 .bp-leg.r{text-align:right}
 .bp-pill{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:14px;color:var(--ink);
-  background:var(--card2);border:1px solid var(--line2);padding:9px 15px;border-radius:14px;white-space:nowrap}
-.bp-pill.green{background:var(--buy-bg);color:var(--buy);border-color:rgba(46,203,143,.3)}
-.bp-pill.amber{background:var(--wait-bg);color:var(--wait);border-color:rgba(232,163,58,.3)}
+  background:#eef3fd;border:1px solid var(--line2);padding:9px 15px;border-radius:14px;white-space:nowrap}
+.bp-pill.green{background:var(--buy-bg);color:var(--buy);border-color:rgba(16,185,129,.3)}
+.bp-pill.amber{background:var(--wait-bg);color:var(--wait);border-color:rgba(245,158,11,.3)}
 
 .sig{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:12px;padding:6px 13px;border-radius:12px;white-space:nowrap;margin-left:auto}
 .BUY{background:var(--buy-bg);color:var(--buy)}.WAIT{background:var(--wait-bg);color:var(--wait)}.WATCH{background:var(--watch-bg);color:var(--watch)}
-.tag{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted);background:var(--card2);border:1px solid var(--line);border-radius:8px;padding:4px 9px}
-.tag.b{color:var(--gold2);background:rgba(232,181,82,.1);border-color:rgba(232,181,82,.25)}
+.tag{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted);background:#eef3fd;border:1px solid var(--line);border-radius:8px;padding:4px 9px}
+.tag.b{color:var(--brand);background:rgba(47,107,255,.1);border-color:rgba(47,107,255,.22)}
 
 /* airline logo / avatar */
 .av{position:relative;display:inline-grid;place-items:center;border-radius:9px;overflow:hidden;flex:none;
@@ -162,21 +156,21 @@ h1 .grad{background:linear-gradient(100deg,var(--gold2),var(--gold) 45%,#c8902f)
 .av img{position:relative;width:100%;height:100%;object-fit:contain;background:#fff;padding:13%}
 
 /* ---------- stats ---------- */
-.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(176px,1fr));gap:14px;margin-top:38px;perspective:1200px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(176px,1fr));gap:14px;margin-top:8px;perspective:1200px}
 .tilt{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);
   position:relative;transform-style:preserve-3d;
   transform:perspective(900px) rotateX(calc(var(--rx,0deg) + var(--srx,0deg))) rotateY(var(--ry,0deg)) translateY(calc(var(--lift,0px) * -1));
   transition:transform .18s ease,box-shadow .25s ease,border-color .25s ease;will-change:transform}
-.tilt:hover{box-shadow:var(--glow);border-color:rgba(232,181,82,.35)}
+.tilt:hover{box-shadow:var(--glow);border-color:rgba(47,107,255,.32)}
 .tilt:after{content:"";position:absolute;inset:0;border-radius:var(--radius);pointer-events:none;opacity:0;transition:opacity .3s;
-  background:radial-gradient(240px 240px at var(--mx,50%) var(--my,0%),rgba(232,181,82,.14),transparent 60%)}
+  background:radial-gradient(240px 240px at var(--mx,50%) var(--my,0%),rgba(47,107,255,.12),transparent 60%)}
 .tilt.hot:after{opacity:1}
 .stat{display:flex;flex-direction:column;min-height:150px;padding:18px 18px 16px}
 .stat .ic{width:42px;height:42px;border-radius:12px;display:grid;place-items:center;flex:none;transform:translateZ(30px);
-  background:linear-gradient(135deg,rgba(232,181,82,.18),rgba(232,181,82,.05));border:1px solid rgba(232,181,82,.18)}
-.stat .ic svg{width:21px;height:21px;stroke:var(--gold);fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+  background:linear-gradient(135deg,rgba(47,107,255,.16),rgba(107,84,255,.12));border:1px solid rgba(47,107,255,.16)}
+.stat .ic svg{width:21px;height:21px;stroke:var(--brand);fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
 .stat .n{font-family:'Oswald',sans-serif;font-size:30px;font-weight:600;letter-spacing:.4px;margin-top:14px;
-  white-space:nowrap;display:flex;align-items:baseline;gap:5px;transform:translateZ(42px);color:#fff}
+  white-space:nowrap;display:flex;align-items:baseline;gap:5px;transform:translateZ(42px);color:var(--ink)}
 .stat .n .cur{font-size:12px;color:var(--dim);font-weight:500;letter-spacing:0;font-family:'IBM Plex Mono',monospace}
 .stat .l{color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:.12em;margin-top:auto;padding-top:12px;transform:translateZ(20px)}
 .stat .x{color:var(--muted);font-size:12px;margin-top:4px;display:flex;align-items:center;gap:6px;transform:translateZ(16px)}
@@ -185,7 +179,7 @@ h1 .grad{background:linear-gradient(100deg,var(--gold2),var(--gold) 45%,#c8902f)
 .section{margin:74px 0 4px;display:flex;align-items:baseline;gap:14px}
 .section h2{font-size:23px;font-weight:800;letter-spacing:-.5px}
 .section .hint{font-size:12px;color:var(--dim);font-family:'IBM Plex Mono',monospace;margin-left:auto}
-.section .bar-accent{width:30px;height:3px;border-radius:3px;background:linear-gradient(90deg,var(--gold),transparent);align-self:center}
+.section .bar-accent{width:30px;height:3px;border-radius:3px;background:linear-gradient(90deg,var(--brand),transparent);align-self:center}
 
 /* recommendation card = boarding pass + meta strip */
 .rcard{margin-top:18px}
@@ -195,12 +189,12 @@ h1 .grad{background:linear-gradient(100deg,var(--gold2),var(--gold) 45%,#c8902f)
 .rmeta .reason{color:var(--muted);font-size:13.5px}
 .conf{margin-top:11px;max-width:340px}
 .conf .lab{font-size:11px;color:var(--dim);font-family:'IBM Plex Mono',monospace;display:flex;justify-content:space-between}
-.cbar{height:7px;background:rgba(255,255,255,.06);border-radius:7px;overflow:hidden;margin-top:5px}
-.cbar>i{display:block;height:100%;width:0;border-radius:7px;background:linear-gradient(90deg,var(--gold),var(--buy));transition:width 1.2s cubic-bezier(.2,.7,.2,1)}
+.cbar{height:7px;background:#e7eefc;border-radius:7px;overflow:hidden;margin-top:5px}
+.cbar>i{display:block;height:100%;width:0;border-radius:7px;background:linear-gradient(90deg,var(--brand),var(--buy));transition:width 1.2s cubic-bezier(.2,.7,.2,1)}
 .tags{margin-top:11px;display:flex;gap:7px;flex-wrap:wrap}
 .spark{width:140px;height:48px}
 .pricebox{text-align:right}
-.pricebox .price{font-family:'Oswald',sans-serif;font-size:27px;font-weight:600;letter-spacing:.4px;color:#fff}
+.pricebox .price{font-family:'Oswald',sans-serif;font-size:27px;font-weight:600;letter-spacing:.4px;color:var(--ink)}
 .pricebox .pricelbl{color:var(--dim);font-size:11px;font-family:'IBM Plex Mono',monospace;margin-top:2px}
 @media(max-width:860px){.rmeta{grid-template-columns:1fr;gap:14px}.spark{width:100%}.pricebox{text-align:left}}
 
@@ -214,21 +208,21 @@ h1 .grad{background:linear-gradient(100deg,var(--gold2),var(--gold) 45%,#c8902f)
 /* ---------- insight cards ---------- */
 .icards{display:grid;grid-template-columns:repeat(auto-fill,minmax(338px,1fr));gap:16px;margin-top:18px}
 .icard{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:20px;box-shadow:var(--shadow);transition:transform .25s,box-shadow .25s,border-color .25s}
-.icard:hover{transform:translateY(-3px);box-shadow:var(--glow);border-color:rgba(232,181,82,.3)}
+.icard:hover{transform:translateY(-3px);box-shadow:var(--glow);border-color:rgba(47,107,255,.28)}
 .icard .top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
 .icard .rt{font-weight:700;font-size:15.5px;letter-spacing:-.2px}
 .icard .when{font-size:11.5px;color:var(--dim);font-family:'IBM Plex Mono',monospace;margin-top:2px}
-.icard .big{font-family:'Oswald',sans-serif;font-size:26px;font-weight:600;letter-spacing:.4px;color:var(--gold2)}
+.icard .big{font-family:'Oswald',sans-serif;font-size:26px;font-weight:600;letter-spacing:.4px;color:var(--buy)}
 .icard .big small{font-size:11px;color:var(--dim);font-weight:400;display:block;text-align:right;font-family:'Sora',sans-serif}
 .facts{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:16px 0 4px}
-.fact{background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:9px 11px}
+.fact{background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:9px 11px}
 .fact .k{font-size:10.5px;color:var(--dim);text-transform:uppercase;letter-spacing:.1em}
 .fact .v{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:14px;margin-top:2px;color:var(--soft)}
 .alist{margin-top:14px;display:flex;flex-direction:column;gap:9px}
 .aline{display:flex;align-items:center;gap:11px;font-size:13px}
 .aline .nm{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--soft)}
 .aline .pr{font-family:'IBM Plex Mono',monospace;font-weight:600;color:var(--muted)}
-.stopbar{display:flex;height:8px;border-radius:6px;overflow:hidden;margin-top:14px;background:rgba(255,255,255,.06)}
+.stopbar{display:flex;height:8px;border-radius:6px;overflow:hidden;margin-top:14px;background:#e7eefc}
 .stopbar i{display:block;height:100%}
 .stopkey{display:flex;gap:14px;margin-top:8px;font-size:11px;color:var(--muted);flex-wrap:wrap}
 .stopkey span{display:flex;align-items:center;gap:5px}
@@ -238,7 +232,7 @@ h1 .grad{background:linear-gradient(100deg,var(--gold2),var(--gold) 45%,#c8902f)
 details{background:var(--card);border:1px solid var(--line);border-radius:16px;margin-top:12px;padding:2px 18px;box-shadow:var(--shadow);overflow:hidden}
 summary{cursor:pointer;padding:15px 0;font-weight:600;font-size:14.5px;display:flex;align-items:center;justify-content:space-between;gap:10px;list-style:none}
 summary::-webkit-details-marker{display:none}
-summary .pill{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--gold2);background:rgba(232,181,82,.12);padding:3px 9px;border-radius:20px;white-space:nowrap;border:1px solid rgba(232,181,82,.2)}
+summary .pill{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--brand);background:rgba(47,107,255,.1);padding:3px 9px;border-radius:20px;white-space:nowrap;border:1px solid rgba(47,107,255,.2)}
 summary:after{content:"+";color:var(--dim);font-size:18px;margin-left:6px;transition:.2s}
 details[open] summary:after{transform:rotate(45deg)}
 table{width:100%;border-collapse:collapse;font-size:13px;margin-bottom:8px}
@@ -248,7 +242,7 @@ td.num,th.num{text-align:right;font-family:'IBM Plex Mono',monospace}
 td .airline{display:flex;align-items:center;gap:10px;color:var(--soft)}
 tr.best td{background:var(--buy-bg)}
 .cheapest{font-size:10px;color:var(--buy);font-weight:700;font-family:'IBM Plex Mono',monospace;margin-left:8px}
-.chip{font-family:'IBM Plex Mono',monospace;font-size:11px;padding:2px 8px;border-radius:20px;background:var(--card2);color:var(--muted)}
+.chip{font-family:'IBM Plex Mono',monospace;font-size:11px;padding:2px 8px;border-radius:20px;background:#eef3fd;color:var(--muted)}
 .chip.ns{background:var(--buy-bg);color:var(--buy)}
 
 .empty{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:54px 30px;text-align:center;margin-top:34px;box-shadow:var(--shadow)}
@@ -256,36 +250,29 @@ tr.best td{background:var(--buy-bg)}
 
 .foot{margin-top:80px;border-top:1px solid var(--line);padding-top:28px;color:var(--dim);font-size:12.5px;line-height:1.8}
 .author{display:flex;align-items:center;gap:13px;margin-top:22px}
-.author .ring{width:46px;height:46px;border-radius:14px;flex:none;display:grid;place-items:center;color:#0c0e12;font-weight:800;
-  font-family:'IBM Plex Mono',monospace;font-size:16px;background:linear-gradient(135deg,var(--gold2),var(--gold));box-shadow:0 10px 22px -8px rgba(232,181,82,.6)}
+.author .ring{width:46px;height:46px;border-radius:14px;flex:none;display:grid;place-items:center;color:#fff;font-weight:800;
+  font-family:'IBM Plex Mono',monospace;font-size:16px;background:linear-gradient(135deg,var(--brand),var(--brand2));box-shadow:0 10px 22px -8px rgba(107,84,255,.6)}
 .author .who{font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.16em}
 .author .nm{font-size:16px;font-weight:700;color:var(--ink);letter-spacing:-.2px}
 
 /* ---------- scroll reveal ---------- */
 .reveal,.reveal-l,.reveal-r,.reveal-sc{opacity:0;transition:opacity .8s ease,transform .8s cubic-bezier(.2,.7,.2,1);will-change:opacity,transform}
 .reveal{transform:translateY(30px)}
-.reveal-l{transform:translateX(-40px)}
-.reveal-r{transform:translateX(40px)}
+.reveal-l{transform:translateX(-44px)}
+.reveal-r{transform:translateX(44px)}
 .reveal-sc{transform:scale(.94)}
 .reveal.in,.reveal-l.in,.reveal-r.in,.reveal-sc.in{opacity:1;transform:none}
 @media(prefers-reduced-motion:reduce){
   .reveal,.reveal-l,.reveal-r,.reveal-sc{opacity:1;transform:none;transition:none}
   .cbar>i,.bp-bar>i,.bp-plane{transition:none}
-  .bg-glow,.fb .planet,.fb .pl,.flyplane,.tilt,.bp.tilt-3d{transition:none;animation:none}
+  .blob,.bp.float,.arc .path,.arc .pl,.cue .ch,.tilt,.bp.tilt-3d,h1 .grad{animation:none}
 }
 </style></head><body>
 
-<div class="bgwrap">
-  <span class="bg-glow" data-px="-0.05"></span>
-  <span class="bg-glow g2" data-px="0.04"></span>
-  <span class="bg-grid" data-px="0.015"></span>
-  <span class="bg-plane" data-px="-0.14"><svg viewBox="0 0 24 24"><path d="M2.5 19h19v2h-19zM22.07 9.64c-.21-.8-1.04-1.28-1.84-1.06L14.92 10 8.46 3.98l-1.93.51 3.87 6.71-4.97 1.33-1.97-1.54-1.45.39 1.81 3.14.79 1.37 1.69-.46 5.13-1.37 4.83-1.29 5.96-1.6c.81-.23 1.28-1.05 1.07-1.84z"/></svg></span>
-</div>
-<div class="grain"></div>
-<div class="flyplane" id="flyplane"><svg viewBox="0 0 24 24"><path d="M2 21l21-9L2 3v7l15 2-15 2z"/></svg></div>
+<div class="mesh"><span class="blob b1" data-px="-0.05"></span><span class="blob b2" data-px="0.04"></span><span class="blob b3" data-px="-0.03"></span></div>
 
 <nav class="nav"><div class="row">
-  <div class="brand"><span class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="#0c0e12" stroke-width="2.2"
+  <div class="brand"><span class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2"
     stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v3M9 8h6l1.5 11h-9L9 8zM7.5 19h9M10 8l.5-3h3l.5 3"/></svg></span>Faro</div>
   <div class="links"><a href="#deals">Signals</a><a href="#trend">Trends</a><a href="#insights">Insights</a><a href="#fares">Fares</a></div>
   <div class="ctx"><span class="pulse"></span><span id="clock">live</span><span id="navwx"></span></div>
@@ -293,21 +280,27 @@ tr.best td{background:var(--buy-bg)}
 
 <div class="wrap">
   <header class="hero">
-    <div class="reveal-l">
-      <div class="eyebrow" id="eyebrow">SMART FARE TIMING</div>
-      <h1>Book your flight<br>at the <span class="grad">perfect moment.</span></h1>
-      <div class="lead" id="lead">Faro watches the fares every day and tells you whether to grab the seat now or hold
-        out for a better price — with the airline, stops and flight time for every option.</div>
-      <div class="chips" id="hchips"></div>
-      <div class="bpwrap"><div id="deal"></div></div>
-    </div>
-    <div class="reveal-r">
-      <div class="scene" id="scene">
-        <div class="island" id="island"></div>
-        <div class="fb"><div class="planet"></div><div class="ring"></div><div class="pl">✈️</div></div>
-        <div class="routeover" id="routeover"></div>
+    <div class="ghost" id="ghost"></div>
+    <div class="hero-inner">
+      <div class="reveal-l">
+        <div class="eyebrow"><span class="dot"></span><span id="eyebrow">SMART FARE TIMING</span></div>
+        <h1>Book your flight<br>at the <span class="grad">perfect moment.</span></h1>
+        <div class="lead" id="lead">Faro watches the fares every day and tells you whether to grab the seat now or hold
+          out for a better price — with the airline, stops and flight time for every option.</div>
+        <div class="chips" id="hchips"></div>
+      </div>
+      <div class="reveal-r">
+        <div class="arc"><svg viewBox="0 0 420 120" preserveAspectRatio="none">
+          <defs><linearGradient id="ag" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0" stop-color="#2f6bff"/><stop offset="1" stop-color="#00b6d4"/></linearGradient></defs>
+          <path class="path" d="M14 100 Q210 -16 406 64"/>
+          <circle class="ep" cx="14" cy="100" r="6"/><circle class="ep ep2" cx="406" cy="64" r="6"/>
+          <g class="pl"><path d="M-9 0 L9 0 M0 -6 L11 0 L0 6" fill="none" stroke="#2f6bff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></g>
+        </svg></div>
+        <div class="bpwrap"><div id="deal"></div></div>
       </div>
     </div>
+    <div class="cue"><a href="#stats"><span>explore</span><span class="ch"><svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></span></a></div>
   </header>
 
   <div class="stats" id="stats"></div>
@@ -325,14 +318,14 @@ tr.best td{background:var(--buy-bg)}
 </div>
 
 <script>
-const D = {"generated": "2026-06-20 09:44 UTC", "recs": [{"signal": "WATCH", "confidence": 25, "reason": "Still collecting history for this route.", "price": 1344.0, "predicted_low": 1344.0, "expected_savings": 0.0, "prob_drop": null, "trailing_min": 1344.0, "percentile": 0, "days_to_departure": 73, "method": "heuristic", "itinerary": "CHC-CMB 2026-09-01 -> 2026-09-22", "points": 1}, {"signal": "WATCH", "confidence": 25, "reason": "Still collecting history for this route.", "price": 1425.0, "predicted_low": 1425.0, "expected_savings": 0.0, "prob_drop": null, "trailing_min": 1425.0, "percentile": 0, "days_to_departure": 75, "method": "heuristic", "itinerary": "CHC-CMB 2026-09-03 -> 2026-09-24", "points": 1}, {"signal": "WATCH", "confidence": 25, "reason": "Still collecting history for this route.", "price": 1465.0, "predicted_low": 1465.0, "expected_savings": 0.0, "prob_drop": null, "trailing_min": 1465.0, "percentile": 0, "days_to_departure": 80, "method": "heuristic", "itinerary": "CHC-CMB 2026-09-08 -> 2026-10-15", "points": 1}, {"signal": "WATCH", "confidence": 25, "reason": "Still collecting history for this route.", "price": 1480.0, "predicted_low": 1480.0, "expected_savings": 0.0, "prob_drop": null, "trailing_min": 1480.0, "percentile": 0, "days_to_departure": 68, "method": "heuristic", "itinerary": "CHC-CMB 2026-08-27 -> 2026-09-17", "points": 1}, {"signal": "WATCH", "confidence": 25, "reason": "Still collecting history for this route.", "price": 1481.0, "predicted_low": 1481.0, "expected_savings": 0.0, "prob_drop": null, "trailing_min": 1481.0, "percentile": 0, "days_to_departure": 87, "method": "heuristic", "itinerary": "CHC-CMB 2026-09-15 -> 2026-10-24", "points": 1}], "history": {"CHC-CMB 2026-08-27 -> 2026-09-17": [{"d": "2026-06-20", "p": 1480.0}], "CHC-CMB 2026-09-01 -> 2026-09-22": [{"d": "2026-06-20", "p": 1344.0}], "CHC-CMB 2026-09-03 -> 2026-09-24": [{"d": "2026-06-20", "p": 1425.0}], "CHC-CMB 2026-09-08 -> 2026-10-15": [{"d": "2026-06-20", "p": 1465.0}], "CHC-CMB 2026-09-15 -> 2026-10-24": [{"d": "2026-06-20", "p": 1481.0}]}, "insights": [{"itinerary": "CHC-CMB 2026-09-01 -> 2026-09-22", "offers": 2, "min": 1344.0, "median": 1344.0, "max": 1344.0, "nonstop": false, "stops": {"nonstop": 0, "one": 2, "two_plus": 0}, "fastest": 960, "typical_duration": 960, "airlines": ["Jetstar"], "airline_prices": [{"name": "Jetstar", "price": 1344.0, "iata": "JQ"}], "cheapest_airline": "Jetstar", "cheapest_iata": "JQ", "days_to_departure": 73, "scan_date": "2026-06-20"}, {"itinerary": "CHC-CMB 2026-09-03 -> 2026-09-24", "offers": 10, "min": 1425.0, "median": 2895.0, "max": 3345.0, "nonstop": false, "stops": {"nonstop": 0, "one": 8, "two_plus": 2}, "fastest": 960, "typical_duration": 1080, "airlines": ["Jetstar + Qantas", "Qantas + Jetstar", "Singapore Airlines + Air New Zealand", "Air New Zealand + Singapore Airlines"], "airline_prices": [{"name": "Jetstar + Qantas", "price": 1425.0, "iata": "JQ"}, {"name": "Qantas + Jetstar", "price": 2445.0, "iata": "QF"}, {"name": "Singapore Airlines + Air New Zealand", "price": 2895.0, "iata": "SQ"}, {"name": "Air New Zealand + Singapore Airlines", "price": 3345.0, "iata": "NZ"}], "cheapest_airline": "Jetstar + Qantas", "cheapest_iata": "JQ", "days_to_departure": 75, "scan_date": "2026-06-20"}, {"itinerary": "CHC-CMB 2026-09-08 -> 2026-10-15", "offers": 12, "min": 1465.0, "median": 2369.5, "max": 3065.0, "nonstop": false, "stops": {"nonstop": 0, "one": 12, "two_plus": 0}, "fastest": 960, "typical_duration": 1117, "airlines": ["Jetstar + Qantas", "Qantas + SriLankan", "Air New Zealand + SriLankan", "Qantas + Jetstar", "Singapore Airlines + Air New Zealand"], "airline_prices": [{"name": "Jetstar + Qantas", "price": 1465.0, "iata": "JQ"}, {"name": "Qantas + SriLankan", "price": 2021.0, "iata": "QF"}, {"name": "Air New Zealand + SriLankan", "price": 2032.0, "iata": "NZ"}, {"name": "Qantas + Jetstar", "price": 2707.0, "iata": "QF"}, {"name": "Singapore Airlines + Air New Zealand", "price": 3065.0, "iata": "SQ"}], "cheapest_airline": "Jetstar + Qantas", "cheapest_iata": "JQ", "days_to_departure": 80, "scan_date": "2026-06-20"}, {"itinerary": "CHC-CMB 2026-08-27 -> 2026-09-17", "offers": 12, "min": 1480.0, "median": 2642.5, "max": 2905.0, "nonstop": false, "stops": {"nonstop": 0, "one": 8, "two_plus": 4}, "fastest": 960, "typical_duration": 1112, "airlines": ["Jetstar + Qantas", "Singapore Airlines + Air New Zealand", "Air New Zealand + Singapore Airlines", "Qantas + Jetstar"], "airline_prices": [{"name": "Jetstar + Qantas", "price": 1480.0, "iata": "JQ"}, {"name": "Singapore Airlines + Air New Zealand", "price": 2565.0, "iata": "SQ"}, {"name": "Air New Zealand + Singapore Airlines", "price": 2720.0, "iata": "NZ"}, {"name": "Qantas + Jetstar", "price": 2738.0, "iata": "QF"}], "cheapest_airline": "Jetstar + Qantas", "cheapest_iata": "JQ", "days_to_departure": 68, "scan_date": "2026-06-20"}, {"itinerary": "CHC-CMB 2026-09-15 -> 2026-10-24", "offers": 2, "min": 1481.0, "median": 1481.0, "max": 1481.0, "nonstop": false, "stops": {"nonstop": 0, "one": 2, "two_plus": 0}, "fastest": 960, "typical_duration": 960, "airlines": ["Jetstar"], "airline_prices": [{"name": "Jetstar", "price": 1481.0, "iata": "JQ"}], "cheapest_airline": "Jetstar", "cheapest_iata": "JQ", "days_to_departure": 87, "scan_date": "2026-06-20"}], "latest_offers": {"CHC-CMB 2026-08-27 -> 2026-09-17": [{"price": 1480.0, "airline": "Jetstar + Qantas", "iata": "JQ", "stops": 1, "duration": 960}, {"price": 1480.0, "airline": "", "iata": "", "stops": 1, "duration": 960}, {"price": 2565.0, "airline": "", "iata": "", "stops": 1, "duration": 1030}, {"price": 2565.0, "airline": "Singapore Airlines + Air New Zealand", "iata": "SQ", "stops": 1, "duration": 1155}, {"price": 2565.0, "airline": "", "iata": "", "stops": 1, "duration": 1030}, {"price": 2565.0, "airline": "", "iata": "", "stops": 1, "duration": 1155}, {"price": 2720.0, "airline": "Air New Zealand + Singapore Airlines", "iata": "NZ", "stops": 2, "duration": 1215}, {"price": 2720.0, "airline": "", "iata": "", "stops": 2, "duration": 1215}, {"price": 2738.0, "airline": "Qantas + Jetstar", "iata": "QF", "stops": 1, "duration": 1080}, {"price": 2738.0, "airline": "", "iata": "", "stops": 1, "duration": 1080}], "CHC-CMB 2026-09-01 -> 2026-09-22": [{"price": 1344.0, "airline": "Jetstar", "iata": "JQ", "stops": 1, "duration": 960}, {"price": 1344.0, "airline": "", "iata": "", "stops": 1, "duration": 960}], "CHC-CMB 2026-09-03 -> 2026-09-24": [{"price": 1425.0, "airline": "Jetstar + Qantas", "iata": "JQ", "stops": 1, "duration": 960}, {"price": 1425.0, "airline": "", "iata": "", "stops": 1, "duration": 960}, {"price": 2445.0, "airline": "Qantas + Jetstar", "iata": "QF", "stops": 1, "duration": 1080}, {"price": 2445.0, "airline": "", "iata": "", "stops": 1, "duration": 1080}, {"price": 2895.0, "airline": "", "iata": "", "stops": 1, "duration": 1030}, {"price": 2895.0, "airline": "Singapore Airlines + Air New Zealand", "iata": "SQ", "stops": 1, "duration": 1155}, {"price": 2895.0, "airline": "", "iata": "", "stops": 1, "duration": 1030}, {"price": 2895.0, "airline": "", "iata": "", "stops": 1, "duration": 1155}, {"price": 3345.0, "airline": "Air New Zealand + Singapore Airlines", "iata": "NZ", "stops": 2, "duration": 1145}, {"price": 3345.0, "airline": "", "iata": "", "stops": 2, "duration": 1145}], "CHC-CMB 2026-09-08 -> 2026-10-15": [{"price": 1465.0, "airline": "Jetstar + Qantas", "iata": "JQ", "stops": 1, "duration": 960}, {"price": 1465.0, "airline": "", "iata": "", "stops": 1, "duration": 960}, {"price": 2021.0, "airline": "Qantas + SriLankan", "iata": "QF", "stops": 1, "duration": 1355}, {"price": 2021.0, "airline": "", "iata": "", "stops": 1, "duration": 1355}, {"price": 2032.0, "airline": "Air New Zealand + SriLankan", "iata": "NZ", "stops": 1, "duration": 1365}, {"price": 2032.0, "airline": "", "iata": "", "stops": 1, "duration": 1365}, {"price": 2707.0, "airline": "Qantas + Jetstar", "iata": "QF", "stops": 1, "duration": 1080}, {"price": 2707.0, "airline": "", "iata": "", "stops": 1, "duration": 1080}, {"price": 3065.0, "airline": "", "iata": "", "stops": 1, "duration": 1030}, {"price": 3065.0, "airline": "Singapore Airlines + Air New Zealand", "iata": "SQ", "stops": 1, "duration": 1155}], "CHC-CMB 2026-09-15 -> 2026-10-24": [{"price": 1481.0, "airline": "Jetstar", "iata": "JQ", "stops": 1, "duration": 960}, {"price": 1481.0, "airline": "", "iata": "", "stops": 1, "duration": 960}]}, "airline_market": [{"name": "Jetstar", "iata": "JQ", "offers": 2, "min": 1344.0}, {"name": "Jetstar + Qantas", "iata": "JQ", "offers": 3, "min": 1425.0}, {"name": "Qantas + SriLankan", "iata": "QF", "offers": 1, "min": 2021.0}, {"name": "Air New Zealand + SriLankan", "iata": "NZ", "offers": 1, "min": 2032.0}, {"name": "Qantas + Jetstar", "iata": "QF", "offers": 3, "min": 2445.0}, {"name": "Singapore Airlines + Air New Zealand", "iata": "SQ", "offers": 3, "min": 2565.0}, {"name": "Air New Zealand + Singapore Airlines", "iata": "NZ", "offers": 3, "min": 2720.0}], "stats": {"scans": 2, "total_offers": 38, "routes": 5, "airlines": 7, "avg_price": 2376.7368421052633, "fastest": 960, "cheapest_ever": {"price": 1344.0, "itinerary": "CHC-CMB 2026-09-01 -> 2026-09-22", "airline": "Jetstar", "iata": "JQ", "date": "2026-06-20"}}, "cities": {"CHC": "Christchurch", "CMB": "Colombo"}, "primary": {"origin": {"code": "CHC", "name": "Christchurch", "lat": -43.489, "lon": 172.532, "tz": "Pacific/Auckland"}, "dest": {"code": "CMB", "name": "Colombo", "lat": 7.181, "lon": 79.884, "tz": "Asia/Colombo"}}, "model": null, "currency": "NZD"};
+const D = {"generated": "2026-06-20 09:53 UTC", "recs": [{"signal": "WATCH", "confidence": 25, "reason": "Still collecting history for this route.", "price": 1344.0, "predicted_low": 1344.0, "expected_savings": 0.0, "prob_drop": null, "trailing_min": 1344.0, "percentile": 0, "days_to_departure": 73, "method": "heuristic", "itinerary": "CHC-CMB 2026-09-01 -> 2026-09-22", "points": 1}, {"signal": "WATCH", "confidence": 25, "reason": "Still collecting history for this route.", "price": 1425.0, "predicted_low": 1425.0, "expected_savings": 0.0, "prob_drop": null, "trailing_min": 1425.0, "percentile": 0, "days_to_departure": 75, "method": "heuristic", "itinerary": "CHC-CMB 2026-09-03 -> 2026-09-24", "points": 1}, {"signal": "WATCH", "confidence": 25, "reason": "Still collecting history for this route.", "price": 1465.0, "predicted_low": 1465.0, "expected_savings": 0.0, "prob_drop": null, "trailing_min": 1465.0, "percentile": 0, "days_to_departure": 80, "method": "heuristic", "itinerary": "CHC-CMB 2026-09-08 -> 2026-10-15", "points": 1}, {"signal": "WATCH", "confidence": 25, "reason": "Still collecting history for this route.", "price": 1480.0, "predicted_low": 1480.0, "expected_savings": 0.0, "prob_drop": null, "trailing_min": 1480.0, "percentile": 0, "days_to_departure": 68, "method": "heuristic", "itinerary": "CHC-CMB 2026-08-27 -> 2026-09-17", "points": 1}, {"signal": "WATCH", "confidence": 25, "reason": "Still collecting history for this route.", "price": 1481.0, "predicted_low": 1481.0, "expected_savings": 0.0, "prob_drop": null, "trailing_min": 1481.0, "percentile": 0, "days_to_departure": 87, "method": "heuristic", "itinerary": "CHC-CMB 2026-09-15 -> 2026-10-24", "points": 1}], "history": {"CHC-CMB 2026-08-27 -> 2026-09-17": [{"d": "2026-06-20", "p": 1480.0}], "CHC-CMB 2026-09-01 -> 2026-09-22": [{"d": "2026-06-20", "p": 1344.0}], "CHC-CMB 2026-09-03 -> 2026-09-24": [{"d": "2026-06-20", "p": 1425.0}], "CHC-CMB 2026-09-08 -> 2026-10-15": [{"d": "2026-06-20", "p": 1465.0}], "CHC-CMB 2026-09-15 -> 2026-10-24": [{"d": "2026-06-20", "p": 1481.0}]}, "insights": [{"itinerary": "CHC-CMB 2026-09-01 -> 2026-09-22", "offers": 2, "min": 1344.0, "median": 1344.0, "max": 1344.0, "nonstop": false, "stops": {"nonstop": 0, "one": 2, "two_plus": 0}, "fastest": 960, "typical_duration": 960, "airlines": ["Jetstar"], "airline_prices": [{"name": "Jetstar", "price": 1344.0, "iata": "JQ"}], "cheapest_airline": "Jetstar", "cheapest_iata": "JQ", "days_to_departure": 73, "scan_date": "2026-06-20"}, {"itinerary": "CHC-CMB 2026-09-03 -> 2026-09-24", "offers": 10, "min": 1425.0, "median": 2895.0, "max": 3345.0, "nonstop": false, "stops": {"nonstop": 0, "one": 8, "two_plus": 2}, "fastest": 960, "typical_duration": 1080, "airlines": ["Jetstar + Qantas", "Qantas + Jetstar", "Singapore Airlines + Air New Zealand", "Air New Zealand + Singapore Airlines"], "airline_prices": [{"name": "Jetstar + Qantas", "price": 1425.0, "iata": "JQ"}, {"name": "Qantas + Jetstar", "price": 2445.0, "iata": "QF"}, {"name": "Singapore Airlines + Air New Zealand", "price": 2895.0, "iata": "SQ"}, {"name": "Air New Zealand + Singapore Airlines", "price": 3345.0, "iata": "NZ"}], "cheapest_airline": "Jetstar + Qantas", "cheapest_iata": "JQ", "days_to_departure": 75, "scan_date": "2026-06-20"}, {"itinerary": "CHC-CMB 2026-09-08 -> 2026-10-15", "offers": 12, "min": 1465.0, "median": 2369.5, "max": 3065.0, "nonstop": false, "stops": {"nonstop": 0, "one": 12, "two_plus": 0}, "fastest": 960, "typical_duration": 1117, "airlines": ["Jetstar + Qantas", "Qantas + SriLankan", "Air New Zealand + SriLankan", "Qantas + Jetstar", "Singapore Airlines + Air New Zealand"], "airline_prices": [{"name": "Jetstar + Qantas", "price": 1465.0, "iata": "JQ"}, {"name": "Qantas + SriLankan", "price": 2021.0, "iata": "QF"}, {"name": "Air New Zealand + SriLankan", "price": 2032.0, "iata": "NZ"}, {"name": "Qantas + Jetstar", "price": 2707.0, "iata": "QF"}, {"name": "Singapore Airlines + Air New Zealand", "price": 3065.0, "iata": "SQ"}], "cheapest_airline": "Jetstar + Qantas", "cheapest_iata": "JQ", "days_to_departure": 80, "scan_date": "2026-06-20"}, {"itinerary": "CHC-CMB 2026-08-27 -> 2026-09-17", "offers": 12, "min": 1480.0, "median": 2642.5, "max": 2905.0, "nonstop": false, "stops": {"nonstop": 0, "one": 8, "two_plus": 4}, "fastest": 960, "typical_duration": 1112, "airlines": ["Jetstar + Qantas", "Singapore Airlines + Air New Zealand", "Air New Zealand + Singapore Airlines", "Qantas + Jetstar"], "airline_prices": [{"name": "Jetstar + Qantas", "price": 1480.0, "iata": "JQ"}, {"name": "Singapore Airlines + Air New Zealand", "price": 2565.0, "iata": "SQ"}, {"name": "Air New Zealand + Singapore Airlines", "price": 2720.0, "iata": "NZ"}, {"name": "Qantas + Jetstar", "price": 2738.0, "iata": "QF"}], "cheapest_airline": "Jetstar + Qantas", "cheapest_iata": "JQ", "days_to_departure": 68, "scan_date": "2026-06-20"}, {"itinerary": "CHC-CMB 2026-09-15 -> 2026-10-24", "offers": 2, "min": 1481.0, "median": 1481.0, "max": 1481.0, "nonstop": false, "stops": {"nonstop": 0, "one": 2, "two_plus": 0}, "fastest": 960, "typical_duration": 960, "airlines": ["Jetstar"], "airline_prices": [{"name": "Jetstar", "price": 1481.0, "iata": "JQ"}], "cheapest_airline": "Jetstar", "cheapest_iata": "JQ", "days_to_departure": 87, "scan_date": "2026-06-20"}], "latest_offers": {"CHC-CMB 2026-08-27 -> 2026-09-17": [{"price": 1480.0, "airline": "Jetstar + Qantas", "iata": "JQ", "stops": 1, "duration": 960}, {"price": 1480.0, "airline": "", "iata": "", "stops": 1, "duration": 960}, {"price": 2565.0, "airline": "", "iata": "", "stops": 1, "duration": 1030}, {"price": 2565.0, "airline": "Singapore Airlines + Air New Zealand", "iata": "SQ", "stops": 1, "duration": 1155}, {"price": 2565.0, "airline": "", "iata": "", "stops": 1, "duration": 1030}, {"price": 2565.0, "airline": "", "iata": "", "stops": 1, "duration": 1155}, {"price": 2720.0, "airline": "Air New Zealand + Singapore Airlines", "iata": "NZ", "stops": 2, "duration": 1215}, {"price": 2720.0, "airline": "", "iata": "", "stops": 2, "duration": 1215}, {"price": 2738.0, "airline": "Qantas + Jetstar", "iata": "QF", "stops": 1, "duration": 1080}, {"price": 2738.0, "airline": "", "iata": "", "stops": 1, "duration": 1080}], "CHC-CMB 2026-09-01 -> 2026-09-22": [{"price": 1344.0, "airline": "Jetstar", "iata": "JQ", "stops": 1, "duration": 960}, {"price": 1344.0, "airline": "", "iata": "", "stops": 1, "duration": 960}], "CHC-CMB 2026-09-03 -> 2026-09-24": [{"price": 1425.0, "airline": "Jetstar + Qantas", "iata": "JQ", "stops": 1, "duration": 960}, {"price": 1425.0, "airline": "", "iata": "", "stops": 1, "duration": 960}, {"price": 2445.0, "airline": "Qantas + Jetstar", "iata": "QF", "stops": 1, "duration": 1080}, {"price": 2445.0, "airline": "", "iata": "", "stops": 1, "duration": 1080}, {"price": 2895.0, "airline": "", "iata": "", "stops": 1, "duration": 1030}, {"price": 2895.0, "airline": "Singapore Airlines + Air New Zealand", "iata": "SQ", "stops": 1, "duration": 1155}, {"price": 2895.0, "airline": "", "iata": "", "stops": 1, "duration": 1030}, {"price": 2895.0, "airline": "", "iata": "", "stops": 1, "duration": 1155}, {"price": 3345.0, "airline": "Air New Zealand + Singapore Airlines", "iata": "NZ", "stops": 2, "duration": 1145}, {"price": 3345.0, "airline": "", "iata": "", "stops": 2, "duration": 1145}], "CHC-CMB 2026-09-08 -> 2026-10-15": [{"price": 1465.0, "airline": "Jetstar + Qantas", "iata": "JQ", "stops": 1, "duration": 960}, {"price": 1465.0, "airline": "", "iata": "", "stops": 1, "duration": 960}, {"price": 2021.0, "airline": "Qantas + SriLankan", "iata": "QF", "stops": 1, "duration": 1355}, {"price": 2021.0, "airline": "", "iata": "", "stops": 1, "duration": 1355}, {"price": 2032.0, "airline": "Air New Zealand + SriLankan", "iata": "NZ", "stops": 1, "duration": 1365}, {"price": 2032.0, "airline": "", "iata": "", "stops": 1, "duration": 1365}, {"price": 2707.0, "airline": "Qantas + Jetstar", "iata": "QF", "stops": 1, "duration": 1080}, {"price": 2707.0, "airline": "", "iata": "", "stops": 1, "duration": 1080}, {"price": 3065.0, "airline": "", "iata": "", "stops": 1, "duration": 1030}, {"price": 3065.0, "airline": "Singapore Airlines + Air New Zealand", "iata": "SQ", "stops": 1, "duration": 1155}], "CHC-CMB 2026-09-15 -> 2026-10-24": [{"price": 1481.0, "airline": "Jetstar", "iata": "JQ", "stops": 1, "duration": 960}, {"price": 1481.0, "airline": "", "iata": "", "stops": 1, "duration": 960}]}, "airline_market": [{"name": "Jetstar", "iata": "JQ", "offers": 2, "min": 1344.0}, {"name": "Jetstar + Qantas", "iata": "JQ", "offers": 3, "min": 1425.0}, {"name": "Qantas + SriLankan", "iata": "QF", "offers": 1, "min": 2021.0}, {"name": "Air New Zealand + SriLankan", "iata": "NZ", "offers": 1, "min": 2032.0}, {"name": "Qantas + Jetstar", "iata": "QF", "offers": 3, "min": 2445.0}, {"name": "Singapore Airlines + Air New Zealand", "iata": "SQ", "offers": 3, "min": 2565.0}, {"name": "Air New Zealand + Singapore Airlines", "iata": "NZ", "offers": 3, "min": 2720.0}], "stats": {"scans": 2, "total_offers": 38, "routes": 5, "airlines": 7, "avg_price": 2376.7368421052633, "fastest": 960, "cheapest_ever": {"price": 1344.0, "itinerary": "CHC-CMB 2026-09-01 -> 2026-09-22", "airline": "Jetstar", "iata": "JQ", "date": "2026-06-20"}}, "cities": {"CHC": "Christchurch", "CMB": "Colombo"}, "primary": {"origin": {"code": "CHC", "name": "Christchurch", "lat": -43.489, "lon": 172.532, "tz": "Pacific/Auckland"}, "dest": {"code": "CMB", "name": "Colombo", "lat": 7.181, "lon": 79.884, "tz": "Asia/Colombo"}}, "model": null, "currency": "NZD"};
 const CUR = D.currency || 'NZD';
 const fmt = (n,c)=> (c||CUR)+' '+Math.round(n).toLocaleString();
 const fmtv = n => Math.round(n).toLocaleString();
 const dur = m => m ? Math.floor(m/60)+'h '+(m%60).toString().padStart(2,'0')+'m' : '—';
 const stops = s => s===0 ? 'Nonstop' : s+' stop'+(s>1?'s':'');
 const esc = s => (s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const palette=['#e8b552','#2ecb8f','#6ea8ff','#e8902a','#e0567d','#9a8cff','#4fd1c5','#f2cf86'];
+const palette=['#2f6bff','#6b54ff','#00b6d4','#10b981','#f59e0b','#e0567d','#7c8aa5','#9a6cff'];
 const acolor = s => palette[Math.abs([...(s||'?')].reduce((a,c)=>a*31+c.charCodeAt(0)|0,7))%palette.length];
 const initials = s => (s||'?').replace(/[^A-Za-z ]/g,'').split(/\s+/).filter(Boolean).slice(0,2).map(w=>w[0]).join('').toUpperCase()||'?';
 const MM=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -359,10 +352,10 @@ function parseItin(s){
     depShort:f(d1), retShort:f(d2)};
 }
 
-/* ---- boarding-pass widget (the SFO→AMS card from the mock) ---- */
+/* ---- boarding-pass widget ---- */
 function bpass(o){
   const stopChip = o.stopChip ? '<span class="bp-stop">'+esc(o.stopChip)+'</span>' : '';
-  return '<div class="bp'+(o.tilt?' tilt-3d':'')+'" id="'+(o.id||'')+'">'+
+  return '<div class="bp'+(o.cls||'')+'" id="'+(o.id||'')+'">'+
     '<div class="bp-top"><span class="bp-tag">'+esc(o.tag||'')+'</span>'+
       (o.sig?'<span class="sig '+o.sig+'">'+o.sig+'</span>':'')+'</div>'+
     '<div class="bp-mid">'+
@@ -379,7 +372,6 @@ function bpass(o){
       '<div class="bp-leg r"><span class="k">'+esc(o.rightK)+'</span><span class="v">'+esc(o.rightV)+'</span></div></div>'+
   '</div>';
 }
-/* progress + stop hints shared by hero + rec cards */
 function progFor(days){ return days==null ? 50 : Math.round(clamp(1-days/300,0.08,0.94)*100); }
 function stopHint(insight){
   if(!insight) return {chip:'',sub:'tracking fares'};
@@ -397,12 +389,9 @@ function clock(){const el=document.getElementById('clock');if(!el)return;
   else el.textContent=new Date().toUTCString().slice(17,25)+' UTC';setTimeout(clock,1000);}
 clock();
 
-/* island notification (uses dest local time) */
-function island(){const el=document.getElementById('island');if(!el||!dest)return;
-  let t='';try{t=new Intl.DateTimeFormat('en-US',{hour:'numeric',minute:'2-digit',timeZone:dest.tz}).format(new Date());}catch(e){}
-  el.innerHTML='<span class="pl">'+PLANE+'</span><span>'+esc(dest.code||dest.name)+'</span><span class="t">'+t+'</span>';
-  setTimeout(island,30000);}
-island();
+/* ghost backdrop = route monogram */
+(function(){const el=document.getElementById('ghost');if(!el)return;
+  el.textContent = (orig&&dest)? (orig.code+' '+dest.code) : 'FARO';})();
 
 /* ---- live weather (Open-Meteo) ---- */
 const WX={0:['☀️','Clear'],1:['🌤️','Mostly clear'],2:['⛅','Partly cloudy'],3:['☁️','Cloudy'],45:['🌫️','Fog'],48:['🌫️','Fog'],
@@ -432,14 +421,14 @@ function ltick(){const el=document.getElementById('lt');if(!el)return;
 /* ---- hero deal card ---- */
 function renderDeal(){const el=document.getElementById('deal');if(!el)return;
   const best=(D.insights&&D.insights[0])||null;
-  if(!best){el.innerHTML='<div class="bp"><div class="bp-top"><span class="bp-tag">Best deal</span></div>'+
+  if(!best){el.innerHTML='<div class="bp float"><div class="bp-top"><span class="bp-tag">Best deal</span></div>'+
     '<div class="bp-mid"><div class="bp-code">✈<small>collecting</small></div><div class="bp-track">'+
     '<div class="bp-sub">The first deal appears within a few daily scans.</div></div></div></div>';return;}
   const pi=parseItin(best.itinerary),rec=(D.recs||[]).find(r=>r.itinerary===best.itinerary),sig=rec?rec.signal:'WATCH';
   const sh=stopHint(best),days=best.days_to_departure;
   const fxalt=rates? (['USD','AUD','GBP','EUR'].filter(c=>c!==CUR&&rates[c])[0]) : null;
   const altline=fxalt?' · ≈ '+fmt(convert(best.min,fxalt),fxalt):'';
-  el.innerHTML=bpass({id:'dealcard',tilt:true,tag:'Best fare right now',sig:sig,
+  el.innerHTML=bpass({id:'dealcard',cls:' float tilt-3d',tag:'Best fare right now',sig:sig,
     o:pi.o,o_city:pi.o_city,d:pi.d,d_city:pi.d_city,
     arr:(days!=null?'Departs in <b>'+days+' days</b>':'Cheapest <b>'+fmt(best.min)+'</b>'),
     progress:progFor(days),stopChip:sh.chip,sub:sh.sub+altline,
@@ -527,10 +516,10 @@ if(!D.recs.length){
           '<div class="fact"><div class="k">Highest</div><div class="v">'+fmt(r.max)+'</div></div>'+
           '<div class="fact"><div class="k">Fastest</div><div class="v">'+dur(r.fastest)+'</div></div>'+
           '<div class="fact"><div class="k">Typical time</div><div class="v">'+dur(r.typical_duration)+'</div></div></div>'+
-        '<div class="stopbar">'+seg(sb.nonstop,'#2ecb8f')+seg(sb.one,'#e8b552')+seg(sb.two_plus,'#e8902a')+'</div>'+
-        '<div class="stopkey"><span><i class="swatch" style="background:#2ecb8f"></i>'+sb.nonstop+' nonstop</span>'+
-          '<span><i class="swatch" style="background:#e8b552"></i>'+sb.one+' · 1 stop</span>'+
-          '<span><i class="swatch" style="background:#e8902a"></i>'+sb.two_plus+' · 2+ stops</span></div>'+
+        '<div class="stopbar">'+seg(sb.nonstop,'#10b981')+seg(sb.one,'#2f6bff')+seg(sb.two_plus,'#f59e0b')+'</div>'+
+        '<div class="stopkey"><span><i class="swatch" style="background:#10b981"></i>'+sb.nonstop+' nonstop</span>'+
+          '<span><i class="swatch" style="background:#2f6bff"></i>'+sb.one+' · 1 stop</span>'+
+          '<span><i class="swatch" style="background:#f59e0b"></i>'+sb.two_plus+' · 2+ stops</span></div>'+
         '<div class="alist">'+alist+'</div></div>';});
     add(h+'</div>');}
 
@@ -548,19 +537,19 @@ if(!D.recs.length){
       add(t+'</tbody></table></details>');});}
 }
 
-/* ---- charts (dark theme) ---- */
+/* ---- charts (light theme) ---- */
 function gridOpts(){return{responsive:true,maintainAspectRatio:false,
-  plugins:{legend:{labels:{font:{family:'Sora',size:11},color:'#99a1b1',boxWidth:12,padding:14}}},
-  scales:{x:{grid:{color:'rgba(255,255,255,.05)'},ticks:{color:'#6a7280',font:{family:'IBM Plex Mono',size:10}}},
-          y:{grid:{color:'rgba(255,255,255,.05)'},ticks:{color:'#6a7280',font:{family:'IBM Plex Mono',size:10}}}}};}
+  plugins:{legend:{labels:{font:{family:'Sora',size:11},color:'#5d6b86',boxWidth:12,padding:14}}},
+  scales:{x:{grid:{color:'#eef2fb'},ticks:{color:'#8a96ad',font:{family:'IBM Plex Mono',size:10}}},
+          y:{grid:{color:'#eef2fb'},ticks:{color:'#8a96ad',font:{family:'IBM Plex Mono',size:10}}}}};}
 function placeholder(id,msg){const c=document.getElementById(id);if(!c)return;
   (c.closest('.canvas-wrap')||c.parentNode).innerHTML='<div style="height:100%;display:grid;place-items:center;color:var(--dim);font-size:13px;text-align:center;padding:0 20px">'+msg+'</div>';}
 let charted=false;
 function drawCharts(){if(charted)return;charted=true;
   if(typeof Chart==='undefined'){placeholder('trendChart','Chart library unavailable.');placeholder('airChart','Chart library unavailable.');return;}
   D.recs.forEach((r,i)=>{const h=D.history[r.itinerary]||[],c=document.getElementById('spark'+i);if(!c||h.length<2)return;
-    const g=c.getContext('2d').createLinearGradient(0,0,0,48);g.addColorStop(0,'rgba(232,181,82,.35)');g.addColorStop(1,'rgba(232,181,82,0)');
-    new Chart(c,{type:'line',data:{labels:h.map(x=>x.d),datasets:[{data:h.map(x=>x.p),borderColor:'#e8b552',borderWidth:2,pointRadius:0,tension:.35,fill:true,backgroundColor:g}]},
+    const g=c.getContext('2d').createLinearGradient(0,0,0,48);g.addColorStop(0,'rgba(47,107,255,.32)');g.addColorStop(1,'rgba(47,107,255,0)');
+    new Chart(c,{type:'line',data:{labels:h.map(x=>x.d),datasets:[{data:h.map(x=>x.p),borderColor:'#2f6bff',borderWidth:2,pointRadius:0,tension:.35,fill:true,backgroundColor:g}]},
       options:{responsive:false,plugins:{legend:{display:false},tooltip:{enabled:false}},scales:{x:{display:false},y:{display:false}}}});});
   const tc=document.getElementById('trendChart'),enough=Object.values(D.history).some(h=>h.length>=2);
   if(tc&&!enough)placeholder('trendChart','Booking curves appear once each route has 2+ days of history. Check back tomorrow.');
@@ -572,80 +561,6 @@ function drawCharts(){if(charted)return;charted=true;
   if(ac&&D.airline_market&&D.airline_market.length){const m=D.airline_market;
     new Chart(ac,{type:'bar',data:{labels:m.map(a=>a.name),datasets:[{label:'Lowest fare ('+CUR+')',data:m.map(a=>a.min),backgroundColor:m.map(a=>acolor(a.name)),borderRadius:8,maxBarThickness:30}]},
       options:Object.assign(gridOpts(),{indexAxis:'y',plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+fmt(c.raw)+' · '+m[c.dataIndex].offers+' offers'}}}})});}}
-
-/* ---- 3D globe (Three.js) with graceful CSS fallback ---- */
-function ll2v(lat,lon,r){const phi=(90-lat)*Math.PI/180,th=(lon+180)*Math.PI/180;
-  return new THREE.Vector3(-r*Math.sin(phi)*Math.cos(th),r*Math.cos(phi),r*Math.sin(phi)*Math.sin(th));}
-function makePlane(){const mat=new THREE.MeshStandardMaterial({color:0xf6efe0,metalness:.7,roughness:.28});
-  const g=new THREE.Group();
-  const body=new THREE.Mesh(new THREE.CylinderGeometry(0.85,0.85,7,18),mat);body.rotation.z=Math.PI/2;g.add(body);
-  const nose=new THREE.Mesh(new THREE.ConeGeometry(0.85,2,18),mat);nose.rotation.z=-Math.PI/2;nose.position.x=4.5;g.add(nose);
-  const tailcone=new THREE.Mesh(new THREE.ConeGeometry(0.85,1.6,18),mat);tailcone.rotation.z=Math.PI/2;tailcone.position.x=-4.3;g.add(tailcone);
-  const wing=new THREE.Mesh(new THREE.BoxGeometry(2.1,0.18,8.4),mat);g.add(wing);
-  const tail=new THREE.Mesh(new THREE.BoxGeometry(1.3,0.16,3.4),mat);tail.position.x=-3.2;g.add(tail);
-  const fin=new THREE.Mesh(new THREE.BoxGeometry(1.3,1.8,0.16),mat);fin.position.set(-3.2,0.8,0);g.add(fin);
-  const eng=new THREE.MeshStandardMaterial({color:0xd9b873,metalness:.8,roughness:.3});
-  [-1.6,1.6].forEach(z=>{const e=new THREE.Mesh(new THREE.CylinderGeometry(0.45,0.45,1.8,14),eng);e.rotation.z=Math.PI/2;e.position.set(.4,-.5,z);g.add(e);});
-  g.scale.setScalar(1.25);return g;}
-function initGlobe(){
-  const mount=document.getElementById('scene');
-  if(!mount||typeof THREE==='undefined')return;
-  let renderer;
-  try{renderer=new THREE.WebGLRenderer({antialias:true,alpha:true});}catch(e){return;}
-  const W=mount.clientWidth,H=mount.clientHeight;
-  renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.setSize(W,H);
-  const fb=mount.querySelector('.fb');if(fb)fb.remove();
-  mount.insertBefore(renderer.domElement,mount.firstChild);
-  const scene=new THREE.Scene();
-  const camera=new THREE.PerspectiveCamera(42,W/H,0.1,3000);camera.position.set(0,30,330);camera.lookAt(0,0,0);
-  const group=new THREE.Group();scene.add(group);
-  const R=100,loader=new THREE.TextureLoader();loader.setCrossOrigin('anonymous');
-  const base='https://unpkg.com/three-globe/example/img/';
-  const mat=new THREE.MeshPhongMaterial({color:0x1d3a66,shininess:18,specular:0x2a4d77});
-  loader.load(base+'earth-blue-marble.jpg',t=>{mat.map=t;mat.color.set(0xffffff);mat.needsUpdate=true;});
-  loader.load(base+'earth-topology.png',t=>{mat.bumpMap=t;mat.bumpScale=6;mat.needsUpdate=true;});
-  loader.load(base+'earth-water.png',t=>{mat.specularMap=t;mat.specular.set(0x5a93d6);mat.needsUpdate=true;});
-  group.add(new THREE.Mesh(new THREE.SphereGeometry(R,72,72),mat));
-  group.add(new THREE.Mesh(new THREE.SphereGeometry(R*1.045,48,48),
-    new THREE.MeshBasicMaterial({color:0xe8b552,transparent:true,opacity:.10,side:THREE.BackSide})));
-  scene.add(new THREE.AmbientLight(0xffffff,.55));
-  const sun=new THREE.DirectionalLight(0xfff0d0,1.2);sun.position.set(-220,120,260);scene.add(sun);
-  scene.add(new THREE.DirectionalLight(0xe8b552,.3));
-  const sg=new THREE.BufferGeometry(),sp=[];
-  for(let i=0;i<700;i++){const u=Math.random(),v=Math.random(),th=2*Math.PI*u,ph=Math.acos(2*v-1),rr=900;
-    sp.push(rr*Math.sin(ph)*Math.cos(th),rr*Math.sin(ph)*Math.sin(th),rr*Math.cos(ph));}
-  sg.setAttribute('position',new THREE.Float32BufferAttribute(sp,3));
-  scene.add(new THREE.Points(sg,new THREE.PointsMaterial({color:0xf0e6cf,size:1.5,sizeAttenuation:false,transparent:true,opacity:.7})));
-  let curve=null,plane=null;
-  if(orig&&dest&&orig.lat!=null&&dest.lat!=null){
-    const a=ll2v(orig.lat,orig.lon,R),b=ll2v(dest.lat,dest.lon,R),pts=[],N=90;
-    for(let i=0;i<=N;i++){const t=i/N,v=a.clone().lerp(b,t).normalize(),lift=1+0.3*Math.sin(Math.PI*t);pts.push(v.multiplyScalar(R*lift));}
-    curve=new THREE.CatmullRomCurve3(pts);
-    group.add(new THREE.Mesh(new THREE.TubeGeometry(curve,140,0.6,8,false),new THREE.MeshBasicMaterial({color:0xe8b552})));
-    [[a,0xe8b552],[b,0x2ecb8f]].forEach(([p,col])=>{const m=new THREE.Mesh(new THREE.SphereGeometry(2.4,16,16),new THREE.MeshBasicMaterial({color:col}));
-      m.position.copy(p.clone().multiplyScalar(1.01));group.add(m);
-      const halo=new THREE.Mesh(new THREE.SphereGeometry(4.2,16,16),new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:.25}));
-      halo.position.copy(m.position);group.add(halo);});
-    plane=makePlane();group.add(plane);
-  }
-  if(curve){const mid=curve.getPoint(0.5).clone().normalize(),q=new THREE.Quaternion().setFromUnitVectors(mid,new THREE.Vector3(0,0,1));group.quaternion.premultiply(q);}
-  group.rotation.x=0.28;
-  const reduce=matchMedia('(prefers-reduced-motion:reduce)').matches;
-  let t=0,px=0,py=0,tx=0,ty=0;
-  mount.addEventListener('pointermove',e=>{const r=mount.getBoundingClientRect();tx=((e.clientX-r.left)/r.width-.5);ty=((e.clientY-r.top)/r.height-.5);});
-  (function animate(){requestAnimationFrame(animate);
-    if(!reduce)group.rotation.y+=0.0011;
-    px+=(tx-px)*0.05;py+=(ty-py)*0.05;camera.position.x=px*70;camera.position.y=30-py*46;camera.lookAt(0,0,0);
-    if(plane&&curve){t=(t+0.0015)%1;const a=curve.getPoint(t),b=curve.getPoint((t+0.008)%1);
-      plane.position.copy(a);const up=a.clone().normalize();
-      plane.quaternion.setFromRotationMatrix(new THREE.Matrix4().lookAt(a,b,up));plane.rotateY(Math.PI/2);}
-    renderer.render(scene,camera);})();
-  addEventListener('resize',()=>{const w=mount.clientWidth,h=mount.clientHeight;if(!w||!h)return;camera.aspect=w/h;camera.updateProjectionMatrix();renderer.setSize(w,h);});
-}
-/* route label over the scene */
-(function(){const el=document.getElementById('routeover');if(el&&orig&&dest)
-  el.innerHTML='<span class="leg" style="background:#e8b552"></span>'+esc(orig.name)+' <span style="opacity:.6">✈</span> '+esc(dest.name)+
-    ' <span class="leg" style="background:#2ecb8f"></span>';else if(el)el.remove();})();
 
 /* ---- tilt ---- */
 const fine=matchMedia('(hover:hover) and (pointer:fine)').matches&&!matchMedia('(prefers-reduced-motion:reduce)').matches;
@@ -659,26 +574,20 @@ let ticking=false;
 function scrollTilt(){if(!fine)return;document.querySelectorAll('.tilt').forEach(card=>{const r=card.getBoundingClientRect(),vh=innerHeight,d=(r.top+r.height/2-vh/2)/vh;
   card.style.setProperty('--srx',(Math.max(-1,Math.min(1,d))*7).toFixed(2)+'deg');card.style.setProperty('--lift',(Math.max(0,1-Math.abs(d)*1.6)*8).toFixed(1)+'px');});}
 
-/* ---- parallax ---- */
+/* ---- parallax (soft blobs only) ---- */
 const pxEls=[...document.querySelectorAll('[data-px]')];
 const reduceMotion=matchMedia('(prefers-reduced-motion:reduce)').matches;
-const fly=document.getElementById('flyplane');
 function parallax(){if(reduceMotion)return;const y=scrollY;
-  pxEls.forEach(el=>{el.style.transform=(el.classList.contains('bg-plane')?'rotate(-14deg) ':'')+'translate3d(0,'+(y*(+el.dataset.px)).toFixed(1)+'px,0)';});
-  if(fly){const max=Math.max(1,document.body.scrollHeight-innerHeight);const t=clamp(y/max,0,1);
-    fly.style.transform='translate3d('+((innerWidth+160)*t-130).toFixed(0)+'px,'+(Math.sin(t*6)*22).toFixed(0)+'px,0) rotate('+(6+t*4).toFixed(1)+'deg)';}}
-
-/* hero mouse parallax */
+  pxEls.forEach(el=>{el.style.translate='0 '+(y*(+el.dataset.px)).toFixed(1)+'px';});}
 const hero=document.querySelector('.hero');
 if(hero&&fine){hero.addEventListener('pointermove',e=>{const x=(e.clientX/innerWidth-.5),yy=(e.clientY/innerHeight-.5);
-  const g=document.querySelector('.bg-glow');if(g)g.style.marginLeft=(x*-24)+'px';
-  const bp=document.querySelector('.bg-plane');if(bp)bp.style.marginTop=(yy*-18)+'px';});}
+  const b1=document.querySelector('.b1'),b2=document.querySelector('.b2');
+  if(b1)b1.style.marginLeft=(x*22)+'px';if(b2)b2.style.marginTop=(yy*20)+'px';});}
 
 /* ---- reveal + boot ---- */
 function fireReveal(el){el.classList.add('in');
   el.querySelectorAll&&el.querySelectorAll('.vn[data-to]').forEach(animateCount);
-  el.querySelectorAll&&el.querySelectorAll('.cbar>i[data-w]').forEach(b=>b.style.width=b.dataset.w+'%');
-  el.querySelectorAll&&el.querySelectorAll('.bp-bar>i[style]').forEach(b=>{/* width already inline; animates via transition */});}
+  el.querySelectorAll&&el.querySelectorAll('.cbar>i[data-w]').forEach(b=>b.style.width=b.dataset.w+'%');}
 const RSEL='.reveal,.reveal-l,.reveal-r,.reveal-sc';
 function revealAll(){document.querySelectorAll(RSEL).forEach(fireReveal);document.querySelectorAll('.vn[data-to]').forEach(animateCount);}
 if(!('IntersectionObserver' in window))revealAll();
@@ -690,6 +599,5 @@ addEventListener('scroll',()=>{if(!ticking){ticking=true;requestAnimationFrame((
 
 renderDeal();renderHeroChips();initTilt();scrollTilt();parallax();
 requestAnimationFrame(drawCharts);
-try{initGlobe();}catch(e){}
 loadWeather();loadRates();
 </script></body></html>
