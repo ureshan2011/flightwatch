@@ -38,14 +38,14 @@ a{color:var(--buy)}
 <div class="meta" id="meta"></div>
 <div id="body"></div>
 <div class="foot">
-Updated automatically once a day via GitHub Actions. Fares come from the free
-Travelpayouts (Aviasales) Data API. Signals are derived from each route's own
+Updated automatically once a day via GitHub Actions. Fares are scraped from Google
+Flights. Signals are derived from each route's own
 observed price history and are informational only &mdash; verify the live fare before booking.
 Data is open: see the <code>data/</code> folder in the repository.
 </div>
 </div>
 <script>
-const D = {"generated": "2026-06-20 05:08 UTC", "recs": [], "history": {}, "total_obs": 0, "scans": 2, "model": null, "currency": "NZD"};
+const D = {"generated": "2026-06-20 05:25 UTC", "recs": [], "history": {}, "total_obs": 0, "scans": 2, "model": null, "currency": "NZD"};
 const fmt = n => D.currency + Math.round(n).toLocaleString();
 const meta = document.getElementById('meta');
 meta.textContent = D.scans + ' daily scans · ' + D.total_obs + ' priced observations · built ' + D.generated +

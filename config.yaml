@@ -4,7 +4,7 @@
 # huge grid -- daily depth on a few routes beats sparse coverage of many.
 
 currency: NZD
-market: nz                  # Travelpayouts data market (storefront locale of the cached fares)
+market: nz                  # Google Flights region (gl=) -- match the route's country
 adults: 1
 max_offers_per_search: 5
 delay_seconds: 1.0          # polite pause between API calls

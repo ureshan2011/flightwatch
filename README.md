@@ -5,17 +5,23 @@ An open, free, self-hosting fare tracker for the **Christchurch ↔ Colombo** co
 a simple **buy / wait** signal on a public dashboard — all running for **$0** on
 GitHub's free tier.
 
-- **Data:** [Travelpayouts (Aviasales) Data API](https://support.travelpayouts.com/hc/en-us/articles/203956163-Aviasales-Data-API) (free, token only)
+- **Data:** **Google Flights**, scraped with a real headless browser (Playwright) — no API key, no token, no paid proxy
 - **Automation:** GitHub Actions (free & unlimited for public repos)
 - **Hosting:** GitHub Pages (free)
 - **Dataset:** every observation is committed as plain CSV in `data/` — open for anyone
 
 > Fares are informational. Always confirm the live price before booking.
 
-> **Why not Amadeus?** FlightWatch originally used the Amadeus Self-Service API,
-> but that no longer has a usable free tier. Travelpayouts' Data API is genuinely
-> free (a single token, no OAuth, no per-call billing) and returns the cheapest
-> cached fares per route + date — exactly what a booking-curve tracker needs.
+> **Why scrape Google Flights?** FlightWatch first used the Amadeus Self-Service API
+> (dropped its free tier), then the Travelpayouts Data API (free, but a *cache* of
+> Aviasales searches that simply has no data for a thin route like CHC↔CMB — it
+> returned zero fares). Google Flights actually has the fares, and driving a real
+> browser needs no key and stays free — so the tracker can be fully autonomous.
+
+> **Heads up:** scraping is inherently more fragile than an official API. Google can
+> change its markup or rate-limit a runner. FlightWatch is built to degrade
+> gracefully (it records `no_results` instead of crashing and saves debug
+> screenshots), and the scraper is isolated in one file so it's easy to repair.
 
 ---
 
@@ -40,12 +46,12 @@ the per-itinerary history becomes a *booking curve* — which is what makes a re
 ```
 flightwatch/            # the Python package (importable, no path hacks)
   __init__.py           #   shared paths (repo root, data/, docs/, config.yaml)
-  provider.py           #   fare source — Travelpayouts client (swap providers here)
+  provider.py           #   fare source — Google Flights scraper (swap providers here)
   collect.py            #   daily scan -> appends to data/
   storage.py            #   append-only monthly CSVs with de-duplication
   predict.py            #   buy / wait / watch signal (heuristic + optional ML)
   dashboard.py          #   renders docs/index.html
-  __main__.py           #   CLI:  python -m flightwatch [collect|build|all]
+  __main__.py           #   CLI:  python -m flightwatch [collect|build|all|diag]
 config.yaml             # what to track
 data/                   # the open dataset (monthly CSVs)
 docs/                   # the published dashboard (GitHub Pages)
@@ -58,44 +64,28 @@ functions (`search_flight_offers` and `cheapest_offer`) and the rest is unchange
 
 ---
 
-## Setup (about 15 minutes, all free)
+## Setup (about 10 minutes, all free — no API keys at all)
 
-### 1. Get a free Travelpayouts API token
-1. Sign up at <https://www.travelpayouts.com/> (free, no credit card — it's their
-   travel affiliate network, which is what gates API access).
-2. In your dashboard, open your profile and copy your **API token** from the
-   *API token* section. If you can't find it, follow their short guide:
-   [Where to find API token](https://support.travelpayouts.com/hc/en-us/articles/13024069738386-Where-to-find-API-token).
-   That single token is all FlightWatch needs — there's no OAuth step or paid upgrade.
+The scraper needs no token or secret, so setup is just GitHub settings.
 
-> The token authorises the **Data API** (`aviasales/v3/prices_for_dates`), which
-> returns cheapest cached fares per route + date. It's available to every account;
-> only the separate real-time *Flights Search API* has a high traffic requirement,
-> and FlightWatch doesn't use it.
-
-### 2. Create the repo
+### 1. Create the repo
 1. Make a **public** GitHub repository (public = free Actions + Pages).
 2. Upload these files (or `git push` them).
 
-### 3. Add your token as a repo secret
-Repo → **Settings → Secrets and variables → Actions**:
-- New **secret** `TRAVELPAYOUTS_TOKEN` = your API token
-
-Secrets are encrypted and never appear in logs or the code.
-
-### 4. Allow the workflow to commit
+### 2. Allow the workflow to commit
 Repo → **Settings → Actions → General → Workflow permissions** → select
 **Read and write permissions** → Save. (The workflow commits the daily data back.)
 
-### 5. Turn on Pages
+### 3. Turn on Pages
 Repo → **Settings → Pages** → Source: **Deploy from a branch** → Branch: `main`,
 Folder: `/docs` → Save. Your dashboard will be at
 `https://<your-username>.github.io/<repo-name>/`.
 
-### 6. Run it once
-Repo → **Actions** tab → **daily-scan** → **Run workflow**. After it finishes, the
-first data point lands in `data/` and the dashboard updates. From then on it runs
-automatically every day.
+### 4. Run it once
+Repo → **Actions** tab → **daily-scan** → **Run workflow**. The workflow installs a
+headless Chromium, scrapes each route, and commits the first data point to `data/`.
+From then on it runs automatically every day. If a run scrapes 0 fares, download the
+**scrape-debug** artifact from that run to see exactly what Google returned.
 
 ---
 
@@ -103,14 +93,17 @@ automatically every day.
 
 ```bash
 pip install -r requirements.txt
-export TRAVELPAYOUTS_TOKEN=your_token
+python -m playwright install --with-deps chromium   # one-time browser download
 
-python -m flightwatch collect    # one scan -> appends to data/
+python -m flightwatch collect    # one scrape -> appends to data/
 python -m flightwatch build      # regenerate docs/index.html
-# or do both at once:
-python -m flightwatch all
+python -m flightwatch all        # both at once
+python -m flightwatch diag       # scrape one route verbosely + save debug screenshot
 open docs/index.html
 ```
+
+Set `FLIGHTWATCH_HEADFUL=1` (the CI default, via `xvfb-run`) to drive a non-headless
+Chromium, which Google is less likely to soft-block than pure headless.
 
 ---
 
@@ -145,34 +138,34 @@ meaningful inside ~6–8 weeks of departure, when fares actually start moving.
 
 ---
 
-## Troubleshooting: "it ran but collected 0 fares"
+## Troubleshooting: "it ran but scraped 0 fares"
 
-The Travelpayouts Data API is a **cache** — it only knows fares that people recently
-searched on Aviasales. An exact-date round trip on a thin route (like CHC↔CMB) is
-the least likely thing to be cached, so an exact-date query often comes back
-`success: true` with an empty list.
+Scraping Google Flights is the trade-off for being keyless and free. If a run
+records `no_results`, it's almost always one of:
 
-FlightWatch handles this in two ways:
+1. **Google soft-blocked the runner** — datacenter IPs are fingerprinted. The
+   workflow already runs a *non-headless* Chromium under `xvfb` (via
+   `FLIGHTWATCH_HEADFUL=1`) to look more like a real browser, which is usually
+   enough for a once-a-day, few-route scrape. A later daily run typically succeeds.
+2. **Google changed its markup** — the extractor keys off the stable
+   `"… round trip total"` ARIA label rather than CSS class names, but if Google
+   reshapes the page the selectors in `provider.py` may need a tweak.
 
-1. **Market locale** (`market:` in `config.yaml`, default `nz`) — fares are cached
-   per storefront, so set this to the country your route is searched from.
-2. **Month fallback** — if an exact-date query is empty, the collector retries the
-   whole departure month and records the cheapest fare found, tagging the row's
-   `source` as `travelpayouts:month` (vs `travelpayouts:dates`). That's still a
-   solid daily "cheapest for a September departure" signal for a thin route.
-
-To see exactly what the cache holds for your routes, run:
+To see exactly what Google returned, scrape one route locally and inspect the saved
+screenshot + HTML:
 
 ```bash
-export TRAVELPAYOUTS_TOKEN=your_token
 python -m flightwatch diag
+ls debug/        # diag-CHC-CMB.png / .html
 ```
 
-It prints `success` and the number of offers for each route at both the exact-date
-and month tiers. If even the month tier is consistently empty for your route, the
-Aviasales cache simply doesn't cover it — at that point the keyless **web-scraping**
-collector (a drop-in alternative for `provider.py`) is the way to go; open an issue
-or ask and it can be wired in.
+Every failed CI scrape also uploads those files as the **scrape-debug** artifact on
+the run, so you can debug a remote run without reproducing it locally.
+
+> If Google blocking ever becomes persistent on GitHub's shared IPs, the most
+> reliable free fix is to run the same `python -m flightwatch all` on any small
+> always-on machine (a home server / Raspberry Pi) on a cron and push the commits —
+> the code is identical; only the runner's IP changes.
 
 ---
 
@@ -183,10 +176,10 @@ or ask and it can be wired in.
 | Daily automation | GitHub Actions (public repo, standard runner) | Free, unlimited |
 | Dashboard hosting | GitHub Pages | Free |
 | Data storage | CSV in the repo | Free |
-| Fare data | Travelpayouts (Aviasales) Data API | Free (token only) |
+| Fare data | Google Flights scrape (headless Chromium) | Free, no key |
 
-A daily run uses ~1–2 Actions minutes and a handful of API calls — comfortably inside
-every free limit.
+A daily run uses ~2–3 Actions minutes (most of it installing Chromium) — comfortably
+inside every free limit.
 
 ---
 
