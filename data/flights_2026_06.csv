@@ -4,8 +4,8 @@ scan_datetime,scan_date,origin,destination,depart_date,return_date,trip_length,d
 2026-06-19T20:27:07Z,2026-06-19,CHC,CMB,2026-08-27,2026-09-17,21,69,,NZD,,,,error,amadeus-test
 2026-06-19T20:27:07Z,2026-06-19,CHC,CMB,2026-09-08,2026-10-15,37,81,,NZD,,,,error,amadeus-test
 2026-06-19T20:27:07Z,2026-06-19,CHC,CMB,2026-09-15,2026-10-24,39,88,,NZD,,,,error,amadeus-test
-2026-06-20T05:04:19Z,2026-06-20,CHC,CMB,2026-09-01,2026-09-22,21,73,,NZD,,,,no_results,travelpayouts
-2026-06-20T05:04:19Z,2026-06-20,CHC,CMB,2026-09-03,2026-09-24,21,75,,NZD,,,,no_results,travelpayouts
-2026-06-20T05:04:19Z,2026-06-20,CHC,CMB,2026-08-27,2026-09-17,21,68,,NZD,,,,no_results,travelpayouts
-2026-06-20T05:04:19Z,2026-06-20,CHC,CMB,2026-09-08,2026-10-15,37,80,,NZD,,,,no_results,travelpayouts
-2026-06-20T05:04:19Z,2026-06-20,CHC,CMB,2026-09-15,2026-10-24,39,87,,NZD,,,,no_results,travelpayouts
+2026-06-20T05:08:46Z,2026-06-20,CHC,CMB,2026-09-01,2026-09-22,21,73,,NZD,,,,no_results,travelpayouts
+2026-06-20T05:08:46Z,2026-06-20,CHC,CMB,2026-09-03,2026-09-24,21,75,,NZD,,,,no_results,travelpayouts
+2026-06-20T05:08:46Z,2026-06-20,CHC,CMB,2026-08-27,2026-09-17,21,68,,NZD,,,,no_results,travelpayouts
+2026-06-20T05:08:46Z,2026-06-20,CHC,CMB,2026-09-08,2026-10-15,37,80,,NZD,,,,no_results,travelpayouts
+2026-06-20T05:08:46Z,2026-06-20,CHC,CMB,2026-09-15,2026-10-24,39,87,,NZD,,,,no_results,travelpayouts
