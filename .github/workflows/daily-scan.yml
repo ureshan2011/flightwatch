@@ -23,10 +23,24 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
+      - name: Install Chromium for Playwright
+        run: python -m playwright install --with-deps chromium
+
       - name: Collect fares and build dashboard
+        # xvfb-run gives Chromium a virtual display; non-headless is less likely to
+        # be soft-blocked by Google than pure headless.
         env:
-          TRAVELPAYOUTS_TOKEN: ${{ secrets.TRAVELPAYOUTS_TOKEN }}
-        run: python -m flightwatch all
+          FLIGHTWATCH_HEADFUL: "1"
+        run: xvfb-run -a python -m flightwatch all
+
+      - name: Upload scrape debug artifacts (if any)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scrape-debug
+          path: debug/
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Commit data and dashboard
         run: |

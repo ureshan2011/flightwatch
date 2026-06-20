@@ -92,8 +92,8 @@ a{color:var(--buy)}
 <div class="meta" id="meta"></div>
 <div id="body"></div>
 <div class="foot">
-Updated automatically once a day via GitHub Actions. Fares come from the free
-Travelpayouts (Aviasales) Data API. Signals are derived from each route's own
+Updated automatically once a day via GitHub Actions. Fares are scraped from Google
+Flights. Signals are derived from each route's own
 observed price history and are informational only &mdash; verify the live fare before booking.
 Data is open: see the <code>data/</code> folder in the repository.
 </div>

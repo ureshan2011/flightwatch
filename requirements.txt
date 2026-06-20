@@ -1,4 +1,6 @@
-requests>=2.31
 PyYAML>=6.0
 pandas>=2.0
 scikit-learn>=1.3
+fast-flights>=3.0          # builds Google Flights' ?tfs= query (and parses, when usable)
+playwright>=1.40           # real headless Chromium -- needed to render Google Flights
+typing_extensions>=4.0     # required by fast-flights
