@@ -145,6 +145,37 @@ meaningful inside ~6–8 weeks of departure, when fares actually start moving.
 
 ---
 
+## Troubleshooting: "it ran but collected 0 fares"
+
+The Travelpayouts Data API is a **cache** — it only knows fares that people recently
+searched on Aviasales. An exact-date round trip on a thin route (like CHC↔CMB) is
+the least likely thing to be cached, so an exact-date query often comes back
+`success: true` with an empty list.
+
+FlightWatch handles this in two ways:
+
+1. **Market locale** (`market:` in `config.yaml`, default `nz`) — fares are cached
+   per storefront, so set this to the country your route is searched from.
+2. **Month fallback** — if an exact-date query is empty, the collector retries the
+   whole departure month and records the cheapest fare found, tagging the row's
+   `source` as `travelpayouts:month` (vs `travelpayouts:dates`). That's still a
+   solid daily "cheapest for a September departure" signal for a thin route.
+
+To see exactly what the cache holds for your routes, run:
+
+```bash
+export TRAVELPAYOUTS_TOKEN=your_token
+python -m flightwatch diag
+```
+
+It prints `success` and the number of offers for each route at both the exact-date
+and month tiers. If even the month tier is consistently empty for your route, the
+Aviasales cache simply doesn't cover it — at that point the keyless **web-scraping**
+collector (a drop-in alternative for `provider.py`) is the way to go; open an issue
+or ask and it can be wired in.
+
+---
+
 ## Cost reality check
 
 | Piece | Service | Cost |
