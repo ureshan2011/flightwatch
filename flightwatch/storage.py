@@ -21,7 +21,7 @@ from . import DATA_DIR
 COLUMNS = [
     "scan_datetime", "scan_date", "origin", "destination",
     "depart_date", "return_date", "trip_length", "days_to_departure",
-    "price", "currency", "airline", "stops", "duration_minutes",
+    "offer_index", "price", "currency", "airline", "stops", "duration_minutes",
     "status", "source",
 ]
 
@@ -52,6 +52,8 @@ def append_rows(rows):
     else:
         combined = new
 
+    # Keep a stable column order even if an older CSV predates a new column.
+    combined = combined.reindex(columns=COLUMNS)
     combined.to_csv(path, index=False)
 
 

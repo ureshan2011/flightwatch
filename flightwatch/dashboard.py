@@ -1,38 +1,114 @@
 """
 Generates docs/index.html (served free by GitHub Pages) from the accumulated data.
-Self-contained: embeds the data as JSON and loads Chart.js from a CDN.
-Handles the empty / early-days case gracefully.
+
+The page shows three things:
+  1. Recommendations -- a BUY / WAIT / WATCH call per itinerary, each with a
+     confidence rate, the model's predicted future low, expected savings from
+     waiting, and the probability the fare drops.
+  2. Market insights -- per-route aggregates from the latest scan (cheapest /
+     typical / range, airlines seen, nonstop availability) so the open dataset
+     is legible at a glance.
+  3. Latest fares -- the actual cheapest offers harvested in the most recent
+     scan, proving the "many records per scan" pipeline.
+
+Self-contained: embeds the data as JSON and loads Chart.js from a CDN. Handles
+the empty / early-days case gracefully.
 """
 
 import os
 import json
 from datetime import datetime
 
+import pandas as pd
+
 from . import DOCS_DIR, storage, predict
+
+
+def _with_itin(ok):
+    ok = ok.copy()
+    ok["itin"] = ok["origin"] + "-" + ok["destination"] + " " + \
+                 ok["depart_date"].astype(str) + " -> " + ok["return_date"].astype(str)
+    return ok
+
+
+def _insights(ok):
+    """Per-itinerary aggregates from that itinerary's most recent scan."""
+    out = []
+    for itin, h in ok.groupby("itin"):
+        latest_day = h["scan_date"].max()
+        day = h[h["scan_date"] == latest_day]
+        prices = day["price"].astype(float)
+        airlines = [a for a in day["airline"].dropna().unique() if a]
+        cheapest = day.loc[prices.idxmin()] if not prices.empty else None
+        out.append({
+            "itinerary": itin,
+            "offers": int(len(day)),
+            "min": float(prices.min()),
+            "median": float(prices.median()),
+            "max": float(prices.max()),
+            "nonstop": bool((day["stops"] == 0).any()),
+            "airlines": sorted(airlines)[:8],
+            "cheapest_airline": (str(cheapest["airline"]) if cheapest is not None else ""),
+            "scan_date": latest_day.strftime("%Y-%m-%d"),
+        })
+    out.sort(key=lambda r: r["min"])
+    return out
+
+
+def _latest_offers(ok, per_itin=8):
+    """The cheapest offers from each itinerary's most recent scan."""
+    out = {}
+    for itin, h in ok.groupby("itin"):
+        day = h[h["scan_date"] == h["scan_date"].max()].copy()
+        day = day.sort_values("price").head(per_itin)
+        out[itin] = [{"price": float(r.price), "airline": str(r.airline or ""),
+                      "stops": int(r.stops) if pd.notna(r.stops) else 0,
+                      "duration": int(r.duration_minutes) if pd.notna(r.duration_minutes) else 0}
+                     for r in day.itertuples()]
+    return out
 
 
 def build():
     df = storage.load_all()
-    recs = predict.recommendations(df)
+    bundle = predict.train_model(df) if not df.empty else None
+    recs = predict.recommendations(df, bundle=bundle)
 
-    # Per-itinerary price history for sparklines/charts
-    history = {}
-    if not df.empty:
-        ok = df[df["status"] == "ok"].copy()
-        ok["itin"] = ok["origin"] + "-" + ok["destination"] + " " + \
-                     ok["depart_date"].astype(str) + " -> " + ok["return_date"].astype(str)
-        for itin, h in ok.sort_values("scan_date").groupby("itin"):
+    history, insights, latest_offers = {}, [], {}
+    stats = {"scans": 0, "total_offers": 0, "routes": 0, "airlines": 0,
+             "cheapest_ever": None}
+
+    if not df.empty and (df["status"] == "ok").any():
+        ok = _with_itin(df[df["status"] == "ok"])
+
+        # One cheapest point per day for the booking-curve sparklines.
+        daily = predict.daily_min(df)
+        for itin, h in daily.groupby("itin"):
             history[itin] = [{"d": d.strftime("%Y-%m-%d"), "p": float(p)}
                              for d, p in zip(h["scan_date"], h["price"])]
 
-    model = predict.train_model(df) if not df.empty else None
+        insights = _insights(ok)
+        latest_offers = _latest_offers(ok)
+
+        cheap_idx = ok["price"].astype(float).idxmin()
+        cheap = ok.loc[cheap_idx]
+        stats = {
+            "scans": int(df["scan_date"].nunique()),
+            "total_offers": int(len(ok)),
+            "routes": int(ok["itin"].nunique()),
+            "airlines": int(ok["airline"].replace("", pd.NA).dropna().nunique()),
+            "cheapest_ever": {"price": float(cheap["price"]),
+                              "itinerary": str(cheap["itin"]),
+                              "date": cheap["scan_date"].strftime("%Y-%m-%d")},
+        }
+
     payload = {
         "generated": datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC"),
         "recs": recs,
         "history": history,
-        "total_obs": int((df["status"] == "ok").sum()) if not df.empty else 0,
-        "scans": int(df["scan_date"].nunique()) if not df.empty else 0,
-        "model": {"mae": round(model["mae"]), "n": model["n"]} if model else None,
+        "insights": insights,
+        "latest_offers": latest_offers,
+        "stats": stats,
+        "model": {"mae": round(bundle["mae"]), "n": bundle["n"]} if bundle else None,
         "currency": (df[df["status"] == "ok"]["currency"].iloc[0]
                      if not df.empty and (df["status"] == "ok").any() else "NZD"),
     }
@@ -40,11 +116,12 @@ def build():
     os.makedirs(DOCS_DIR, exist_ok=True)
     with open(os.path.join(DOCS_DIR, "index.html"), "w", encoding="utf-8") as f:
         f.write(_html(payload))
-    print(f"Dashboard built: {payload['scans']} scans, {payload['total_obs']} priced observations.")
+    print(f"Dashboard built: {stats['scans']} scans, {stats['total_offers']} fare "
+          f"observations across {stats['routes']} routes"
+          f"{', model ±'+str(round(bundle['mae'])) if bundle else ''}.")
 
 
 def _np(o):
-    """Make numpy scalar types JSON-serializable."""
     if hasattr(o, "item"):
         return o.item()
     raise TypeError(f"not serializable: {type(o)}")
@@ -63,11 +140,15 @@ def _html(p):
 *{margin:0;box-sizing:border-box}body{background:var(--bg);color:var(--ink);
 font-family:'Space Grotesk',system-ui,sans-serif;line-height:1.5}
 .mono{font-family:'IBM Plex Mono',monospace}
-.wrap{max-width:1000px;margin:0 auto;padding:36px 20px 80px}
+.wrap{max-width:1040px;margin:0 auto;padding:36px 20px 80px}
 .eyebrow{font-family:'IBM Plex Mono',monospace;letter-spacing:.3em;color:var(--buy);font-size:12px}
 h1{font-size:30px;font-weight:700;margin:6px 0;letter-spacing:-.5px}
 .sub{color:var(--muted);font-size:14px}
 .meta{color:var(--dim);font-size:12px;font-family:'IBM Plex Mono',monospace;margin-top:8px}
+.stats{display:flex;flex-wrap:wrap;gap:10px;margin-top:20px}
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 16px;min-width:120px}
+.stat .n{font-family:'IBM Plex Mono',monospace;font-size:22px;font-weight:600}
+.stat .l{color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:.12em}
 .empty{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:40px;text-align:center;margin-top:28px}
 .empty h2{font-size:20px;margin-bottom:8px}.empty p{color:var(--muted);max-width:520px;margin:0 auto}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px 20px;margin-top:14px;
@@ -77,53 +158,92 @@ display:flex;align-items:center;gap:18px;flex-wrap:wrap}
 .WAIT{background:rgba(255,179,71,.12);color:var(--wait);border:1px solid var(--wait)}
 .WATCH{background:rgba(126,141,181,.12);color:var(--watch);border:1px solid var(--watch)}
 .itin{font-weight:600;font-size:15px}.reason{color:var(--muted);font-size:13px;margin-top:2px}
+.tags{margin-top:6px;display:flex;gap:8px;flex-wrap:wrap}
+.tag{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--dim);background:var(--bg);
+border:1px solid var(--line);border-radius:6px;padding:2px 7px}
+.conf{display:inline-block;min-width:120px}
+.bar{height:6px;background:var(--bg);border:1px solid var(--line);border-radius:6px;overflow:hidden;margin-top:3px}
+.bar > i{display:block;height:100%;background:var(--buy)}
 .price{font-family:'IBM Plex Mono',monospace;font-size:24px;font-weight:600;margin-left:auto}
 .pricelbl{color:var(--dim);font-size:11px;font-family:'IBM Plex Mono',monospace;text-align:right}
 .spark{width:120px;height:40px}
 .section{font-family:'IBM Plex Mono',monospace;letter-spacing:.2em;color:var(--dim);font-size:12px;
-text-transform:uppercase;margin:36px 0 10px;display:flex;gap:12px;align-items:center}
+text-transform:uppercase;margin:40px 0 10px;display:flex;gap:12px;align-items:center}
 .section:after{content:"";flex:1;height:1px;background:var(--line)}
-.foot{color:var(--dim);font-size:12px;margin-top:40px;border-top:1px solid var(--line);padding-top:16px;line-height:1.7}
+table{width:100%;border-collapse:collapse;margin-top:10px;font-size:13px}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line)}
+th{color:var(--dim);font-family:'IBM Plex Mono',monospace;font-weight:500;font-size:11px;
+text-transform:uppercase;letter-spacing:.1em}
+td.num,th.num{text-align:right;font-family:'IBM Plex Mono',monospace}
+details{background:var(--panel);border:1px solid var(--line);border-radius:12px;margin-top:10px;padding:4px 16px}
+summary{cursor:pointer;padding:10px 0;font-weight:600;font-size:14px}
+.foot{color:var(--dim);font-size:12px;margin-top:44px;border-top:1px solid var(--line);padding-top:16px;line-height:1.7}
 a{color:var(--buy)}
 </style></head><body><div class="wrap">
 <div class="eyebrow">CHC &#8644; CMB &middot; OPEN FARE TRACKER</div>
 <h1>FlightWatch</h1>
-<div class="sub">Daily fares for the Christchurch &harr; Colombo corridor, with a buy / wait signal.</div>
+<div class="sub">Daily fares for the Christchurch &harr; Colombo corridor, with a forecast-driven buy / wait signal.</div>
 <div class="meta" id="meta"></div>
+<div class="stats" id="stats"></div>
 <div id="body"></div>
 <div class="foot">
 Updated automatically once a day via GitHub Actions. Fares are scraped from Google
-Flights. Signals are derived from each route's own
-observed price history and are informational only &mdash; verify the live fare before booking.
-Data is open: see the <code>data/</code> folder in the repository.
+Flights across multiple browser fingerprints. Signals come from a quantile
+gradient-boosting model trained on each route's own price history, with a
+heuristic fallback while history is thin &mdash; informational only, verify the
+live fare before booking. Data is open: see the <code>data/</code> folder.
 </div>
 </div>
 <script>
 const D = ''' + data + r''';
 const fmt = n => D.currency + Math.round(n).toLocaleString();
+const dur = m => m ? Math.floor(m/60)+'h '+(m%60)+'m' : '';
+const stops = s => s===0 ? 'nonstop' : s+' stop'+(s>1?'s':'');
 const meta = document.getElementById('meta');
-meta.textContent = D.scans + ' daily scans · ' + D.total_obs + ' priced observations · built ' + D.generated +
-  (D.model ? ' · model ±' + fmt(D.model.mae) : '');
+const S = D.stats;
+meta.textContent = S.scans + ' daily scans · built ' + D.generated +
+  (D.model ? ' · model ±' + fmt(D.model.mae) + ' (n=' + D.model.n + ')' : ' · heuristic mode (collecting data)');
+
+const statsEl = document.getElementById('stats');
+const cells = [
+  ['Fare records', (S.total_offers||0).toLocaleString()],
+  ['Routes', S.routes||0],
+  ['Airlines', S.airlines||0],
+  ['Scans', S.scans||0],
+];
+if(S.cheapest_ever) cells.push(['Cheapest seen', fmt(S.cheapest_ever.price)]);
+statsEl.innerHTML = cells.map(c=>'<div class="stat"><div class="n">'+c[1]+'</div><div class="l">'+c[0]+'</div></div>').join('');
+
 const body = document.getElementById('body');
 
 if(!D.recs.length){
   body.innerHTML = '<div class="empty"><h2>Collecting data…</h2>'+
-    '<p>The tracker has just started. Recommendations appear once each route has a few days of '+
-    'price history (usually within a week). Come back soon — or check the data folder in the repo.</p></div>';
+    '<p>The tracker has just started. Recommendations and forecasts appear once each route has a few days of '+
+    'price history (usually within a week). Come back soon — or browse the data folder in the repo.</p></div>';
 }else{
-  body.innerHTML = '<div class="section">Today’s recommendations</div>';
+  // ---- Recommendations ----
+  body.insertAdjacentHTML('beforeend','<div class="section">Today’s recommendations</div>');
   D.recs.forEach((r,i)=>{
     const id='spark'+i;
+    const conf = r.confidence||0;
+    const tags = [];
+    if(r.predicted_low) tags.push('forecast low '+fmt(r.predicted_low));
+    if(r.signal==='WAIT' && r.expected_savings) tags.push('save ~'+fmt(r.expected_savings)+' by waiting');
+    if(r.prob_drop!=null) tags.push(r.prob_drop+'% chance of a drop');
+    tags.push(r.method);
     body.insertAdjacentHTML('beforeend',
       '<div class="card">'+
         '<span class="sig '+r.signal+'">'+r.signal+'</span>'+
-        '<div><div class="itin">'+r.itinerary+'</div><div class="reason">'+r.reason+'</div></div>'+
+        '<div style="flex:1;min-width:200px"><div class="itin">'+r.itinerary+'</div>'+
+          '<div class="reason">'+r.reason+'</div>'+
+          '<div class="conf">confidence '+conf+'%<div class="bar"><i style="width:'+conf+'%"></i></div></div>'+
+          '<div class="tags">'+tags.map(t=>'<span class="tag">'+t+'</span>').join('')+'</div>'+
+        '</div>'+
         '<canvas class="spark" id="'+id+'"></canvas>'+
         '<div><div class="price">'+fmt(r.price)+'</div>'+
           '<div class="pricelbl">low '+fmt(r.trailing_min)+' · '+r.points+' pts</div></div>'+
       '</div>');
   });
-  // sparklines
   D.recs.forEach((r,i)=>{
     const h = D.history[r.itinerary]||[];
     const c = document.getElementById('spark'+i); if(!c||h.length<2) return;
@@ -132,5 +252,34 @@ if(!D.recs.length){
       options:{responsive:false,plugins:{legend:{display:false},tooltip:{enabled:false}},
         scales:{x:{display:false},y:{display:false}}}});
   });
+
+  // ---- Market insights ----
+  if(D.insights && D.insights.length){
+    body.insertAdjacentHTML('beforeend','<div class="section">Market insights · latest scan</div>');
+    let t='<table><thead><tr><th>Itinerary</th><th class="num">Offers</th><th class="num">Cheapest</th>'+
+      '<th class="num">Typical</th><th class="num">Highest</th><th>Nonstop</th><th>Airlines</th></tr></thead><tbody>';
+    D.insights.forEach(r=>{
+      t+='<tr><td>'+r.itinerary+'</td><td class="num">'+r.offers+'</td>'+
+        '<td class="num">'+fmt(r.min)+'</td><td class="num">'+fmt(r.median)+'</td>'+
+        '<td class="num">'+fmt(r.max)+'</td><td>'+(r.nonstop?'yes':'—')+'</td>'+
+        '<td style="color:var(--muted)">'+(r.airlines.join(', ')||'—')+'</td></tr>';
+    });
+    t+='</tbody></table>';
+    body.insertAdjacentHTML('beforeend',t);
+  }
+
+  // ---- Latest fares (expandable) ----
+  if(D.latest_offers && Object.keys(D.latest_offers).length){
+    body.insertAdjacentHTML('beforeend','<div class="section">Latest fares · cheapest offers per route</div>');
+    Object.keys(D.latest_offers).forEach(itin=>{
+      const rows=D.latest_offers[itin]; if(!rows.length) return;
+      let t='<details><summary>'+itin+' — '+rows.length+' offers</summary>'+
+        '<table><thead><tr><th>Airline</th><th>Stops</th><th>Duration</th><th class="num">Price</th></tr></thead><tbody>';
+      rows.forEach(o=>{ t+='<tr><td>'+(o.airline||'—')+'</td><td>'+stops(o.stops)+'</td>'+
+        '<td>'+dur(o.duration)+'</td><td class="num">'+fmt(o.price)+'</td></tr>'; });
+      t+='</tbody></table></details>';
+      body.insertAdjacentHTML('beforeend',t);
+    });
+  }
 }
 </script></body></html>'''

@@ -1,6 +1,10 @@
 """
-Daily collector. Reads config.yaml, queries each itinerary once, and appends
-one observation per itinerary to the monthly CSV.
+Daily collector. Reads config.yaml, scrapes each itinerary, and appends EVERY
+fare found (one row per offer) to the monthly CSV -- so the dataset grows fast.
+
+Scrapes run concurrently: several headless browsers, each with its own rotating
+fingerprint, work different itineraries at the same time. That is what makes
+volume scraping practical on the free tier without tripping Google's blocks.
 
 Run locally:
     python -m flightwatch collect
@@ -10,6 +14,7 @@ In CI this is invoked by .github/workflows/daily-scan.yml.
 
 import time
 import traceback
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, date
 
 from . import CONFIG_PATH, provider, storage
@@ -22,63 +27,85 @@ def load_config():
         return yaml.safe_load(f)
 
 
+def _scan_one(it, cfg, now, scan_date, market):
+    """Scrape a single itinerary and return its list of CSV rows (one per offer)."""
+    origin, dest = it["origin"], it["destination"]
+    dep, ret = str(it["depart_date"]), str(it["return_date"])
+    dep_d = datetime.strptime(dep, "%Y-%m-%d").date()
+    ret_d = datetime.strptime(ret, "%Y-%m-%d").date()
+    trip_len = (ret_d - dep_d).days
+    dtd = (dep_d - date.today()).days
+
+    base = {
+        "scan_datetime": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "scan_date": scan_date,
+        "origin": origin, "destination": dest,
+        "depart_date": dep, "return_date": ret,
+        "trip_length": trip_len, "days_to_departure": dtd,
+        "currency": cfg.get("currency", "NZD"),
+        "source": "googleflights",
+    }
+
+    # Skip itineraries whose departure has already passed.
+    if dtd < 0:
+        return []
+
+    def empty(status):
+        return [{**base, "offer_index": "", "price": "", "airline": "",
+                 "stops": "", "duration_minutes": "", "status": status}]
+
+    try:
+        offers = provider.search_flight_offers(
+            origin, dest, dep, ret,
+            adults=cfg.get("adults", 1),
+            currency=cfg.get("currency", "NZD"),
+            max_offers=cfg.get("max_offers_per_search", 50),
+            market=market,
+        )
+        if offers:
+            rows = [{**base, "offer_index": i, **o, "status": "ok"}
+                    for i, o in enumerate(offers)]
+            best = min(offers, key=lambda o: o["price"])
+            print(f"  OK   {origin}->{dest} {dep}->{ret}  "
+                  f"{len(offers)} offers, low {best['currency']}{best['price']:.0f}")
+            return rows
+        print(f"  --   {origin}->{dest} {dep}->{ret}  no offers")
+        return empty("no_results")
+    except Exception as e:
+        print(f"  ERR  {origin}->{dest} {dep}->{ret}  {e}")
+        traceback.print_exc()
+        return empty("error")
+
+
 def collect():
     cfg = load_config()
     now = datetime.utcnow()
     scan_date = now.strftime("%Y-%m-%d")
     market = cfg.get("market", "nz")
+    itineraries = cfg["itineraries"]
+    # How many browsers to run at once. Modest by default to stay polite and fit
+    # the free-tier runner's memory; bump `concurrency` in config.yaml to go wider.
+    workers = max(int(cfg.get("concurrency", 3) or 1), 1)
+
     rows = []
-
-    for it in cfg["itineraries"]:
-        origin, dest = it["origin"], it["destination"]
-        dep, ret = str(it["depart_date"]), str(it["return_date"])
-        dep_d = datetime.strptime(dep, "%Y-%m-%d").date()
-        ret_d = datetime.strptime(ret, "%Y-%m-%d").date()
-        trip_len = (ret_d - dep_d).days
-        dtd = (dep_d - date.today()).days
-
-        base = {
-            "scan_datetime": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
-            "scan_date": scan_date,
-            "origin": origin, "destination": dest,
-            "depart_date": dep, "return_date": ret,
-            "trip_length": trip_len, "days_to_departure": dtd,
-            "currency": cfg.get("currency", "NZD"),
-            "source": "googleflights",
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = {
+            pool.submit(_scan_one, it, cfg, now, scan_date, market): it
+            for it in itineraries
         }
-
-        # Skip itineraries whose departure has already passed.
-        if dtd < 0:
-            continue
-
-        try:
-            offers = provider.search_flight_offers(
-                origin, dest, dep, ret,
-                adults=cfg.get("adults", 1),
-                currency=cfg.get("currency", "NZD"),
-                max_offers=cfg.get("max_offers_per_search", 5),
-                market=market,
-            )
-            best = provider.cheapest_offer(offers)
-            if best:
-                rows.append({**base, **best, "status": "ok"})
-                print(f"  OK   {origin}->{dest} {dep}->{ret}  {best['currency']}{best['price']:.0f}")
-            else:
-                rows.append({**base, "price": "", "airline": "", "stops": "",
-                             "duration_minutes": "", "status": "no_results"})
-                print(f"  --   {origin}->{dest} {dep}->{ret}  no offers")
-        except Exception as e:
-            rows.append({**base, "price": "", "airline": "", "stops": "",
-                         "duration_minutes": "", "status": "error"})
-            print(f"  ERR  {origin}->{dest} {dep}->{ret}  {e}")
-            traceback.print_exc()
-
-        time.sleep(cfg.get("delay_seconds", 1.0))  # be polite between scrapes
+        for fut in as_completed(futures):
+            try:
+                rows.extend(fut.result())
+            except Exception:
+                traceback.print_exc()
 
     storage.append_rows(rows)
-    ok = sum(1 for r in rows if r.get("status") == "ok")
-    print(f"\nCollected {ok}/{len(rows)} priced itineraries on {scan_date}.")
-    if ok == 0:
+    ok_offers = sum(1 for r in rows if r.get("status") == "ok")
+    priced_itins = len({(r["origin"], r["destination"], r["depart_date"],
+                         r["return_date"]) for r in rows if r.get("status") == "ok"})
+    print(f"\nCollected {ok_offers} fare rows across {priced_itins} itineraries "
+          f"on {scan_date}.")
+    if ok_offers == 0:
         print("No fares scraped. Run `python -m flightwatch diag` and inspect the "
               "screenshot/HTML written to debug/ to see what Google Flights returned.")
 
@@ -103,7 +130,7 @@ def diagnose():
 
     offers = provider._scrape(url, debug_tag=f"diag-{origin}-{dest}")
     print(f"Scraped {len(offers)} raw offers.")
-    for o in offers[:8]:
+    for o in offers[:20]:
         print(f"  {currency}{o.get('price')}  {o.get('airline','')}  "
               f"stops={o.get('stops')}  dur={o.get('duration_minutes')}m")
     print(f"\nDebug screenshot + HTML saved under: {provider.DEBUG_DIR}")
