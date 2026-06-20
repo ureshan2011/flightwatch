@@ -15,7 +15,6 @@ Both return: signal in {"BUY", "WAIT", "WATCH"}, a short reason, and numbers.
 """
 
 import pandas as pd
-import numpy as np
 
 MIN_OBS_FOR_MODEL = 400          # total observations before training the ML model
 MIN_HISTORY_PER_ITIN = 4         # daily points before an itinerary gets a signal

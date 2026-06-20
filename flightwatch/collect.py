@@ -3,24 +3,19 @@ Daily collector. Reads config.yaml, queries each itinerary once, and appends
 one observation per itinerary to the monthly CSV.
 
 Run locally:
-    AMADEUS_CLIENT_ID=xxx AMADEUS_CLIENT_SECRET=yyy python src/collect.py
+    TRAVELPAYOUTS_TOKEN=xxx python -m flightwatch collect
 
 In CI this is invoked by .github/workflows/daily-scan.yml.
 """
 
 import os
-import sys
 import time
 import traceback
 from datetime import datetime, date
 
 import yaml
 
-sys.path.insert(0, os.path.dirname(__file__))
-import amadeus_client as amadeus
-import storage
-
-CONFIG_PATH = os.path.join(os.path.dirname(__file__), "..", "config.yaml")
+from . import CONFIG_PATH, provider, storage
 
 
 def load_config():
@@ -32,6 +27,7 @@ def collect():
     cfg = load_config()
     now = datetime.utcnow()
     scan_date = now.strftime("%Y-%m-%d")
+    market = cfg.get("market", "us")
     rows = []
 
     for it in cfg["itineraries"]:
@@ -49,7 +45,7 @@ def collect():
             "depart_date": dep, "return_date": ret,
             "trip_length": trip_len, "days_to_departure": dtd,
             "currency": cfg.get("currency", "NZD"),
-            "source": f"amadeus-{os.environ.get('AMADEUS_ENV', 'test')}",
+            "source": "travelpayouts",
         }
 
         # Skip itineraries whose departure has already passed.
@@ -57,13 +53,14 @@ def collect():
             continue
 
         try:
-            offers = amadeus.search_flight_offers(
+            offers = provider.search_flight_offers(
                 origin, dest, dep, ret,
                 adults=cfg.get("adults", 1),
                 currency=cfg.get("currency", "NZD"),
                 max_offers=cfg.get("max_offers_per_search", 5),
+                market=market,
             )
-            best = amadeus.cheapest_offer(offers)
+            best = provider.cheapest_offer(offers)
             if best:
                 rows.append({**base, **best, "status": "ok"})
                 print(f"  OK   {origin}->{dest} {dep}->{ret}  {best['currency']}{best['price']:.0f}")
@@ -82,7 +79,3 @@ def collect():
     storage.append_rows(rows)
     ok = sum(1 for r in rows if r.get("status") == "ok")
     print(f"\nCollected {ok}/{len(rows)} priced itineraries on {scan_date}.")
-
-
-if __name__ == "__main__":
-    collect()

@@ -13,9 +13,10 @@ collector on the same day overwrites that day's rows rather than duplicating the
 import os
 import glob
 from datetime import datetime, date
+
 import pandas as pd
 
-DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
+from . import DATA_DIR
 
 COLUMNS = [
     "scan_datetime", "scan_date", "origin", "destination",
