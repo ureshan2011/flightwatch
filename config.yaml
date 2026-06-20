@@ -6,8 +6,9 @@
 currency: NZD
 market: nz                  # Google Flights region (gl=) -- match the route's country
 adults: 1
-max_offers_per_search: 5
-delay_seconds: 1.0          # polite pause between API calls
+max_offers_per_search: 50   # store up to this many fares per itinerary per scan (0 = all)
+concurrency: 3              # headless browsers to run in parallel (each with its own
+                            # rotating fingerprint). Raise for more volume/speed.
 
 itineraries:
   # Seeded from the June fare analysis (cheapest observed windows).

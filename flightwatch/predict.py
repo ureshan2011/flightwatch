@@ -20,14 +20,24 @@ MIN_OBS_FOR_MODEL = 400          # total observations before training the ML mod
 MIN_HISTORY_PER_ITIN = 4         # daily points before an itinerary gets a signal
 
 
-def _latest_per_itinerary(df):
+def daily_min(df):
+    """
+    Collapse the raw fare rows (many offers per itinerary per day) to ONE point
+    per itinerary per scan_date: the cheapest fare seen that day. The CSV stores
+    every offer for analysis, but the booking curve and buy/wait signal want a
+    single price per day, which is the cheapest available fare.
+    """
     df = df[df["status"] == "ok"].copy()
     if df.empty:
         return df
     df["itin"] = df["origin"] + "-" + df["destination"] + " " + \
                  df["depart_date"].astype(str) + " -> " + df["return_date"].astype(str)
-    df = df.sort_values("scan_date")
-    return df
+    df = df.sort_values("price").drop_duplicates(["itin", "scan_date"], keep="first")
+    return df.sort_values("scan_date")
+
+
+def _latest_per_itinerary(df):
+    return daily_min(df)
 
 
 def heuristic_signal(hist: pd.DataFrame) -> dict:

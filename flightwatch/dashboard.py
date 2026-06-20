@@ -15,13 +15,11 @@ def build():
     df = storage.load_all()
     recs = predict.recommendations(df)
 
-    # Per-itinerary price history for sparklines/charts
+    # Per-itinerary price history for sparklines/charts: one cheapest point per day.
     history = {}
     if not df.empty:
-        ok = df[df["status"] == "ok"].copy()
-        ok["itin"] = ok["origin"] + "-" + ok["destination"] + " " + \
-                     ok["depart_date"].astype(str) + " -> " + ok["return_date"].astype(str)
-        for itin, h in ok.sort_values("scan_date").groupby("itin"):
+        daily = predict.daily_min(df)
+        for itin, h in daily.groupby("itin"):
             history[itin] = [{"d": d.strftime("%Y-%m-%d"), "p": float(p)}
                              for d, p in zip(h["scan_date"], h["price"])]
 
