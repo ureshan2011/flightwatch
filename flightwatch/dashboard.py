@@ -312,21 +312,24 @@ def _html(p):
     data = json.dumps(p, default=_np)
     return r'''<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0d0f13">
 <title>Faro &middot; know when to book</title>
-<meta name="description" content="Faro tracks daily fares and tells you the perfect moment to book — with real airline logos, stops, flight times, live weather and currency.">
+<meta name="description" content="Faro tracks daily fares and tells you the perfect moment to book — boarding-pass style cards with real airline logos, stops, flight times, live weather and currency.">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="preconnect" href="https://pics.avs.io" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Sora:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
 :root{
-  --bg:#eef3fc;--card:#ffffff;--ink:#0d1830;--muted:#56678a;--dim:#8a99b8;
-  --line:#e8eef8;--line2:#dbe4f3;
-  --brand:#3b6ef5;--brand2:#7a5cf0;--teal:#0fb6a8;--pink:#e0567d;
-  --buy:#12b07c;--buy-bg:#e6f7f0;--wait:#e8902a;--wait-bg:#fdf1e2;--watch:#6b7ba0;--watch-bg:#eef1f8;
-  --shadow:0 12px 34px -16px rgba(24,46,92,.20);--shadow-lg:0 30px 66px -24px rgba(24,46,92,.30);
+  --bg:#0c0e12;--bg2:#101319;--card:#161a22;--card2:#1b202a;--ink:#f3efe6;--soft:#cdd3df;
+  --muted:#99a1b1;--dim:#6a7280;--line:#242a35;--line2:#2e3441;
+  --gold:#e8b552;--gold2:#f2cf86;--gold-dim:#8a6e2f;--amber:#e8902a;
+  --buy:#2ecb8f;--buy-bg:rgba(46,203,143,.14);--wait:#e8a33a;--wait-bg:rgba(232,163,58,.15);
+  --watch:#8a93a6;--watch-bg:rgba(138,147,166,.14);
+  --shadow:0 18px 44px -22px rgba(0,0,0,.8);--shadow-lg:0 40px 80px -30px rgba(0,0,0,.85);
+  --glow:0 0 0 1px rgba(232,181,82,.18),0 18px 50px -20px rgba(232,181,82,.25);
   --radius:20px;
 }
 *{margin:0;box-sizing:border-box}
@@ -334,99 +337,135 @@ html{scroll-behavior:smooth}
 body{background:var(--bg);color:var(--ink);overflow-x:hidden;
   font-family:'Sora',system-ui,-apple-system,sans-serif;line-height:1.55;-webkit-font-smoothing:antialiased}
 .mono{font-family:'IBM Plex Mono',monospace}
-.wrap{max-width:1140px;margin:0 auto;padding:0 22px 100px}
-a{color:var(--brand);text-decoration:none}
+.osw{font-family:'Oswald',sans-serif}
+.wrap{max-width:1180px;margin:0 auto;padding:0 22px 120px}
+a{color:var(--gold2);text-decoration:none}
 img,canvas{max-width:100%}
 
-/* aurora bg */
-.aurora{position:fixed;inset:0;z-index:-2;overflow:hidden;background:
-  radial-gradient(1100px 620px at 80% -8%,#dfe8ff 0,transparent 58%),
-  radial-gradient(820px 520px at -8% 6%,#dafaf4 0,transparent 52%),var(--bg)}
-.blob{position:absolute;border-radius:50%;filter:blur(80px);opacity:.5;will-change:transform}
-.b1{width:520px;height:520px;left:-120px;top:-90px;background:#9fb8ff;animation:float1 20s ease-in-out infinite}
-.b2{width:460px;height:460px;right:-120px;top:60px;background:#a9efe2;animation:float2 24s ease-in-out infinite}
-@keyframes float1{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(40px,30px) scale(1.08)}}
-@keyframes float2{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(-50px,40px) scale(1.12)}}
+/* ---------- parallax background ---------- */
+.bgwrap{position:fixed;inset:0;z-index:-3;overflow:hidden;background:
+  radial-gradient(1200px 720px at 82% -10%,#1c2436 0,transparent 60%),
+  radial-gradient(900px 560px at -6% 4%,#15110a 0,transparent 55%),
+  linear-gradient(180deg,#0c0e12,#0a0c10 60%,#0c0e12)}
+.bg-glow{position:absolute;width:760px;height:760px;right:-180px;top:-220px;border-radius:50%;
+  background:radial-gradient(circle,rgba(232,181,82,.20),transparent 62%);filter:blur(20px);will-change:transform}
+.bg-glow.g2{left:-220px;top:30%;right:auto;width:620px;height:620px;
+  background:radial-gradient(circle,rgba(46,203,143,.10),transparent 62%)}
+.bg-grid{position:absolute;inset:-2px;opacity:.5;will-change:transform;
+  background-image:linear-gradient(rgba(255,255,255,.035) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px);
+  background-size:46px 46px;mask:radial-gradient(120% 90% at 50% 0,#000 30%,transparent 80%)}
+.bg-plane{position:absolute;right:-60px;top:160px;width:560px;color:rgba(232,181,82,.05);
+  will-change:transform;transform:rotate(-14deg)}
+.bg-plane svg{width:100%;height:auto;display:block;fill:currentColor}
+.grain{position:fixed;inset:0;z-index:-2;pointer-events:none;opacity:.04;mix-blend-mode:overlay;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+/* a plane that drifts across as you scroll */
+.flyplane{position:fixed;top:18%;left:0;z-index:-1;width:120px;color:rgba(232,181,82,.10);pointer-events:none;
+  transition:transform .1s linear;will-change:transform}
+.flyplane svg{width:100%;fill:currentColor}
 
-/* nav */
-.nav{position:sticky;top:0;z-index:60;backdrop-filter:saturate(170%) blur(14px);
-  background:rgba(238,243,252,.72);border-bottom:1px solid var(--line)}
-.nav .row{max-width:1140px;margin:0 auto;padding:11px 22px;display:flex;align-items:center;gap:14px}
-.brand{font-weight:800;letter-spacing:-.4px;display:flex;align-items:center;gap:10px;font-size:19px}
-.mark{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;flex:none;
-  background:linear-gradient(135deg,var(--brand),var(--brand2));box-shadow:0 6px 16px -6px rgba(59,110,245,.7)}
-.mark svg{width:17px;height:17px}
+/* ---------- nav ---------- */
+.nav{position:sticky;top:0;z-index:60;backdrop-filter:saturate(150%) blur(16px);
+  background:rgba(12,14,18,.66);border-bottom:1px solid var(--line)}
+.nav .row{max-width:1180px;margin:0 auto;padding:12px 22px;display:flex;align-items:center;gap:14px}
+.brand{font-weight:800;letter-spacing:-.4px;display:flex;align-items:center;gap:11px;font-size:19px}
+.mark{width:32px;height:32px;border-radius:10px;display:grid;place-items:center;flex:none;
+  background:linear-gradient(140deg,var(--gold),#c8902f);box-shadow:0 8px 20px -8px rgba(232,181,82,.7)}
+.mark svg{width:18px;height:18px}
 .nav .links{margin-left:auto;display:flex;gap:4px;flex-wrap:wrap}
 .nav .links a{font-size:13px;color:var(--muted);padding:7px 13px;border-radius:20px;transition:.2s}
-.nav .links a:hover{color:var(--ink);background:#fff;box-shadow:var(--shadow)}
+.nav .links a:hover{color:var(--ink);background:rgba(255,255,255,.05)}
 .ctx{display:flex;align-items:center;gap:8px;font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:var(--muted)}
 .ctx .pulse{width:8px;height:8px;border-radius:50%;background:var(--buy);animation:pulse 2s infinite}
-@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(18,176,124,.5)}70%{box-shadow:0 0 0 8px rgba(18,176,124,0)}100%{box-shadow:0 0 0 0 rgba(18,176,124,0)}}
-@media(max-width:720px){.nav .links{display:none}}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(46,203,143,.5)}70%{box-shadow:0 0 0 8px rgba(46,203,143,0)}100%{box-shadow:0 0 0 0 rgba(46,203,143,0)}}
+@media(max-width:760px){.nav .links{display:none}}
 
-/* hero */
-.hero{padding:54px 0 6px;display:grid;grid-template-columns:1.02fr .98fr;gap:36px;align-items:center}
-@media(max-width:920px){.hero{grid-template-columns:1fr;padding-top:40px}}
-.eyebrow{font-family:'IBM Plex Mono',monospace;letter-spacing:.24em;color:var(--brand);font-size:12px;font-weight:600}
-h1{font-size:clamp(36px,6vw,60px);font-weight:800;letter-spacing:-1.8px;margin:16px 0 14px;line-height:1.0}
-h1 .grad{background:linear-gradient(110deg,var(--brand),var(--brand2) 46%,var(--teal));
+/* ---------- hero ---------- */
+.hero{padding:56px 0 6px;display:grid;grid-template-columns:1.05fr .95fr;gap:40px;align-items:center}
+@media(max-width:960px){.hero{grid-template-columns:1fr;padding-top:38px}}
+.eyebrow{font-family:'IBM Plex Mono',monospace;letter-spacing:.26em;color:var(--gold);font-size:12px;font-weight:600;text-transform:uppercase}
+h1{font-size:clamp(40px,6.4vw,72px);font-weight:800;letter-spacing:-2px;margin:16px 0 16px;line-height:.98}
+h1 .grad{background:linear-gradient(100deg,var(--gold2),var(--gold) 45%,#c8902f);
   -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
 .lead{color:var(--muted);font-size:17.5px;max-width:540px}
-.chips{display:flex;gap:10px;flex-wrap:wrap;margin-top:22px}
-.lchip{display:flex;align-items:center;gap:10px;background:#fff;border:1px solid var(--line);
+.lead b{color:var(--soft)}
+.chips{display:flex;gap:10px;flex-wrap:wrap;margin-top:24px}
+.lchip{display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--line);
   border-radius:14px;padding:9px 13px;box-shadow:var(--shadow);font-size:13px}
 .lchip .ico{font-size:16px;line-height:1;width:18px;text-align:center}
-.lchip b{font-family:'IBM Plex Mono',monospace;font-weight:600;display:block}
+.lchip b{font-family:'IBM Plex Mono',monospace;font-weight:600;display:block;color:var(--ink)}
 .lchip small{color:var(--dim);font-size:11px;display:block}
 
-/* 3D globe scene */
-.scene{position:relative;width:100%;height:440px;border-radius:26px;overflow:hidden;
-  background:radial-gradient(120% 120% at 70% 20%,#10204a 0,#0a1430 55%,#070d22 100%);
-  box-shadow:var(--shadow-lg);cursor:grab}
+/* dynamic-island style notification (from the iOS mock) */
+.island{position:absolute;top:14px;left:50%;transform:translateX(-50%);z-index:5;
+  display:flex;align-items:center;gap:10px;background:#05070b;border:1px solid #20252f;
+  color:#eef2f8;font-family:'IBM Plex Mono',monospace;font-size:12px;padding:8px 16px;border-radius:22px;
+  box-shadow:0 14px 30px -14px rgba(0,0,0,.9);white-space:nowrap}
+.island .pl{color:var(--gold)}
+.island .t{margin-left:6px;color:#cfd6e2}
+
+/* 3D scene */
+.scene{position:relative;width:100%;height:480px;border-radius:28px;overflow:hidden;
+  background:radial-gradient(120% 120% at 70% 16%,#11203f 0,#0a1124 55%,#06080f 100%);
+  box-shadow:var(--shadow-lg),inset 0 0 0 1px rgba(232,181,82,.14);cursor:grab}
 .scene canvas{display:block;width:100%;height:100%}
-@media(max-width:920px){.scene{height:360px}}
-@media(max-width:520px){.scene{height:300px}}
-/* CSS fallback planet (shown until/unless WebGL mounts) */
+@media(max-width:960px){.scene{height:380px}}
+@media(max-width:520px){.scene{height:320px}}
 .fb{position:absolute;inset:0;display:grid;place-items:center}
-.fb .planet{width:62%;aspect-ratio:1;border-radius:50%;
-  background:radial-gradient(circle at 34% 30%,#7fb3ff 0,#2f6fd0 40%,#123a82 70%,#0a2350 100%);
-  box-shadow:inset -22px -18px 60px rgba(0,0,0,.55),0 0 60px rgba(80,150,255,.45);animation:spin 26s linear infinite}
-.fb .ring{position:absolute;width:84%;aspect-ratio:1;border:1px dashed rgba(140,180,255,.4);
-  border-radius:50%;transform:rotate(28deg)}
+.fb .planet{width:60%;aspect-ratio:1;border-radius:50%;
+  background:radial-gradient(circle at 34% 30%,#5b86c8 0,#274a86 42%,#11254e 72%,#0a1730 100%);
+  box-shadow:inset -22px -18px 60px rgba(0,0,0,.6),0 0 70px rgba(232,181,82,.22);animation:spin 26s linear infinite}
+.fb .ring{position:absolute;width:84%;aspect-ratio:1;border:1px dashed rgba(232,181,82,.32);border-radius:50%;transform:rotate(28deg)}
 .fb .pl{position:absolute;font-size:26px;animation:orbit 9s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 @keyframes orbit{from{transform:rotate(0) translateX(150px) rotate(0)}to{transform:rotate(360deg) translateX(150px) rotate(-360deg)}}
 .routeover{position:absolute;left:18px;bottom:16px;display:flex;gap:8px;align-items:center;
-  font-family:'IBM Plex Mono',monospace;font-size:12px;color:#dce8ff;
-  background:rgba(8,16,38,.5);backdrop-filter:blur(6px);padding:8px 12px;border-radius:12px;border:1px solid rgba(120,160,255,.25)}
+  font-family:'IBM Plex Mono',monospace;font-size:12px;color:#e9eefb;
+  background:rgba(6,9,16,.55);backdrop-filter:blur(6px);padding:8px 12px;border-radius:12px;border:1px solid rgba(232,181,82,.25)}
 .routeover .leg{width:7px;height:7px;border-radius:50%}
 
-/* deal card */
-.dealwrap{perspective:1200px;margin-top:26px}
-.deal{position:relative;background:linear-gradient(160deg,#ffffff,#f4f8ff);border:1px solid var(--line);
-  border-radius:24px;padding:24px;box-shadow:var(--shadow-lg);transform-style:preserve-3d;
-  transform:rotateX(var(--rx,0deg)) rotateY(var(--ry,0deg));transition:transform .2s ease}
-.deal:after{content:"";position:absolute;inset:0;border-radius:24px;pointer-events:none;opacity:0;transition:opacity .3s;
-  background:radial-gradient(360px 360px at var(--mx,50%) var(--my,0%),rgba(255,255,255,.85),transparent 60%)}
-.deal.hot:after{opacity:.9}
-.deal .tagrow{display:flex;align-items:center;gap:10px;transform:translateZ(40px)}
-.deal .lbl{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim)}
-.deal .route{font-size:22px;font-weight:800;letter-spacing:-.5px;margin:14px 0 2px;transform:translateZ(50px);
-  display:flex;align-items:center;gap:10px}
-.deal .dates{color:var(--muted);font-size:13.5px;transform:translateZ(34px)}
-.deal .pricebig{font-family:'IBM Plex Mono',monospace;font-weight:600;letter-spacing:-1.5px;
-  margin:16px 0 0;transform:translateZ(64px);line-height:1;display:flex;align-items:baseline;gap:8px}
-.deal .pricebig .cur{font-size:15px;color:var(--dim);letter-spacing:0;font-weight:500}
-.deal .pricebig .v{font-size:46px}
-.deal .pricebig small{font-size:13px;color:var(--dim);letter-spacing:0;font-weight:400}
-.deal .meta2{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px;transform:translateZ(40px)}
-.deal .fx{margin-top:14px;display:flex;gap:7px;flex-wrap:wrap;transform:translateZ(26px)}
-.deal .fx span{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted);background:#eef3fd;border-radius:8px;padding:3px 8px}
+/* ---------- boarding pass card ---------- */
+.bpwrap{perspective:1400px;margin-top:28px}
+.bp{position:relative;background:linear-gradient(165deg,#13161d,#0d1015);border:1px solid var(--line2);
+  border-radius:24px;padding:22px 24px;box-shadow:var(--shadow-lg);overflow:hidden}
+.bp:before{content:"";position:absolute;inset:0;border-radius:24px;pointer-events:none;
+  background:radial-gradient(520px 220px at 84% -10%,rgba(232,181,82,.16),transparent 60%)}
+.bp.tilt-3d{transform-style:preserve-3d;transform:rotateX(var(--rx,0deg)) rotateY(var(--ry,0deg));transition:transform .2s ease}
+.bp .bp-top{display:flex;align-items:center;gap:10px;position:relative}
+.bp-tag{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim)}
+.bp-mid{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:16px;margin:14px 0 4px;position:relative}
+.bp-code{font-family:'Oswald',sans-serif;font-weight:700;font-size:clamp(34px,6vw,58px);line-height:.9;letter-spacing:.5px;color:#fff}
+.bp-code small{display:block;font-family:'Sora',sans-serif;font-weight:500;font-size:11.5px;letter-spacing:.02em;color:var(--dim);margin-top:6px}
+.bp-code.r{text-align:right}
+.bp-track{min-width:0}
+.bp-arr{text-align:center;font-size:13px;color:var(--muted);margin-bottom:9px}
+.bp-arr b{color:var(--gold);font-family:'IBM Plex Mono',monospace;font-weight:600}
+.bp-bar{position:relative;height:12px;border-radius:7px;background:rgba(232,181,82,.13);display:flex;align-items:center}
+.bp-bar>i{display:block;height:100%;border-radius:7px;background:linear-gradient(90deg,#c8902f,var(--gold));box-shadow:0 0 16px -2px rgba(232,181,82,.6);transition:width 1.3s cubic-bezier(.2,.7,.2,1)}
+.bp-dot{position:absolute;width:11px;height:11px;border-radius:50%;background:var(--gold);top:50%;transform:translateY(-50%);box-shadow:0 0 0 3px rgba(232,181,82,.18)}
+.bp-dot.l{left:-1px}.bp-dot.r{right:-1px;background:#0d1015;border:2px solid var(--gold)}
+.bp-plane{position:absolute;top:50%;transform:translate(-50%,-50%);color:#0c0e12;display:grid;place-items:center;z-index:2;transition:left 1.3s cubic-bezier(.2,.7,.2,1)}
+.bp-plane svg{width:17px;height:17px;fill:#0c0e12;filter:drop-shadow(0 1px 2px rgba(0,0,0,.4))}
+.bp-stop{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:3;
+  font-family:'IBM Plex Mono',monospace;font-size:9.5px;font-weight:600;letter-spacing:.08em;color:#0c0e12;
+  background:repeating-linear-gradient(45deg,#e8b552,#e8b552 4px,#d6a23f 4px,#d6a23f 8px);
+  padding:3px 8px;border-radius:7px;border:2px solid #0d1015}
+.bp-sub{text-align:center;font-size:11.5px;color:var(--dim);margin-top:9px}
+.bp-foot{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-top:18px;
+  padding-top:16px;border-top:1px dashed var(--line2)}
+.bp-leg .k{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);display:block}
+.bp-leg .v{font-family:'Oswald',sans-serif;font-weight:600;font-size:21px;color:var(--ink);letter-spacing:.3px}
+.bp-leg.r{text-align:right}
+.bp-pill{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:14px;color:var(--ink);
+  background:var(--card2);border:1px solid var(--line2);padding:9px 15px;border-radius:14px;white-space:nowrap}
+.bp-pill.green{background:var(--buy-bg);color:var(--buy);border-color:rgba(46,203,143,.3)}
+.bp-pill.amber{background:var(--wait-bg);color:var(--wait);border-color:rgba(232,163,58,.3)}
 
-.sig{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:12px;padding:6px 12px;border-radius:12px;white-space:nowrap}
+.sig{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:12px;padding:6px 13px;border-radius:12px;white-space:nowrap;margin-left:auto}
 .BUY{background:var(--buy-bg);color:var(--buy)}.WAIT{background:var(--wait-bg);color:var(--wait)}.WATCH{background:var(--watch-bg);color:var(--watch)}
-.tag{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted);background:#eef3fd;border-radius:8px;padding:4px 9px}
-.tag.b{color:var(--brand);background:rgba(59,110,245,.1)}
+.tag{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted);background:var(--card2);border:1px solid var(--line);border-radius:8px;padding:4px 9px}
+.tag.b{color:var(--gold2);background:rgba(232,181,82,.1);border-color:rgba(232,181,82,.25)}
 
 /* airline logo / avatar */
 .av{position:relative;display:inline-grid;place-items:center;border-radius:9px;overflow:hidden;flex:none;
@@ -434,133 +473,149 @@ h1 .grad{background:linear-gradient(110deg,var(--brand),var(--brand2) 46%,var(--
 .av .ini{position:absolute;inset:0;display:grid;place-items:center}
 .av img{position:relative;width:100%;height:100%;object-fit:contain;background:#fff;padding:13%}
 
-/* stats */
-.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(172px,1fr));gap:14px;margin-top:34px;perspective:1200px}
-.tilt{background:#fff;border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);
+/* ---------- stats ---------- */
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(176px,1fr));gap:14px;margin-top:38px;perspective:1200px}
+.tilt{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);
   position:relative;transform-style:preserve-3d;
   transform:perspective(900px) rotateX(calc(var(--rx,0deg) + var(--srx,0deg))) rotateY(var(--ry,0deg)) translateY(calc(var(--lift,0px) * -1));
-  transition:transform .18s ease,box-shadow .25s ease;will-change:transform}
-.tilt:hover{box-shadow:var(--shadow-lg)}
+  transition:transform .18s ease,box-shadow .25s ease,border-color .25s ease;will-change:transform}
+.tilt:hover{box-shadow:var(--glow);border-color:rgba(232,181,82,.35)}
 .tilt:after{content:"";position:absolute;inset:0;border-radius:var(--radius);pointer-events:none;opacity:0;transition:opacity .3s;
-  background:radial-gradient(240px 240px at var(--mx,50%) var(--my,0%),rgba(255,255,255,.9),transparent 60%)}
+  background:radial-gradient(240px 240px at var(--mx,50%) var(--my,0%),rgba(232,181,82,.14),transparent 60%)}
 .tilt.hot:after{opacity:1}
-.stat{display:flex;flex-direction:column;min-height:148px;padding:18px 18px 16px}
+.stat{display:flex;flex-direction:column;min-height:150px;padding:18px 18px 16px}
 .stat .ic{width:42px;height:42px;border-radius:12px;display:grid;place-items:center;flex:none;transform:translateZ(30px);
-  background:linear-gradient(135deg,rgba(59,110,245,.14),rgba(122,92,240,.14))}
-.stat .ic svg{width:21px;height:21px;stroke:var(--brand);fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
-.stat .n{font-family:'IBM Plex Mono',monospace;font-size:25px;font-weight:600;letter-spacing:-.6px;margin-top:14px;
-  white-space:nowrap;display:flex;align-items:baseline;gap:5px;transform:translateZ(42px)}
-.stat .n .cur{font-size:12px;color:var(--dim);font-weight:500;letter-spacing:0}
+  background:linear-gradient(135deg,rgba(232,181,82,.18),rgba(232,181,82,.05));border:1px solid rgba(232,181,82,.18)}
+.stat .ic svg{width:21px;height:21px;stroke:var(--gold);fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.stat .n{font-family:'Oswald',sans-serif;font-size:30px;font-weight:600;letter-spacing:.4px;margin-top:14px;
+  white-space:nowrap;display:flex;align-items:baseline;gap:5px;transform:translateZ(42px);color:#fff}
+.stat .n .cur{font-size:12px;color:var(--dim);font-weight:500;letter-spacing:0;font-family:'IBM Plex Mono',monospace}
 .stat .l{color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:.12em;margin-top:auto;padding-top:12px;transform:translateZ(20px)}
 .stat .x{color:var(--muted);font-size:12px;margin-top:4px;display:flex;align-items:center;gap:6px;transform:translateZ(16px)}
 
-/* sections */
-.section{margin:64px 0 4px;display:flex;align-items:baseline;gap:14px}
-.section h2{font-size:21px;font-weight:800;letter-spacing:-.5px}
+/* ---------- sections ---------- */
+.section{margin:74px 0 4px;display:flex;align-items:baseline;gap:14px}
+.section h2{font-size:23px;font-weight:800;letter-spacing:-.5px}
 .section .hint{font-size:12px;color:var(--dim);font-family:'IBM Plex Mono',monospace;margin-left:auto}
+.section .bar-accent{width:30px;height:3px;border-radius:3px;background:linear-gradient(90deg,var(--gold),transparent);align-self:center}
 
-/* rec cards */
-.rec{background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:20px 22px;margin-top:16px;
-  display:grid;grid-template-columns:auto 1fr auto auto;gap:20px;align-items:center;box-shadow:var(--shadow);
-  transition:transform .25s ease,box-shadow .25s ease}
-.rec:hover{transform:translateY(-3px);box-shadow:var(--shadow-lg)}
-.rec .route{font-weight:700;font-size:16.5px;letter-spacing:-.3px}
-.rec .dates{color:var(--dim);font-size:12.5px;margin-top:1px}
-.rec .reason{color:var(--muted);font-size:13.5px;margin-top:5px}
-.conf{margin-top:9px;max-width:300px}
+/* recommendation card = boarding pass + meta strip */
+.rcard{margin-top:18px}
+.rmeta{background:var(--card);border:1px solid var(--line);border-top:none;border-radius:0 0 var(--radius) var(--radius);
+  margin:-14px 6px 0;padding:26px 22px 18px;display:grid;grid-template-columns:1fr auto auto;gap:20px;align-items:center;
+  box-shadow:var(--shadow)}
+.rmeta .reason{color:var(--muted);font-size:13.5px}
+.conf{margin-top:11px;max-width:340px}
 .conf .lab{font-size:11px;color:var(--dim);font-family:'IBM Plex Mono',monospace;display:flex;justify-content:space-between}
-.bar{height:7px;background:#eaf0fa;border-radius:7px;overflow:hidden;margin-top:4px}
-.bar>i{display:block;height:100%;width:0;border-radius:7px;background:linear-gradient(90deg,var(--brand),var(--teal));transition:width 1.1s cubic-bezier(.2,.7,.2,1)}
-.tags{margin-top:10px;display:flex;gap:7px;flex-wrap:wrap}
-.spark{width:130px;height:46px}
+.cbar{height:7px;background:rgba(255,255,255,.06);border-radius:7px;overflow:hidden;margin-top:5px}
+.cbar>i{display:block;height:100%;width:0;border-radius:7px;background:linear-gradient(90deg,var(--gold),var(--buy));transition:width 1.2s cubic-bezier(.2,.7,.2,1)}
+.tags{margin-top:11px;display:flex;gap:7px;flex-wrap:wrap}
+.spark{width:140px;height:48px}
 .pricebox{text-align:right}
-.price{font-family:'IBM Plex Mono',monospace;font-size:25px;font-weight:600;letter-spacing:-1px}
-.pricelbl{color:var(--dim);font-size:11px;font-family:'IBM Plex Mono',monospace;margin-top:2px}
-@media(max-width:820px){.rec{grid-template-columns:auto 1fr}.spark,.pricebox{grid-column:1/-1;justify-self:start}.pricebox{text-align:left}.spark{width:100%}}
+.pricebox .price{font-family:'Oswald',sans-serif;font-size:27px;font-weight:600;letter-spacing:.4px;color:#fff}
+.pricebox .pricelbl{color:var(--dim);font-size:11px;font-family:'IBM Plex Mono',monospace;margin-top:2px}
+@media(max-width:860px){.rmeta{grid-template-columns:1fr;gap:14px}.spark{width:100%}.pricebox{text-align:left}}
 
-/* charts */
-.grid2{display:grid;grid-template-columns:1.4fr 1fr;gap:16px;margin-top:16px}
-@media(max-width:820px){.grid2{grid-template-columns:1fr}}
-.panel{background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:20px;box-shadow:var(--shadow)}
+/* ---------- charts ---------- */
+.grid2{display:grid;grid-template-columns:1.4fr 1fr;gap:16px;margin-top:18px}
+@media(max-width:860px){.grid2{grid-template-columns:1fr}}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:20px;box-shadow:var(--shadow)}
 .panel h3{font-size:14px;font-weight:700}.panel .ph{color:var(--dim);font-size:12px;margin:2px 0 14px}
-.canvas-wrap{position:relative;height:252px}
+.canvas-wrap{position:relative;height:256px}
 
-/* insight cards */
-.icards{display:grid;grid-template-columns:repeat(auto-fill,minmax(334px,1fr));gap:16px;margin-top:16px}
-.icard{background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:20px;box-shadow:var(--shadow);transition:transform .25s,box-shadow .25s}
-.icard:hover{transform:translateY(-3px);box-shadow:var(--shadow-lg)}
+/* ---------- insight cards ---------- */
+.icards{display:grid;grid-template-columns:repeat(auto-fill,minmax(338px,1fr));gap:16px;margin-top:18px}
+.icard{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:20px;box-shadow:var(--shadow);transition:transform .25s,box-shadow .25s,border-color .25s}
+.icard:hover{transform:translateY(-3px);box-shadow:var(--glow);border-color:rgba(232,181,82,.3)}
 .icard .top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
 .icard .rt{font-weight:700;font-size:15.5px;letter-spacing:-.2px}
 .icard .when{font-size:11.5px;color:var(--dim);font-family:'IBM Plex Mono',monospace;margin-top:2px}
-.icard .big{font-family:'IBM Plex Mono',monospace;font-size:23px;font-weight:600;letter-spacing:-.5px;color:var(--buy)}
-.icard .big small{font-size:11px;color:var(--dim);font-weight:400;display:block;text-align:right}
+.icard .big{font-family:'Oswald',sans-serif;font-size:26px;font-weight:600;letter-spacing:.4px;color:var(--gold2)}
+.icard .big small{font-size:11px;color:var(--dim);font-weight:400;display:block;text-align:right;font-family:'Sora',sans-serif}
 .facts{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:16px 0 4px}
-.fact{background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:9px 11px}
+.fact{background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:9px 11px}
 .fact .k{font-size:10.5px;color:var(--dim);text-transform:uppercase;letter-spacing:.1em}
-.fact .v{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:14px;margin-top:2px}
+.fact .v{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:14px;margin-top:2px;color:var(--soft)}
 .alist{margin-top:14px;display:flex;flex-direction:column;gap:9px}
 .aline{display:flex;align-items:center;gap:11px;font-size:13px}
-.aline .nm{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.aline .nm{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--soft)}
 .aline .pr{font-family:'IBM Plex Mono',monospace;font-weight:600;color:var(--muted)}
-.stopbar{display:flex;height:8px;border-radius:6px;overflow:hidden;margin-top:14px;background:#eaf0fa}
+.stopbar{display:flex;height:8px;border-radius:6px;overflow:hidden;margin-top:14px;background:rgba(255,255,255,.06)}
 .stopbar i{display:block;height:100%}
 .stopkey{display:flex;gap:14px;margin-top:8px;font-size:11px;color:var(--muted);flex-wrap:wrap}
 .stopkey span{display:flex;align-items:center;gap:5px}
 .swatch{width:9px;height:9px;border-radius:3px;display:inline-block}
 
-/* fares */
-details{background:#fff;border:1px solid var(--line);border-radius:16px;margin-top:12px;padding:2px 18px;box-shadow:var(--shadow);overflow:hidden}
+/* ---------- fares ---------- */
+details{background:var(--card);border:1px solid var(--line);border-radius:16px;margin-top:12px;padding:2px 18px;box-shadow:var(--shadow);overflow:hidden}
 summary{cursor:pointer;padding:15px 0;font-weight:600;font-size:14.5px;display:flex;align-items:center;justify-content:space-between;gap:10px;list-style:none}
 summary::-webkit-details-marker{display:none}
-summary .pill{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--brand);background:rgba(59,110,245,.1);padding:3px 9px;border-radius:20px;white-space:nowrap}
+summary .pill{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--gold2);background:rgba(232,181,82,.12);padding:3px 9px;border-radius:20px;white-space:nowrap;border:1px solid rgba(232,181,82,.2)}
 summary:after{content:"+";color:var(--dim);font-size:18px;margin-left:6px;transition:.2s}
 details[open] summary:after{transform:rotate(45deg)}
 table{width:100%;border-collapse:collapse;font-size:13px;margin-bottom:8px}
 th,td{text-align:left;padding:10px 8px;border-top:1px solid var(--line)}
 th{color:var(--dim);font-family:'IBM Plex Mono',monospace;font-weight:500;font-size:10.5px;text-transform:uppercase;letter-spacing:.1em}
 td.num,th.num{text-align:right;font-family:'IBM Plex Mono',monospace}
-td .airline{display:flex;align-items:center;gap:10px}
+td .airline{display:flex;align-items:center;gap:10px;color:var(--soft)}
 tr.best td{background:var(--buy-bg)}
 .cheapest{font-size:10px;color:var(--buy);font-weight:700;font-family:'IBM Plex Mono',monospace;margin-left:8px}
-.chip{font-family:'IBM Plex Mono',monospace;font-size:11px;padding:2px 8px;border-radius:20px;background:#eef3fd;color:var(--muted)}
+.chip{font-family:'IBM Plex Mono',monospace;font-size:11px;padding:2px 8px;border-radius:20px;background:var(--card2);color:var(--muted)}
 .chip.ns{background:var(--buy-bg);color:var(--buy)}
 
-.empty{background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:54px 30px;text-align:center;margin-top:34px;box-shadow:var(--shadow)}
+.empty{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:54px 30px;text-align:center;margin-top:34px;box-shadow:var(--shadow)}
 .empty h2{font-size:22px;margin-bottom:10px}.empty p{color:var(--muted);max-width:520px;margin:0 auto}
 
-.foot{margin-top:70px;border-top:1px solid var(--line);padding-top:26px;color:var(--dim);font-size:12.5px;line-height:1.8}
+.foot{margin-top:80px;border-top:1px solid var(--line);padding-top:28px;color:var(--dim);font-size:12.5px;line-height:1.8}
 .author{display:flex;align-items:center;gap:13px;margin-top:22px}
-.author .ring{width:46px;height:46px;border-radius:14px;flex:none;display:grid;place-items:center;color:#fff;font-weight:800;
-  font-family:'IBM Plex Mono',monospace;font-size:16px;background:linear-gradient(135deg,var(--brand),var(--brand2));box-shadow:0 10px 22px -8px rgba(122,92,240,.7)}
+.author .ring{width:46px;height:46px;border-radius:14px;flex:none;display:grid;place-items:center;color:#0c0e12;font-weight:800;
+  font-family:'IBM Plex Mono',monospace;font-size:16px;background:linear-gradient(135deg,var(--gold2),var(--gold));box-shadow:0 10px 22px -8px rgba(232,181,82,.6)}
 .author .who{font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.16em}
 .author .nm{font-size:16px;font-weight:700;color:var(--ink);letter-spacing:-.2px}
 
-.reveal{opacity:0;transform:translateY(26px);transition:opacity .7s ease,transform .7s cubic-bezier(.2,.7,.2,1)}
-.reveal.in{opacity:1;transform:none}
-@media(prefers-reduced-motion:reduce){.reveal{opacity:1;transform:none;transition:none}.bar>i{transition:none}.blob,.fb .planet,.fb .pl{animation:none}.tilt,.deal{transition:none}}
+/* ---------- scroll reveal ---------- */
+.reveal,.reveal-l,.reveal-r,.reveal-sc{opacity:0;transition:opacity .8s ease,transform .8s cubic-bezier(.2,.7,.2,1);will-change:opacity,transform}
+.reveal{transform:translateY(30px)}
+.reveal-l{transform:translateX(-40px)}
+.reveal-r{transform:translateX(40px)}
+.reveal-sc{transform:scale(.94)}
+.reveal.in,.reveal-l.in,.reveal-r.in,.reveal-sc.in{opacity:1;transform:none}
+@media(prefers-reduced-motion:reduce){
+  .reveal,.reveal-l,.reveal-r,.reveal-sc{opacity:1;transform:none;transition:none}
+  .cbar>i,.bp-bar>i,.bp-plane{transition:none}
+  .bg-glow,.fb .planet,.fb .pl,.flyplane,.tilt,.bp.tilt-3d{transition:none;animation:none}
+}
 </style></head><body>
 
-<div class="aurora"><span class="blob b1"></span><span class="blob b2"></span></div>
+<div class="bgwrap">
+  <span class="bg-glow" data-px="-0.05"></span>
+  <span class="bg-glow g2" data-px="0.04"></span>
+  <span class="bg-grid" data-px="0.015"></span>
+  <span class="bg-plane" data-px="-0.14"><svg viewBox="0 0 24 24"><path d="M2.5 19h19v2h-19zM22.07 9.64c-.21-.8-1.04-1.28-1.84-1.06L14.92 10 8.46 3.98l-1.93.51 3.87 6.71-4.97 1.33-1.97-1.54-1.45.39 1.81 3.14.79 1.37 1.69-.46 5.13-1.37 4.83-1.29 5.96-1.6c.81-.23 1.28-1.05 1.07-1.84z"/></svg></span>
+</div>
+<div class="grain"></div>
+<div class="flyplane" id="flyplane"><svg viewBox="0 0 24 24"><path d="M2 21l21-9L2 3v7l15 2-15 2z"/></svg></div>
 
 <nav class="nav"><div class="row">
-  <div class="brand"><span class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2"
+  <div class="brand"><span class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="#0c0e12" stroke-width="2.2"
     stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v3M9 8h6l1.5 11h-9L9 8zM7.5 19h9M10 8l.5-3h3l.5 3"/></svg></span>Faro</div>
-  <div class="links"><a href="#deals">Deals</a><a href="#trend">Trends</a><a href="#insights">Insights</a><a href="#fares">Fares</a></div>
+  <div class="links"><a href="#deals">Signals</a><a href="#trend">Trends</a><a href="#insights">Insights</a><a href="#fares">Fares</a></div>
   <div class="ctx"><span class="pulse"></span><span id="clock">live</span><span id="navwx"></span></div>
 </div></nav>
 
 <div class="wrap">
   <header class="hero">
-    <div class="reveal">
+    <div class="reveal-l">
       <div class="eyebrow" id="eyebrow">SMART FARE TIMING</div>
       <h1>Book your flight<br>at the <span class="grad">perfect moment.</span></h1>
       <div class="lead" id="lead">Faro watches the fares every day and tells you whether to grab the seat now or hold
         out for a better price — with the airline, stops and flight time for every option.</div>
       <div class="chips" id="hchips"></div>
-      <div class="dealwrap"><div class="deal" id="deal"></div></div>
+      <div class="bpwrap"><div id="deal"></div></div>
     </div>
-    <div class="reveal">
+    <div class="reveal-r">
       <div class="scene" id="scene">
+        <div class="island" id="island"></div>
         <div class="fb"><div class="planet"></div><div class="ring"></div><div class="pl">✈️</div></div>
         <div class="routeover" id="routeover"></div>
       </div>
@@ -589,10 +644,12 @@ const fmtv = n => Math.round(n).toLocaleString();
 const dur = m => m ? Math.floor(m/60)+'h '+(m%60).toString().padStart(2,'0')+'m' : '—';
 const stops = s => s===0 ? 'Nonstop' : s+' stop'+(s>1?'s':'');
 const esc = s => (s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const palette=['#3b6ef5','#7a5cf0','#0fb6a8','#e8902a','#e0567d','#5a6b86','#12b07c','#9a6cff'];
+const palette=['#e8b552','#2ecb8f','#6ea8ff','#e8902a','#e0567d','#9a8cff','#4fd1c5','#f2cf86'];
 const acolor = s => palette[Math.abs([...(s||'?')].reduce((a,c)=>a*31+c.charCodeAt(0)|0,7))%palette.length];
 const initials = s => (s||'?').replace(/[^A-Za-z ]/g,'').split(/\s+/).filter(Boolean).slice(0,2).map(w=>w[0]).join('').toUpperCase()||'?';
 const MM=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const PLANE='<svg viewBox="0 0 24 24"><path d="M2 21l21-9L2 3v7l15 2-15 2z"/></svg>';
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 
 /* real airline logo over an initials fallback */
 function avatar(name,iata,size){
@@ -605,12 +662,44 @@ function avatar(name,iata,size){
 
 function parseItin(s){
   const m=(s||'').match(/^([A-Z]{3})-([A-Z]{3}) (\d{4})-(\d{2})-(\d{2}) -> (\d{4})-(\d{2})-(\d{2})$/);
-  if(!m) return {title:s||'',dates:'',nights:null};
+  if(!m) return {title:s||'',dates:'',nights:null,o:'',d:'',depShort:'',retShort:''};
   const cn=c=>(D.cities&&D.cities[c])||c;
   const d1=new Date(+m[3],+m[4]-1,+m[5]), d2=new Date(+m[6],+m[7]-1,+m[8]);
   const f=d=>d.getDate()+' '+MM[d.getMonth()];
-  return {title:cn(m[1])+' → '+cn(m[2]), dates:f(d1)+' – '+f(d2)+' '+d2.getFullYear(), nights:Math.round((d2-d1)/86400000)};
+  return {title:cn(m[1])+' → '+cn(m[2]), dates:f(d1)+' – '+f(d2)+' '+d2.getFullYear(),
+    nights:Math.round((d2-d1)/86400000), o:m[1], d:m[2], o_city:cn(m[1]), d_city:cn(m[2]),
+    depShort:f(d1), retShort:f(d2)};
 }
+
+/* ---- boarding-pass widget (the SFO→AMS card from the mock) ---- */
+function bpass(o){
+  const stopChip = o.stopChip ? '<span class="bp-stop">'+esc(o.stopChip)+'</span>' : '';
+  return '<div class="bp'+(o.tilt?' tilt-3d':'')+'" id="'+(o.id||'')+'">'+
+    '<div class="bp-top"><span class="bp-tag">'+esc(o.tag||'')+'</span>'+
+      (o.sig?'<span class="sig '+o.sig+'">'+o.sig+'</span>':'')+'</div>'+
+    '<div class="bp-mid">'+
+      '<div class="bp-code">'+esc(o.o)+'<small>'+esc(o.o_city||'')+'</small></div>'+
+      '<div class="bp-track"><div class="bp-arr">'+o.arr+'</div>'+
+        '<div class="bp-bar"><span class="bp-dot l"></span><i style="width:'+o.progress+'%"></i>'+
+          '<span class="bp-plane" style="left:'+o.progress+'%">'+PLANE+'</span>'+stopChip+
+          '<span class="bp-dot r"></span></div>'+
+        '<div class="bp-sub">'+esc(o.sub||'')+'</div></div>'+
+      '<div class="bp-code r">'+esc(o.d)+'<small>'+esc(o.d_city||'')+'</small></div>'+
+    '</div>'+
+    '<div class="bp-foot"><div class="bp-leg"><span class="k">'+esc(o.leftK)+'</span><span class="v">'+esc(o.leftV)+'</span></div>'+
+      (o.pill?'<span class="bp-pill '+(o.pillClass||'')+'">'+esc(o.pill)+'</span>':'')+
+      '<div class="bp-leg r"><span class="k">'+esc(o.rightK)+'</span><span class="v">'+esc(o.rightV)+'</span></div></div>'+
+  '</div>';
+}
+/* progress + stop hints shared by hero + rec cards */
+function progFor(days){ return days==null ? 50 : Math.round(clamp(1-days/300,0.08,0.94)*100); }
+function stopHint(insight){
+  if(!insight) return {chip:'',sub:'tracking fares'};
+  if(insight.nonstop) return {chip:'', sub:'Nonstop available · fastest '+dur(insight.fastest)};
+  const sb=insight.stops||{}; const n=(sb.one||0)+(sb.two_plus||0)>0;
+  return {chip:n?'1+ STOP':'', sub:'Connections only · fastest '+dur(insight.fastest)};
+}
+const insightFor = itin => (D.insights||[]).find(x=>x.itinerary===itin)||null;
 
 /* ---- clocks ---- */
 const dest=(D.primary&&D.primary.dest)||null, orig=(D.primary&&D.primary.origin)||null;
@@ -619,6 +708,13 @@ function clock(){const el=document.getElementById('clock');if(!el)return;
     catch(e){el.textContent=new Date().toUTCString().slice(17,25)+' UTC';}}
   else el.textContent=new Date().toUTCString().slice(17,25)+' UTC';setTimeout(clock,1000);}
 clock();
+
+/* island notification (uses dest local time) */
+function island(){const el=document.getElementById('island');if(!el||!dest)return;
+  let t='';try{t=new Intl.DateTimeFormat('en-US',{hour:'numeric',minute:'2-digit',timeZone:dest.tz}).format(new Date());}catch(e){}
+  el.innerHTML='<span class="pl">'+PLANE+'</span><span>'+esc(dest.code||dest.name)+'</span><span class="t">'+t+'</span>';
+  setTimeout(island,30000);}
+island();
 
 /* ---- live weather (Open-Meteo) ---- */
 const WX={0:['☀️','Clear'],1:['🌤️','Mostly clear'],2:['⛅','Partly cloudy'],3:['☁️','Cloudy'],45:['🌫️','Fog'],48:['🌫️','Fog'],
@@ -635,8 +731,6 @@ let rates=null;
 async function loadRates(){try{const r=await fetch('https://open.er-api.com/v6/latest/'+CUR);const j=await r.json();
   if(j&&j.result==='success')rates=j.rates;}catch(e){}renderDeal();}
 function convert(a,to){return rates&&rates[to]?a*rates[to]:null;}
-function fxLine(a){if(!rates)return '';return ['USD','AUD','GBP','EUR','LKR','INR'].filter(c=>c!==CUR&&rates[c]).slice(0,4)
-  .map(c=>'<span>'+fmt(convert(a,c),c)+'</span>').join('');}
 
 /* ---- hero chips ---- */
 function renderHeroChips(){const el=document.getElementById('hchips');if(!el)return;const S=D.stats,ch=[];
@@ -650,20 +744,20 @@ function ltick(){const el=document.getElementById('lt');if(!el)return;
 /* ---- hero deal card ---- */
 function renderDeal(){const el=document.getElementById('deal');if(!el)return;
   const best=(D.insights&&D.insights[0])||null;
-  if(!best){el.innerHTML='<div class="lbl">Best deal</div><div class="route" style="margin-top:10px">Collecting fares…</div>'+
-    '<div class="dates">The first deal appears within a few daily scans.</div>';return;}
+  if(!best){el.innerHTML='<div class="bp"><div class="bp-top"><span class="bp-tag">Best deal</span></div>'+
+    '<div class="bp-mid"><div class="bp-code">✈<small>collecting</small></div><div class="bp-track">'+
+    '<div class="bp-sub">The first deal appears within a few daily scans.</div></div></div></div>';return;}
   const pi=parseItin(best.itinerary),rec=(D.recs||[]).find(r=>r.itinerary===best.itinerary),sig=rec?rec.signal:'WATCH';
-  const save=Math.max(0,Math.round((best.median||best.min)-best.min));
-  const sub=rec&&rec.signal==='BUY'?'Good time to book':rec&&rec.signal==='WAIT'?'Prices may still fall':'Worth watching';
-  el.innerHTML='<div class="tagrow"><span class="lbl">Best deal right now</span><span class="sig '+sig+'" style="margin-left:auto">'+sig+'</span></div>'+
-    '<div class="route">'+(best.cheapest_airline?avatar(best.cheapest_airline,best.cheapest_iata,30):'')+esc(pi.title)+'</div>'+
-    '<div class="dates">'+esc(pi.dates)+(pi.nights?' · '+pi.nights+' nights':'')+'</div>'+
-    '<div class="pricebig"><span class="cur">'+CUR+'</span><span class="v">'+fmtv(best.min)+'</span><small>cheapest return</small></div>'+
-    '<div class="dates" style="margin-top:8px">'+esc(sub)+(best.cheapest_airline?' · '+esc(best.cheapest_airline):'')+(save>0?' · save ~'+fmt(save)+' vs typical':'')+'</div>'+
-    '<div class="meta2">'+(best.fastest?'<span class="tag">⏱ '+dur(best.fastest)+' fastest</span>':'')+
-      (best.nonstop?'<span class="tag b">Nonstop available</span>':'<span class="tag">connections only</span>')+
-      (best.days_to_departure!=null?'<span class="tag">'+best.days_to_departure+' days to go</span>':'')+'</div>'+
-    '<div class="fx">'+fxLine(best.min)+'</div>';}
+  const sh=stopHint(best),days=best.days_to_departure;
+  const fxalt=rates? (['USD','AUD','GBP','EUR'].filter(c=>c!==CUR&&rates[c])[0]) : null;
+  const altline=fxalt?' · ≈ '+fmt(convert(best.min,fxalt),fxalt):'';
+  el.innerHTML=bpass({id:'dealcard',tilt:true,tag:'Best fare right now',sig:sig,
+    o:pi.o,o_city:pi.o_city,d:pi.d,d_city:pi.d_city,
+    arr:(days!=null?'Departs in <b>'+days+' days</b>':'Cheapest <b>'+fmt(best.min)+'</b>'),
+    progress:progFor(days),stopChip:sh.chip,sub:sh.sub+altline,
+    leftK:'Depart',leftV:pi.depShort,rightK:'Return',rightV:pi.retShort,
+    pill:fmt(best.min),pillClass:(sig==='BUY'?'green':sig==='WAIT'?'amber':'')});
+  const dc=document.getElementById('dealcard');if(dc&&fine)bindTilt(dc,5,7);}
 
 /* ---- stat cards ---- */
 const ICON={
@@ -690,7 +784,7 @@ if(S.cheapest_ever)cells.push(['gem','Lowest ever',Math.round(S.cheapest_ever.pr
   (S.cheapest_ever.airline?avatar(S.cheapest_ever.airline,S.cheapest_ever.iata,18)+esc(S.cheapest_ever.airline):'')]);
 document.getElementById('stats').innerHTML=cells.map(c=>{
   const cur=c[3]==='cur'?'<span class="cur">'+CUR+'</span>':'';
-  return '<div class="tilt stat reveal"><div class="ic"><svg viewBox="0 0 24 24">'+ICON[c[0]]+'</svg></div>'+
+  return '<div class="tilt stat reveal-sc"><div class="ic"><svg viewBox="0 0 24 24">'+ICON[c[0]]+'</svg></div>'+
     '<div class="n">'+cur+'<span class="vn" data-to="'+c[2]+'" data-kind="'+c[3]+'">0</span></div>'+
     '<div class="l">'+c[1]+'</div>'+(c[4]?'<div class="x">'+c[4]+'</div>':'')+'</div>';}).join('');
 
@@ -707,48 +801,53 @@ if(!D.recs.length){
   add('<div class="empty reveal"><h2>Collecting data…</h2><p>Faro has just started watching this route. Signals, trends and the '+
     'airline breakdown appear once there are a few days of price history — usually within a week.</p></div>');
 }else{
-  add('<div class="section reveal" id="deals"><h2>Today’s signals</h2><span class="hint">act-now first</span></div>');
-  D.recs.forEach((r,i)=>{const pi=parseItin(r.itinerary),conf=r.confidence||0,tags=[];
+  add('<div class="section reveal"><span class="bar-accent"></span><h2 id="deals">Today’s signals</h2><span class="hint">act-now first</span></div>');
+  D.recs.forEach((r,i)=>{const pi=parseItin(r.itinerary),conf=r.confidence||0,ins=insightFor(r.itinerary),sh=stopHint(ins),tags=[];
     if(r.predicted_low)tags.push(['forecast low '+fmt(r.predicted_low),1]);
     if(r.signal==='WAIT'&&r.expected_savings)tags.push(['save ~'+fmt(r.expected_savings)+' by waiting',1]);
     if(r.prob_drop!=null)tags.push([r.prob_drop+'% chance of a drop',0]);
     if(r.days_to_departure!=null)tags.push([r.days_to_departure+' days to go',0]);
-    add('<div class="rec reveal"><span class="sig '+r.signal+'">'+r.signal+'</span>'+
-      '<div><div class="route">'+esc(pi.title)+'</div><div class="dates">'+esc(pi.dates)+(pi.nights?' · '+pi.nights+' nights':'')+'</div>'+
-        '<div class="reason">'+esc(r.reason)+'</div>'+
-        '<div class="conf"><div class="lab"><span>confidence</span><span>'+conf+'%</span></div><div class="bar"><i data-w="'+conf+'"></i></div></div>'+
+    const pass=bpass({tag:pi.title,sig:r.signal,o:pi.o,o_city:pi.o_city,d:pi.d,d_city:pi.d_city,
+      arr:(r.days_to_departure!=null?'Departs in <b>'+r.days_to_departure+' days</b>':'Today <b>'+fmt(r.price)+'</b>'),
+      progress:progFor(r.days_to_departure),stopChip:sh.chip,sub:sh.sub,
+      leftK:'Depart',leftV:pi.depShort,rightK:'Return',rightV:pi.retShort,
+      pill:fmt(r.price),pillClass:(r.signal==='BUY'?'green':r.signal==='WAIT'?'amber':'')});
+    add('<div class="rcard reveal">'+pass+'<div class="rmeta">'+
+      '<div><div class="reason">'+esc(r.reason)+'</div>'+
+        '<div class="conf"><div class="lab"><span>confidence</span><span>'+conf+'%</span></div><div class="cbar"><i data-w="'+conf+'"></i></div></div>'+
         '<div class="tags">'+tags.map(t=>'<span class="tag'+(t[1]?' b':'')+'">'+esc(t[0])+'</span>').join('')+'</div></div>'+
       '<canvas class="spark" id="spark'+i+'"></canvas>'+
-      '<div class="pricebox"><div class="price">'+fmt(r.price)+'</div><div class="pricelbl">low '+fmt(r.trailing_min)+' · '+r.points+' pts</div></div></div>');});
+      '<div class="pricebox"><div class="price">'+fmt(r.price)+'</div><div class="pricelbl">low '+fmt(r.trailing_min)+' · '+r.points+' pts</div></div></div></div>');});
 
-  add('<div class="section reveal" id="trend"><h2>Price trends &amp; airlines</h2></div>'+
-    '<div class="grid2"><div class="panel reveal"><h3>Cheapest fare over time</h3><div class="ph">one cheapest-per-day point per route</div>'+
+  add('<div class="section reveal"><span class="bar-accent"></span><h2 id="trend">Price trends &amp; airlines</h2>'+
+    (D.model?'<span class="hint">model ±'+D.model.mae+' · n='+D.model.n+'</span>':'')+'</div>'+
+    '<div class="grid2"><div class="panel reveal-l"><h3>Cheapest fare over time</h3><div class="ph">one cheapest-per-day point per route</div>'+
       '<div class="canvas-wrap"><canvas id="trendChart"></canvas></div></div>'+
-    '<div class="panel reveal"><h3>Best fare by airline</h3><div class="ph">lowest fare each carrier offered in the latest scan</div>'+
+    '<div class="panel reveal-r"><h3>Best fare by airline</h3><div class="ph">lowest fare each carrier offered in the latest scan</div>'+
       '<div class="canvas-wrap"><canvas id="airChart"></canvas></div></div></div>');
 
   if(D.insights&&D.insights.length){
-    add('<div class="section reveal" id="insights"><h2>Market insights</h2><span class="hint">latest scan</span></div>');
+    add('<div class="section reveal"><span class="bar-accent"></span><h2 id="insights">Market insights</h2><span class="hint">latest scan</span></div>');
     let h='<div class="icards">';
     D.insights.forEach(r=>{const pi=parseItin(r.itinerary),sb=r.stops,tot=Math.max(1,sb.nonstop+sb.one+sb.two_plus);
       const seg=(n,c)=>n?'<i style="width:'+(n/tot*100)+'%;background:'+c+'"></i>':'';
       const alist=(r.airline_prices||[]).map(a=>'<div class="aline">'+avatar(a.name,a.iata,28)+'<span class="nm">'+esc(a.name)+'</span><span class="pr">'+fmt(a.price)+'</span></div>').join('')
         ||'<div class="aline" style="color:var(--dim)">airline not reported</div>';
-      h+='<div class="icard reveal"><div class="top"><div><div class="rt">'+esc(pi.title)+'</div><div class="when">'+esc(pi.dates)+' · '+r.offers+' offers</div></div>'+
+      h+='<div class="icard reveal-sc"><div class="top"><div><div class="rt">'+esc(pi.title)+'</div><div class="when">'+esc(pi.dates)+' · '+r.offers+' offers</div></div>'+
         '<div style="text-align:right"><div class="big">'+fmt(r.min)+'</div><small>cheapest</small></div></div>'+
         '<div class="facts"><div class="fact"><div class="k">Typical</div><div class="v">'+fmt(r.median)+'</div></div>'+
           '<div class="fact"><div class="k">Highest</div><div class="v">'+fmt(r.max)+'</div></div>'+
           '<div class="fact"><div class="k">Fastest</div><div class="v">'+dur(r.fastest)+'</div></div>'+
           '<div class="fact"><div class="k">Typical time</div><div class="v">'+dur(r.typical_duration)+'</div></div></div>'+
-        '<div class="stopbar">'+seg(sb.nonstop,'#12b07c')+seg(sb.one,'#3b6ef5')+seg(sb.two_plus,'#e8902a')+'</div>'+
-        '<div class="stopkey"><span><i class="swatch" style="background:#12b07c"></i>'+sb.nonstop+' nonstop</span>'+
-          '<span><i class="swatch" style="background:#3b6ef5"></i>'+sb.one+' · 1 stop</span>'+
+        '<div class="stopbar">'+seg(sb.nonstop,'#2ecb8f')+seg(sb.one,'#e8b552')+seg(sb.two_plus,'#e8902a')+'</div>'+
+        '<div class="stopkey"><span><i class="swatch" style="background:#2ecb8f"></i>'+sb.nonstop+' nonstop</span>'+
+          '<span><i class="swatch" style="background:#e8b552"></i>'+sb.one+' · 1 stop</span>'+
           '<span><i class="swatch" style="background:#e8902a"></i>'+sb.two_plus+' · 2+ stops</span></div>'+
         '<div class="alist">'+alist+'</div></div>';});
     add(h+'</div>');}
 
   if(D.latest_offers&&Object.keys(D.latest_offers).length){
-    add('<div class="section reveal" id="fares"><h2>Latest fares</h2><span class="hint">cheapest per route</span></div>');
+    add('<div class="section reveal"><span class="bar-accent"></span><h2 id="fares">Latest fares</h2><span class="hint">cheapest per route</span></div>');
     Object.keys(D.latest_offers).forEach(itin=>{const rows=D.latest_offers[itin];if(!rows.length)return;
       const pi=parseItin(itin),best=Math.min.apply(null,rows.map(o=>o.price));
       let t='<details class="reveal"><summary><span>'+esc(pi.title)+' · '+esc(pi.dates)+'</span><span class="pill">'+rows.length+' offers · from '+fmt(best)+'</span></summary>'+
@@ -761,19 +860,19 @@ if(!D.recs.length){
       add(t+'</tbody></table></details>');});}
 }
 
-/* ---- charts ---- */
+/* ---- charts (dark theme) ---- */
 function gridOpts(){return{responsive:true,maintainAspectRatio:false,
-  plugins:{legend:{labels:{font:{family:'Sora',size:11},color:'#56678a',boxWidth:12,padding:14}}},
-  scales:{x:{grid:{color:'#eef2f9'},ticks:{color:'#8a99b8',font:{family:'IBM Plex Mono',size:10}}},
-          y:{grid:{color:'#eef2f9'},ticks:{color:'#8a99b8',font:{family:'IBM Plex Mono',size:10}}}}};}
+  plugins:{legend:{labels:{font:{family:'Sora',size:11},color:'#99a1b1',boxWidth:12,padding:14}}},
+  scales:{x:{grid:{color:'rgba(255,255,255,.05)'},ticks:{color:'#6a7280',font:{family:'IBM Plex Mono',size:10}}},
+          y:{grid:{color:'rgba(255,255,255,.05)'},ticks:{color:'#6a7280',font:{family:'IBM Plex Mono',size:10}}}}};}
 function placeholder(id,msg){const c=document.getElementById(id);if(!c)return;
   (c.closest('.canvas-wrap')||c.parentNode).innerHTML='<div style="height:100%;display:grid;place-items:center;color:var(--dim);font-size:13px;text-align:center;padding:0 20px">'+msg+'</div>';}
 let charted=false;
 function drawCharts(){if(charted)return;charted=true;
   if(typeof Chart==='undefined'){placeholder('trendChart','Chart library unavailable.');placeholder('airChart','Chart library unavailable.');return;}
   D.recs.forEach((r,i)=>{const h=D.history[r.itinerary]||[],c=document.getElementById('spark'+i);if(!c||h.length<2)return;
-    const g=c.getContext('2d').createLinearGradient(0,0,0,46);g.addColorStop(0,'rgba(59,110,245,.28)');g.addColorStop(1,'rgba(59,110,245,0)');
-    new Chart(c,{type:'line',data:{labels:h.map(x=>x.d),datasets:[{data:h.map(x=>x.p),borderColor:'#3b6ef5',borderWidth:2,pointRadius:0,tension:.35,fill:true,backgroundColor:g}]},
+    const g=c.getContext('2d').createLinearGradient(0,0,0,48);g.addColorStop(0,'rgba(232,181,82,.35)');g.addColorStop(1,'rgba(232,181,82,0)');
+    new Chart(c,{type:'line',data:{labels:h.map(x=>x.d),datasets:[{data:h.map(x=>x.p),borderColor:'#e8b552',borderWidth:2,pointRadius:0,tension:.35,fill:true,backgroundColor:g}]},
       options:{responsive:false,plugins:{legend:{display:false},tooltip:{enabled:false}},scales:{x:{display:false},y:{display:false}}}});});
   const tc=document.getElementById('trendChart'),enough=Object.values(D.history).some(h=>h.length>=2);
   if(tc&&!enough)placeholder('trendChart','Booking curves appear once each route has 2+ days of history. Check back tomorrow.');
@@ -789,7 +888,7 @@ function drawCharts(){if(charted)return;charted=true;
 /* ---- 3D globe (Three.js) with graceful CSS fallback ---- */
 function ll2v(lat,lon,r){const phi=(90-lat)*Math.PI/180,th=(lon+180)*Math.PI/180;
   return new THREE.Vector3(-r*Math.sin(phi)*Math.cos(th),r*Math.cos(phi),r*Math.sin(phi)*Math.sin(th));}
-function makePlane(){const mat=new THREE.MeshStandardMaterial({color:0xf3f6ff,metalness:.7,roughness:.28});
+function makePlane(){const mat=new THREE.MeshStandardMaterial({color:0xf6efe0,metalness:.7,roughness:.28});
   const g=new THREE.Group();
   const body=new THREE.Mesh(new THREE.CylinderGeometry(0.85,0.85,7,18),mat);body.rotation.z=Math.PI/2;g.add(body);
   const nose=new THREE.Mesh(new THREE.ConeGeometry(0.85,2,18),mat);nose.rotation.z=-Math.PI/2;nose.position.x=4.5;g.add(nose);
@@ -797,7 +896,7 @@ function makePlane(){const mat=new THREE.MeshStandardMaterial({color:0xf3f6ff,me
   const wing=new THREE.Mesh(new THREE.BoxGeometry(2.1,0.18,8.4),mat);g.add(wing);
   const tail=new THREE.Mesh(new THREE.BoxGeometry(1.3,0.16,3.4),mat);tail.position.x=-3.2;g.add(tail);
   const fin=new THREE.Mesh(new THREE.BoxGeometry(1.3,1.8,0.16),mat);fin.position.set(-3.2,0.8,0);g.add(fin);
-  const eng=new THREE.MeshStandardMaterial({color:0x9fb4d8,metalness:.8,roughness:.3});
+  const eng=new THREE.MeshStandardMaterial({color:0xd9b873,metalness:.8,roughness:.3});
   [-1.6,1.6].forEach(z=>{const e=new THREE.Mesh(new THREE.CylinderGeometry(0.45,0.45,1.8,14),eng);e.rotation.z=Math.PI/2;e.position.set(.4,-.5,z);g.add(e);});
   g.scale.setScalar(1.25);return g;}
 function initGlobe(){
@@ -814,28 +913,28 @@ function initGlobe(){
   const group=new THREE.Group();scene.add(group);
   const R=100,loader=new THREE.TextureLoader();loader.setCrossOrigin('anonymous');
   const base='https://unpkg.com/three-globe/example/img/';
-  const mat=new THREE.MeshPhongMaterial({color:0x24508f,shininess:16,specular:0x2a4d77});
+  const mat=new THREE.MeshPhongMaterial({color:0x1d3a66,shininess:18,specular:0x2a4d77});
   loader.load(base+'earth-blue-marble.jpg',t=>{mat.map=t;mat.color.set(0xffffff);mat.needsUpdate=true;});
   loader.load(base+'earth-topology.png',t=>{mat.bumpMap=t;mat.bumpScale=6;mat.needsUpdate=true;});
   loader.load(base+'earth-water.png',t=>{mat.specularMap=t;mat.specular.set(0x5a93d6);mat.needsUpdate=true;});
   group.add(new THREE.Mesh(new THREE.SphereGeometry(R,72,72),mat));
   group.add(new THREE.Mesh(new THREE.SphereGeometry(R*1.045,48,48),
-    new THREE.MeshBasicMaterial({color:0x6fb0ff,transparent:true,opacity:.14,side:THREE.BackSide})));
+    new THREE.MeshBasicMaterial({color:0xe8b552,transparent:true,opacity:.10,side:THREE.BackSide})));
   scene.add(new THREE.AmbientLight(0xffffff,.55));
-  const sun=new THREE.DirectionalLight(0xffffff,1.15);sun.position.set(-220,120,260);scene.add(sun);
-  scene.add(new THREE.DirectionalLight(0x88aaff,.35));
+  const sun=new THREE.DirectionalLight(0xfff0d0,1.2);sun.position.set(-220,120,260);scene.add(sun);
+  scene.add(new THREE.DirectionalLight(0xe8b552,.3));
   const sg=new THREE.BufferGeometry(),sp=[];
   for(let i=0;i<700;i++){const u=Math.random(),v=Math.random(),th=2*Math.PI*u,ph=Math.acos(2*v-1),rr=900;
     sp.push(rr*Math.sin(ph)*Math.cos(th),rr*Math.sin(ph)*Math.sin(th),rr*Math.cos(ph));}
   sg.setAttribute('position',new THREE.Float32BufferAttribute(sp,3));
-  scene.add(new THREE.Points(sg,new THREE.PointsMaterial({color:0xbcd2ff,size:1.5,sizeAttenuation:false,transparent:true,opacity:.7})));
+  scene.add(new THREE.Points(sg,new THREE.PointsMaterial({color:0xf0e6cf,size:1.5,sizeAttenuation:false,transparent:true,opacity:.7})));
   let curve=null,plane=null;
   if(orig&&dest&&orig.lat!=null&&dest.lat!=null){
     const a=ll2v(orig.lat,orig.lon,R),b=ll2v(dest.lat,dest.lon,R),pts=[],N=90;
     for(let i=0;i<=N;i++){const t=i/N,v=a.clone().lerp(b,t).normalize(),lift=1+0.3*Math.sin(Math.PI*t);pts.push(v.multiplyScalar(R*lift));}
     curve=new THREE.CatmullRomCurve3(pts);
-    group.add(new THREE.Mesh(new THREE.TubeGeometry(curve,140,0.6,8,false),new THREE.MeshBasicMaterial({color:0x6ea8ff})));
-    [[a,0xe0567d],[b,0x12b07c]].forEach(([p,col])=>{const m=new THREE.Mesh(new THREE.SphereGeometry(2.4,16,16),new THREE.MeshBasicMaterial({color:col}));
+    group.add(new THREE.Mesh(new THREE.TubeGeometry(curve,140,0.6,8,false),new THREE.MeshBasicMaterial({color:0xe8b552})));
+    [[a,0xe8b552],[b,0x2ecb8f]].forEach(([p,col])=>{const m=new THREE.Mesh(new THREE.SphereGeometry(2.4,16,16),new THREE.MeshBasicMaterial({color:col}));
       m.position.copy(p.clone().multiplyScalar(1.01));group.add(m);
       const halo=new THREE.Mesh(new THREE.SphereGeometry(4.2,16,16),new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:.25}));
       halo.position.copy(m.position);group.add(halo);});
@@ -857,8 +956,8 @@ function initGlobe(){
 }
 /* route label over the scene */
 (function(){const el=document.getElementById('routeover');if(el&&orig&&dest)
-  el.innerHTML='<span class="leg" style="background:#e0567d"></span>'+esc(orig.name)+' <span style="opacity:.6">✈</span> '+esc(dest.name)+
-    ' <span class="leg" style="background:#12b07c"></span>';else if(el)el.remove();})();
+  el.innerHTML='<span class="leg" style="background:#e8b552"></span>'+esc(orig.name)+' <span style="opacity:.6">✈</span> '+esc(dest.name)+
+    ' <span class="leg" style="background:#2ecb8f"></span>';else if(el)el.remove();})();
 
 /* ---- tilt ---- */
 const fine=matchMedia('(hover:hover) and (pointer:fine)').matches&&!matchMedia('(prefers-reduced-motion:reduce)').matches;
@@ -867,23 +966,41 @@ function bindTilt(card,mx,my){card.addEventListener('pointermove',e=>{const r=ca
   card.style.setProperty('--rx',(-y*mx).toFixed(2)+'deg');card.style.setProperty('--ry',(x*my).toFixed(2)+'deg');
   card.style.setProperty('--mx',(x*100+50)+'%');card.style.setProperty('--my',(y*100+50)+'%');card.classList.add('hot');});
   card.addEventListener('pointerleave',()=>{card.style.setProperty('--rx','0deg');card.style.setProperty('--ry','0deg');card.classList.remove('hot');});}
-function initTilt(){if(!fine)return;document.querySelectorAll('.tilt').forEach(c=>bindTilt(c,9,11));const d=document.getElementById('deal');if(d)bindTilt(d,6,8);}
+function initTilt(){if(!fine)return;document.querySelectorAll('.tilt').forEach(c=>bindTilt(c,9,11));}
 let ticking=false;
 function scrollTilt(){if(!fine)return;document.querySelectorAll('.tilt').forEach(card=>{const r=card.getBoundingClientRect(),vh=innerHeight,d=(r.top+r.height/2-vh/2)/vh;
   card.style.setProperty('--srx',(Math.max(-1,Math.min(1,d))*7).toFixed(2)+'deg');card.style.setProperty('--lift',(Math.max(0,1-Math.abs(d)*1.6)*8).toFixed(1)+'px');});}
-addEventListener('scroll',()=>{if(!ticking){ticking=true;requestAnimationFrame(()=>{scrollTilt();ticking=false;});}},{passive:true});
+
+/* ---- parallax ---- */
+const pxEls=[...document.querySelectorAll('[data-px]')];
+const reduceMotion=matchMedia('(prefers-reduced-motion:reduce)').matches;
+const fly=document.getElementById('flyplane');
+function parallax(){if(reduceMotion)return;const y=scrollY;
+  pxEls.forEach(el=>{el.style.transform=(el.classList.contains('bg-plane')?'rotate(-14deg) ':'')+'translate3d(0,'+(y*(+el.dataset.px)).toFixed(1)+'px,0)';});
+  if(fly){const max=Math.max(1,document.body.scrollHeight-innerHeight);const t=clamp(y/max,0,1);
+    fly.style.transform='translate3d('+((innerWidth+160)*t-130).toFixed(0)+'px,'+(Math.sin(t*6)*22).toFixed(0)+'px,0) rotate('+(6+t*4).toFixed(1)+'deg)';}}
+
+/* hero mouse parallax */
+const hero=document.querySelector('.hero');
+if(hero&&fine){hero.addEventListener('pointermove',e=>{const x=(e.clientX/innerWidth-.5),yy=(e.clientY/innerHeight-.5);
+  const g=document.querySelector('.bg-glow');if(g)g.style.marginLeft=(x*-24)+'px';
+  const bp=document.querySelector('.bg-plane');if(bp)bp.style.marginTop=(yy*-18)+'px';});}
 
 /* ---- reveal + boot ---- */
 function fireReveal(el){el.classList.add('in');
   el.querySelectorAll&&el.querySelectorAll('.vn[data-to]').forEach(animateCount);
-  el.querySelectorAll&&el.querySelectorAll('.bar>i[data-w]').forEach(b=>b.style.width=b.dataset.w+'%');}
-function revealAll(){document.querySelectorAll('.reveal').forEach(fireReveal);document.querySelectorAll('.vn[data-to]').forEach(animateCount);}
+  el.querySelectorAll&&el.querySelectorAll('.cbar>i[data-w]').forEach(b=>b.style.width=b.dataset.w+'%');
+  el.querySelectorAll&&el.querySelectorAll('.bp-bar>i[style]').forEach(b=>{/* width already inline; animates via transition */});}
+const RSEL='.reveal,.reveal-l,.reveal-r,.reveal-sc';
+function revealAll(){document.querySelectorAll(RSEL).forEach(fireReveal);document.querySelectorAll('.vn[data-to]').forEach(animateCount);}
 if(!('IntersectionObserver' in window))revealAll();
-else{const io=new IntersectionObserver(es=>es.forEach(e=>{if(!e.isIntersecting)return;fireReveal(e.target);io.unobserve(e.target);}),{threshold:.14});
-  document.querySelectorAll('.reveal').forEach(el=>io.observe(el));}
-setTimeout(()=>document.querySelectorAll('.reveal:not(.in)').forEach(el=>{if(el.getBoundingClientRect().top<innerHeight*1.2)fireReveal(el);}),1200);
+else{const io=new IntersectionObserver(es=>es.forEach(e=>{if(!e.isIntersecting)return;fireReveal(e.target);io.unobserve(e.target);}),{threshold:.12});
+  document.querySelectorAll(RSEL).forEach((el,i)=>{el.style.transitionDelay=Math.min(i%6*60,300)+'ms';io.observe(el);});}
+setTimeout(()=>document.querySelectorAll(RSEL).forEach(el=>{if(!el.classList.contains('in')&&el.getBoundingClientRect().top<innerHeight*1.2)fireReveal(el);}),1200);
 
-renderDeal();renderHeroChips();initTilt();scrollTilt();
+addEventListener('scroll',()=>{if(!ticking){ticking=true;requestAnimationFrame(()=>{scrollTilt();parallax();ticking=false;});}},{passive:true});
+
+renderDeal();renderHeroChips();initTilt();scrollTilt();parallax();
 requestAnimationFrame(drawCharts);
 try{initGlobe();}catch(e){}
 loadWeather();loadRates();
