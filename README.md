@@ -1,11 +1,11 @@
 # FlightWatch ✈
 
 An open, free, self-hosting fare tracker for the **Christchurch ↔ Colombo** corridor
-(and any route you add). It scans fares once a day, builds a price history, and shows
-a simple **buy / wait** signal on a public dashboard — all running for **$0** on
-GitHub's free tier.
+(and any route you add). It scrapes the **full** fare list once a day, builds a price
+history, forecasts where the fare is heading, and shows a **buy / wait** decision with
+a **confidence rate** on a public dashboard — all running for **$0** on GitHub's free tier.
 
-- **Data:** **Google Flights**, scraped with a real headless browser (Playwright) — no API key, no token, no paid proxy
+- **Data:** **Google Flights**, scraped with real headless browsers (Playwright) — no API key, no token, no paid proxy. It rotates several **browser fingerprints** and runs **multiple browsers in parallel**, harvesting **every** offer per scan (not just the cheapest) to build a large open dataset
 - **Automation:** GitHub Actions (free & unlimited for public repos)
 - **Hosting:** GitHub Pages (free)
 - **Dataset:** every observation is committed as plain CSV in `data/` — open for anyone
@@ -34,10 +34,11 @@ config.yaml ──► flightwatch/collect.py ──► data/flights_YYYY_MM.csv 
                      flightwatch/predict.py ──────┘  (buy/wait signal)
 ```
 
-A GitHub Actions cron runs the collector daily, appends one priced observation per
-itinerary, regenerates the dashboard, and commits both back to the repo. Over weeks,
-the per-itinerary history becomes a *booking curve* — which is what makes a real
-"should I book now?" prediction possible.
+A GitHub Actions cron runs the collector daily. It scrapes each itinerary in parallel
+(each browser using a different fingerprint to dodge soft-blocks), appends **every**
+fare found as its own CSV row, retrains the forecast model, regenerates the dashboard,
+and commits everything back to the repo. Over weeks, the per-itinerary history becomes
+a *booking curve* — which is what makes a real "should I book now?" prediction possible.
 
 ---
 
@@ -49,7 +50,7 @@ flightwatch/            # the Python package (importable, no path hacks)
   provider.py           #   fare source — Google Flights scraper (swap providers here)
   collect.py            #   daily scan -> appends to data/
   storage.py            #   append-only monthly CSVs with de-duplication
-  predict.py            #   buy / wait / watch signal (heuristic + optional ML)
+  predict.py            #   forecast + buy/wait/watch decision with confidence (heuristic + quantile ML)
   dashboard.py          #   renders docs/index.html
   __main__.py           #   CLI:  python -m flightwatch [collect|build|all|diag]
 config.yaml             # what to track
@@ -122,19 +123,28 @@ Change the scan time in `.github/workflows/daily-scan.yml` (`cron`, in UTC).
 
 ---
 
-## The buy / wait signal
+## The buy / wait decision (with confidence)
 
-`flightwatch/predict.py` starts with a transparent **heuristic**: it compares
-today's price to that route's own observed minimum/median and the days left to
-departure.
+`flightwatch/predict.py` is a small decision engine. While history is thin it uses a
+transparent **heuristic** (today's price vs the route's own min/median and days left)
+and honestly reports **low confidence**. Once there are enough cheapest-per-day
+observations (~120) it trains a **quantile gradient-boosting model** — 10th / 50th /
+90th percentile of the booking curve — so every call carries an uncertainty band, not
+just a point estimate.
 
-- **BUY** — near its lowest observed price with departure approaching
-- **WAIT** — priced at/above typical and still far out (history suggests room to fall)
-- **WATCH** — not enough history yet, or no clear edge
+Each recommendation exposes its full reasoning:
 
-Once you've accumulated enough observations (~400), it also trains a gradient-boosting
-model and reports its cross-validated error. Expect predictions to only become
-meaningful inside ~6–8 weeks of departure, when fares actually start moving.
+- **Signal** — **BUY** / **WAIT** / **WATCH**
+- **Confidence** — 0–100%, combining how much data exists with how decisive the signal is
+- **Forecast low** — the model's expected cheapest fare over the remaining window
+- **Expected savings** — how much waiting is predicted to save (for WAIT)
+- **Drop probability** — the chance the fare falls below today's price
+
+The dashboard also renders **market insights** (cheapest / typical / range, airlines,
+nonstop availability per route) and the **latest cheapest offers** from each scan.
+The model's cross-validated error (±MAE) is shown so you can judge how much to trust it;
+expect it to sharpen as history accumulates and inside ~6–8 weeks of departure, when
+fares actually start moving.
 
 ---
 
