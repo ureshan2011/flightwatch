@@ -62,8 +62,11 @@ def collect():
             )
             best = provider.cheapest_offer(offers)
             if best:
-                rows.append({**base, **best, "status": "ok"})
-                print(f"  OK   {origin}->{dest} {dep}->{ret}  {best['currency']}{best['price']:.0f}")
+                tier = best.get("tier", "dates")
+                row = {**base, **best, "status": "ok", "source": f"travelpayouts:{tier}"}
+                rows.append(row)
+                note = "" if tier == "dates" else f"  (month fallback -> {best.get('found_depart','')})"
+                print(f"  OK   {origin}->{dest} {dep}->{ret}  {best['currency']}{best['price']:.0f}{note}")
             else:
                 rows.append({**base, "price": "", "airline": "", "stops": "",
                              "duration_minutes": "", "status": "no_results"})
@@ -79,3 +82,39 @@ def collect():
     storage.append_rows(rows)
     ok = sum(1 for r in rows if r.get("status") == "ok")
     print(f"\nCollected {ok}/{len(rows)} priced itineraries on {scan_date}.")
+    if ok == 0:
+        print("No fares found. Run `python -m flightwatch diag` to see what the "
+              "Travelpayouts cache holds for these routes.")
+
+
+def diagnose():
+    """
+    Print the raw Travelpayouts response for each configured route, per tier.
+    Helps answer "is the token working?" and "does the cache have this route?".
+    Run with: python -m flightwatch diag
+    """
+    cfg = load_config()
+    currency = cfg.get("currency", "NZD")
+    market = cfg.get("market", "nz")
+    print(f"Diagnostics -- currency={currency} market={market}\n")
+
+    for it in cfg["itineraries"]:
+        origin, dest = it["origin"], it["destination"]
+        dep, ret = str(it["depart_date"]), str(it["return_date"])
+        print(f"{origin}->{dest}  {dep} -> {ret}")
+        try:
+            raw = provider.raw_search(origin, dest, dep, ret,
+                                      currency=currency, market=market,
+                                      max_offers=cfg.get("max_offers_per_search", 5))
+        except Exception as e:
+            print(f"  ERROR calling API: {e}\n")
+            continue
+        for tier, body in raw.items():
+            ok = body.get("success", False)
+            data = body.get("data", []) or []
+            sample = ""
+            if data:
+                d0 = data[0]
+                sample = f"  e.g. {d0.get('departure_at','')[:10]} {d0.get('price','')}{currency} {d0.get('airline','')}"
+            print(f"  [{tier:5}] success={ok}  offers={len(data)}{sample}")
+        print()
