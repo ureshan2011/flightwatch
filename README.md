@@ -5,48 +5,73 @@ An open, free, self-hosting fare tracker for the **Christchurch ↔ Colombo** co
 a simple **buy / wait** signal on a public dashboard — all running for **$0** on
 GitHub's free tier.
 
-- **Data:** [Amadeus Self-Service API](https://developers.amadeus.com) (free tier)
+- **Data:** [Travelpayouts (Aviasales) Data API](https://www.travelpayouts.com/developers/api) (free, token only)
 - **Automation:** GitHub Actions (free & unlimited for public repos)
 - **Hosting:** GitHub Pages (free)
 - **Dataset:** every observation is committed as plain CSV in `data/` — open for anyone
 
 > Fares are informational. Always confirm the live price before booking.
 
+> **Why not Amadeus?** FlightWatch originally used the Amadeus Self-Service API,
+> but that no longer has a usable free tier. Travelpayouts' Data API is genuinely
+> free (a single token, no OAuth, no per-call billing) and returns the cheapest
+> cached fares per route + date — exactly what a booking-curve tracker needs.
+
 ---
 
 ## How it works
 
 ```
-config.yaml ──► src/collect.py ──► data/flights_YYYY_MM.csv (append-only, time-stamped)
-                                          │
-                     src/build_dashboard.py ──► docs/index.html  (GitHub Pages)
-                     src/predict.py ───────────┘  (buy/wait signal)
+config.yaml ──► flightwatch/collect.py ──► data/flights_YYYY_MM.csv (append-only, time-stamped)
+                                                  │
+                     flightwatch/dashboard.py ──► docs/index.html  (GitHub Pages)
+                     flightwatch/predict.py ──────┘  (buy/wait signal)
 ```
 
-A GitHub Actions cron runs `collect.py` daily, appends one priced observation per
+A GitHub Actions cron runs the collector daily, appends one priced observation per
 itinerary, regenerates the dashboard, and commits both back to the repo. Over weeks,
 the per-itinerary history becomes a *booking curve* — which is what makes a real
 "should I book now?" prediction possible.
 
 ---
 
+## Project layout
+
+```
+flightwatch/            # the Python package (importable, no path hacks)
+  __init__.py           #   shared paths (repo root, data/, docs/, config.yaml)
+  provider.py           #   fare source — Travelpayouts client (swap providers here)
+  collect.py            #   daily scan -> appends to data/
+  storage.py            #   append-only monthly CSVs with de-duplication
+  predict.py            #   buy / wait / watch signal (heuristic + optional ML)
+  dashboard.py          #   renders docs/index.html
+  __main__.py           #   CLI:  python -m flightwatch [collect|build|all]
+config.yaml             # what to track
+data/                   # the open dataset (monthly CSVs)
+docs/                   # the published dashboard (GitHub Pages)
+.github/workflows/      # the daily cron
+```
+
+Everything runs through the package, so the provider lives in exactly one file
+(`flightwatch/provider.py`). To use a different fare source later, keep its two
+functions (`search_flight_offers` and `cheapest_offer`) and the rest is unchanged.
+
+---
+
 ## Setup (about 15 minutes, all free)
 
-### 1. Get free Amadeus API keys
-1. Create an account at <https://developers.amadeus.com>.
-2. In **My Self-Service Workspace**, create an app. Copy its **API Key** and **API Secret**.
-3. You start in the free **test** environment. Later, click **Move to Production**
-   (still free up to quota) for live data — then set the repo variable `AMADEUS_ENV` to `production`.
+### 1. Get a free Travelpayouts API token
+1. Sign up at <https://www.travelpayouts.com/developers/api>.
+2. Open your profile and copy your **API token** from the *API token* section.
+   That single token is all FlightWatch needs — there's no OAuth step or paid upgrade.
 
 ### 2. Create the repo
 1. Make a **public** GitHub repository (public = free Actions + Pages).
 2. Upload these files (or `git push` them).
 
-### 3. Add your keys as repo secrets
+### 3. Add your token as a repo secret
 Repo → **Settings → Secrets and variables → Actions**:
-- New **secret** `AMADEUS_CLIENT_ID` = your API Key
-- New **secret** `AMADEUS_CLIENT_SECRET` = your API Secret
-- (Optional) New **variable** `AMADEUS_ENV` = `production` once you've upgraded
+- New **secret** `TRAVELPAYOUTS_TOKEN` = your API token
 
 Secrets are encrypted and never appear in logs or the code.
 
@@ -70,12 +95,12 @@ automatically every day.
 
 ```bash
 pip install -r requirements.txt
-export AMADEUS_CLIENT_ID=your_key
-export AMADEUS_CLIENT_SECRET=your_secret
-# export AMADEUS_ENV=production   # once upgraded
+export TRAVELPAYOUTS_TOKEN=your_token
 
-python src/collect.py            # one scan -> appends to data/
-python src/build_dashboard.py    # regenerate docs/index.html
+python -m flightwatch collect    # one scan -> appends to data/
+python -m flightwatch build      # regenerate docs/index.html
+# or do both at once:
+python -m flightwatch all
 open docs/index.html
 ```
 
@@ -98,8 +123,9 @@ Change the scan time in `.github/workflows/daily-scan.yml` (`cron`, in UTC).
 
 ## The buy / wait signal
 
-`src/predict.py` starts with a transparent **heuristic**: it compares today's price
-to that route's own observed minimum/median and the days left to departure.
+`flightwatch/predict.py` starts with a transparent **heuristic**: it compares
+today's price to that route's own observed minimum/median and the days left to
+departure.
 
 - **BUY** — near its lowest observed price with departure approaching
 - **WAIT** — priced at/above typical and still far out (history suggests room to fall)
@@ -118,7 +144,7 @@ meaningful inside ~6–8 weeks of departure, when fares actually start moving.
 | Daily automation | GitHub Actions (public repo, standard runner) | Free, unlimited |
 | Dashboard hosting | GitHub Pages | Free |
 | Data storage | CSV in the repo | Free |
-| Fare data | Amadeus Self-Service | Free (test + free production quota) |
+| Fare data | Travelpayouts (Aviasales) Data API | Free (token only) |
 
 A daily run uses ~1–2 Actions minutes and a handful of API calls — comfortably inside
 every free limit.

@@ -5,17 +5,10 @@ Handles the empty / early-days case gracefully.
 """
 
 import os
-import sys
 import json
 from datetime import datetime
 
-import pandas as pd
-
-sys.path.insert(0, os.path.dirname(__file__))
-import storage
-import predict
-
-DOCS = os.path.join(os.path.dirname(__file__), "..", "docs")
+from . import DOCS_DIR, storage, predict
 
 
 def build():
@@ -44,8 +37,8 @@ def build():
                      if not df.empty and (df["status"] == "ok").any() else "NZD"),
     }
 
-    os.makedirs(DOCS, exist_ok=True)
-    with open(os.path.join(DOCS, "index.html"), "w") as f:
+    os.makedirs(DOCS_DIR, exist_ok=True)
+    with open(os.path.join(DOCS_DIR, "index.html"), "w", encoding="utf-8") as f:
         f.write(_html(payload))
     print(f"Dashboard built: {payload['scans']} scans, {payload['total_obs']} priced observations.")
 
@@ -99,7 +92,8 @@ a{color:var(--buy)}
 <div class="meta" id="meta"></div>
 <div id="body"></div>
 <div class="foot">
-Updated automatically once a day via GitHub Actions. Signals are derived from each route's own
+Updated automatically once a day via GitHub Actions. Fares come from the free
+Travelpayouts (Aviasales) Data API. Signals are derived from each route's own
 observed price history and are informational only &mdash; verify the live fare before booking.
 Data is open: see the <code>data/</code> folder in the repository.
 </div>
@@ -108,16 +102,16 @@ Data is open: see the <code>data/</code> folder in the repository.
 const D = ''' + data + r''';
 const fmt = n => D.currency + Math.round(n).toLocaleString();
 const meta = document.getElementById('meta');
-meta.textContent = D.scans + ' daily scans \u00b7 ' + D.total_obs + ' priced observations \u00b7 built ' + D.generated +
-  (D.model ? ' \u00b7 model \u00b1' + fmt(D.model.mae) : '');
+meta.textContent = D.scans + ' daily scans · ' + D.total_obs + ' priced observations · built ' + D.generated +
+  (D.model ? ' · model ±' + fmt(D.model.mae) : '');
 const body = document.getElementById('body');
 
 if(!D.recs.length){
-  body.innerHTML = '<div class="empty"><h2>Collecting data\u2026</h2>'+
+  body.innerHTML = '<div class="empty"><h2>Collecting data…</h2>'+
     '<p>The tracker has just started. Recommendations appear once each route has a few days of '+
-    'price history (usually within a week). Come back soon \u2014 or check the data folder in the repo.</p></div>';
+    'price history (usually within a week). Come back soon — or check the data folder in the repo.</p></div>';
 }else{
-  body.innerHTML = '<div class="section">Today\u2019s recommendations</div>';
+  body.innerHTML = '<div class="section">Today’s recommendations</div>';
   D.recs.forEach((r,i)=>{
     const id='spark'+i;
     body.insertAdjacentHTML('beforeend',
@@ -126,7 +120,7 @@ if(!D.recs.length){
         '<div><div class="itin">'+r.itinerary+'</div><div class="reason">'+r.reason+'</div></div>'+
         '<canvas class="spark" id="'+id+'"></canvas>'+
         '<div><div class="price">'+fmt(r.price)+'</div>'+
-          '<div class="pricelbl">low '+fmt(r.trailing_min)+' \u00b7 '+r.points+' pts</div></div>'+
+          '<div class="pricelbl">low '+fmt(r.trailing_min)+' · '+r.points+' pts</div></div>'+
       '</div>');
   });
   // sparklines
@@ -140,7 +134,3 @@ if(!D.recs.length){
   });
 }
 </script></body></html>'''
-
-
-if __name__ == "__main__":
-    build()

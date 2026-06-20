@@ -38,25 +38,26 @@ a{color:var(--buy)}
 <div class="meta" id="meta"></div>
 <div id="body"></div>
 <div class="foot">
-Updated automatically once a day via GitHub Actions. Signals are derived from each route's own
+Updated automatically once a day via GitHub Actions. Fares come from the free
+Travelpayouts (Aviasales) Data API. Signals are derived from each route's own
 observed price history and are informational only &mdash; verify the live fare before booking.
 Data is open: see the <code>data/</code> folder in the repository.
 </div>
 </div>
 <script>
-const D = {"generated": "2026-06-19 20:27 UTC", "recs": [], "history": {}, "total_obs": 0, "scans": 1, "model": null, "currency": "NZD"};
+const D = {"generated": "2026-06-20 04:32 UTC", "recs": [], "history": {}, "total_obs": 0, "scans": 1, "model": null, "currency": "NZD"};
 const fmt = n => D.currency + Math.round(n).toLocaleString();
 const meta = document.getElementById('meta');
-meta.textContent = D.scans + ' daily scans \u00b7 ' + D.total_obs + ' priced observations \u00b7 built ' + D.generated +
-  (D.model ? ' \u00b7 model \u00b1' + fmt(D.model.mae) : '');
+meta.textContent = D.scans + ' daily scans · ' + D.total_obs + ' priced observations · built ' + D.generated +
+  (D.model ? ' · model ±' + fmt(D.model.mae) : '');
 const body = document.getElementById('body');
 
 if(!D.recs.length){
-  body.innerHTML = '<div class="empty"><h2>Collecting data\u2026</h2>'+
+  body.innerHTML = '<div class="empty"><h2>Collecting data…</h2>'+
     '<p>The tracker has just started. Recommendations appear once each route has a few days of '+
-    'price history (usually within a week). Come back soon \u2014 or check the data folder in the repo.</p></div>';
+    'price history (usually within a week). Come back soon — or check the data folder in the repo.</p></div>';
 }else{
-  body.innerHTML = '<div class="section">Today\u2019s recommendations</div>';
+  body.innerHTML = '<div class="section">Today’s recommendations</div>';
   D.recs.forEach((r,i)=>{
     const id='spark'+i;
     body.insertAdjacentHTML('beforeend',
@@ -65,7 +66,7 @@ if(!D.recs.length){
         '<div><div class="itin">'+r.itinerary+'</div><div class="reason">'+r.reason+'</div></div>'+
         '<canvas class="spark" id="'+id+'"></canvas>'+
         '<div><div class="price">'+fmt(r.price)+'</div>'+
-          '<div class="pricelbl">low '+fmt(r.trailing_min)+' \u00b7 '+r.points+' pts</div></div>'+
+          '<div class="pricelbl">low '+fmt(r.trailing_min)+' · '+r.points+' pts</div></div>'+
       '</div>');
   });
   // sparklines
