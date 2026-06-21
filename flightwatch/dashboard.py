@@ -456,6 +456,10 @@ def build():
     }
 
     os.makedirs(DOCS_DIR, exist_ok=True)
+    if explore:
+        with open(os.path.join(DOCS_DIR, "explore.json"), "w", encoding="utf-8") as ef:
+            json.dump(explore, ef, default=_np)
+    payload["explore"] = []
     with open(os.path.join(DOCS_DIR, "index.html"), "w", encoding="utf-8") as f:
         f.write(_html(payload))
     print(f"Dashboard built: {stats['scans']} scans, {stats['total_offers']} fare "
@@ -1240,8 +1244,9 @@ if(!D.recs.length){
    stops / airline, see the cheapest fare painted on a calendar, and deep-link
    straight to the booking page for any option. */
 function buildFinder(){
-  const EX=D.explore||[], EXM=D.explore_meta||{};
-  if(!EX.length)return;
+  let EX=[], EXM=D.explore_meta||{};
+  if(!EXM.dep_min)return;
+  let loaded=false;
   const lmin=EXM.len_min, lmax=EXM.len_max, hasLen=(lmin!=null&&lmax!=null&&lmax>lmin);
   const F={depFrom:EXM.dep_min,depTo:EXM.dep_max,lenMin:lmin,lenMax:lmax,
            maxPrice:EXM.price_max,stops:'any',airline:'',route:'',sort:'price',day:'',view:'cal'};
@@ -1273,6 +1278,12 @@ function buildFinder(){
     fast:(a,b)=>(a.fastest||1e9)-(b.fastest||1e9)};
   const heat=(p,lo,hi)=>{if(hi<=lo)return 'hsl(150 62% 90%)';
     const t=Math.max(0,Math.min(1,(p-lo)/(hi-lo)));return 'hsl('+(132-(132-6)*t).toFixed(0)+' 72% '+(91-t*16).toFixed(0)+'%)';};
+
+  async function ensureLoaded(){
+    if(loaded)return;
+    try{const r=await fetch('explore.json');EX=await r.json();}catch(e){EX=D.explore||[];}
+    loaded=true;
+  }
 
   function buildCalendar(){
     const cal=$('cal');if(!cal)return;
@@ -1327,6 +1338,7 @@ function buildFinder(){
 
   function render(){const box=$('calbox');if(box)box.style.display=F.view==='cal'?'block':'none';
     if(F.view==='cal')buildCalendar();buildTrips();}
+  async function doSearch(){await ensureLoaded();lim=24;render();}
 
   // ---- controls ----
   const airOpts='<option value="">Any airline</option>'+(EXM.airlines||[]).map(a=>'<option value="'+esc(a)+'">'+esc(a)+'</option>').join('');
@@ -1337,7 +1349,7 @@ function buildFinder(){
       EXM.routes.map(r=>'<option value="'+esc(r)+'">'+esc(r.replace('-','→'))+'</option>').join('')+'</select></div>':'';
   const stopsBtns='<button data-v="any" class="on">Any</button><button data-v="1">≤1 stop</button>'+(EXM.nonstop_any?'<button data-v="nonstop">Nonstop</button>':'');
 
-  add('<div class="section reveal" id="finder"><h2>Find a trip</h2><span class="hint">'+(EXM.count||EX.length)+' date combos · live filters</span></div>'+
+  add('<div class="section reveal" id="finder"><h2>Find a trip</h2><span class="hint">'+(EXM.count||0)+' date combos · set filters &amp; search</span></div>'+
    '<div class="finder reveal"><div class="filters">'+
      '<div class="fld"><label>Depart from</label><input type="date" id="f-df" min="'+EXM.dep_min+'" max="'+EXM.dep_max+'" value="'+EXM.dep_min+'"></div>'+
      '<div class="fld"><label>Depart to</label><input type="date" id="f-dt" min="'+EXM.dep_min+'" max="'+EXM.dep_max+'" value="'+EXM.dep_max+'"></div>'+
@@ -1349,27 +1361,29 @@ function buildFinder(){
      '<div class="fld"><label>Stops</label><div class="seg-ctrl" id="f-stops">'+stopsBtns+'</div></div>'+
      '<div class="fld"><label>Sort by</label><select id="f-sort"><option value="price">Cheapest</option>'+
        '<option value="date">Departure date</option><option value="length">Trip length</option><option value="fast">Fastest</option></select></div>'+
+     '<div class="fld"><label>&nbsp;</label><button class="btnbook" id="f-search" style="width:100%;justify-content:center;border:0;cursor:pointer">'+_EXT+'Search flights</button></div>'+
    '</div>'+
-   '<div class="finder-bar"><span class="count" id="ex-count"></span>'+
+   '<div class="finder-bar"><span class="count" id="ex-count">Set your dates and click Search</span>'+
      '<div class="viewtoggle" id="f-view"><button data-v="cal" class="on">Calendar</button><button data-v="list">List</button></div>'+
      '<button class="reset" id="f-reset">Reset</button></div>'+
-   '<div class="cal-wrap" id="calbox"><div id="cal"></div></div>'+
+   '<div class="cal-wrap" id="calbox" style="display:none"><div id="cal"></div></div>'+
    '<div class="trips" id="trips"></div>'+
    '<button class="morebtn" id="ex-more" style="display:none">Show more trips</button></div>');
 
   // ---- wiring ----
-  $('f-df').addEventListener('change',e=>{F.depFrom=e.target.value;F.day='';lim=24;render();});
-  $('f-dt').addEventListener('change',e=>{F.depTo=e.target.value;F.day='';lim=24;render();});
-  if($('f-lmin'))$('f-lmin').addEventListener('change',e=>{F.lenMin=+e.target.value;lim=24;render();});
-  if($('f-lmax'))$('f-lmax').addEventListener('change',e=>{F.lenMax=+e.target.value;lim=24;render();});
-  $('f-price').addEventListener('input',e=>{F.maxPrice=+e.target.value;$('f-pv').textContent=fmt(F.maxPrice);lim=24;render();});
-  $('f-air').addEventListener('change',e=>{F.airline=e.target.value;lim=24;render();});
-  if($('f-route'))$('f-route').addEventListener('change',e=>{F.route=e.target.value;lim=24;render();});
-  $('f-sort').addEventListener('change',e=>{F.sort=e.target.value;lim=24;render();});
+  $('f-search').addEventListener('click',()=>doSearch());
+  $('f-df').addEventListener('change',e=>{F.depFrom=e.target.value;F.day='';doSearch();});
+  $('f-dt').addEventListener('change',e=>{F.depTo=e.target.value;F.day='';doSearch();});
+  if($('f-lmin'))$('f-lmin').addEventListener('change',e=>{F.lenMin=+e.target.value;doSearch();});
+  if($('f-lmax'))$('f-lmax').addEventListener('change',e=>{F.lenMax=+e.target.value;doSearch();});
+  $('f-price').addEventListener('input',e=>{F.maxPrice=+e.target.value;$('f-pv').textContent=fmt(F.maxPrice);if(loaded){lim=24;render();}});
+  $('f-air').addEventListener('change',e=>{F.airline=e.target.value;doSearch();});
+  if($('f-route'))$('f-route').addEventListener('change',e=>{F.route=e.target.value;doSearch();});
+  $('f-sort').addEventListener('change',e=>{F.sort=e.target.value;if(loaded){lim=24;render();}});
   $('f-stops').querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{
-    F.stops=b.dataset.v;$('f-stops').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));lim=24;render();}));
+    F.stops=b.dataset.v;$('f-stops').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));if(loaded){lim=24;render();}}));
   $('f-view').querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{
-    F.view=b.dataset.v;$('f-view').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));render();}));
+    F.view=b.dataset.v;$('f-view').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));if(loaded)render();}));
   $('ex-more').addEventListener('click',()=>{lim+=24;buildTrips();});
   $('f-reset').addEventListener('click',()=>{
     F.depFrom=EXM.dep_min;F.depTo=EXM.dep_max;F.lenMin=lmin;F.lenMax=lmax;F.maxPrice=EXM.price_max;
@@ -1377,9 +1391,7 @@ function buildFinder(){
     $('f-df').value=EXM.dep_min;$('f-dt').value=EXM.dep_max;$('f-price').value=EXM.price_max;$('f-pv').textContent=fmt(EXM.price_max);
     if($('f-lmin'))$('f-lmin').value=lmin;if($('f-lmax'))$('f-lmax').value=lmax;
     $('f-air').value='';if($('f-route'))$('f-route').value='';$('f-sort').value='price';
-    $('f-stops').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x.dataset.v==='any'));render();});
-
-  render();
+    $('f-stops').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x.dataset.v==='any'));if(loaded){render();}});
 }
 
 /* ---- charts ---- */
