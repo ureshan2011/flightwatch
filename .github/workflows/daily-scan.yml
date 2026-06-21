@@ -81,5 +81,10 @@ jobs:
           git diff --staged --quiet && { echo "no changes"; exit 0; }
           git commit -m "Scan: $(date -u +%Y-%m-%dT%H:%MZ)"
           # Land cleanly even if another slot's run pushed while we scraped.
-          git pull --rebase --autostash origin "${GITHUB_REF_NAME}" || true
+          # Try rebase first; on conflict, abort and fall back to merge.
+          if ! git pull --rebase --autostash origin "${GITHUB_REF_NAME}"; then
+            echo "Rebase failed — aborting and falling back to merge"
+            git rebase --abort
+            git pull --no-edit origin "${GITHUB_REF_NAME}"
+          fi
           git push
