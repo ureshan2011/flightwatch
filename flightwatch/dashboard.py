@@ -220,6 +220,98 @@ def _airline_market(ok):
     return sorted(agg.values(), key=lambda d: d["min"])[:8]
 
 
+def _next_tick(now, hours):
+    """Next UTC time aligned to a multiple of `hours` (the cron cadence)."""
+    from datetime import timedelta
+    h = (now.hour // max(hours, 1) + 1) * max(hours, 1)
+    midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    return midnight + timedelta(hours=h)
+
+
+def _scrape_status(df):
+    """Live operational picture of the scraper for the dashboard's status panel:
+    when it last ran, what succeeded/failed, the dates/flights covered, and what
+    the next scheduled run is expected to scrape. All times are UTC ISO so the
+    page can render them live (relative, with countdowns) client-side.
+    """
+    from . import collect as collect_mod
+    try:
+        cfg = collect_mod.load_config() or {}
+    except Exception:
+        cfg = {}
+    gen = cfg.get("auto_generate") or {}
+    shards = max(int(gen.get("shards", 4) or 1), 1)
+    cadence = int(cfg.get("scan_every_hours", 6) or 6)
+    sharding = bool(gen.get("shard_across_slots", True)) and shards > 1
+
+    st = {"cadence_hours": cadence, "shards": shards, "has_data": False,
+          "recent": [], "now_iso": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")}
+
+    # The full rolling grid we aim to cover (fixed itineraries + generated sweep).
+    try:
+        grid = collect_mod.generate_grid(cfg)
+    except Exception:
+        grid = []
+    fixed = list(cfg.get("itineraries") or [])
+    st["grid_total"] = len(grid) + len(fixed)
+    st["routes"] = sorted({f'{g["origin"]}-{g["destination"]}' for g in grid + fixed})
+    if grid:
+        deps = sorted({g["depart_date"] for g in grid})
+        st["grid_from"], st["grid_to"] = deps[0], deps[-1]
+
+    # Next scheduled run + which shard (and therefore which dates) it will scrape.
+    nxt = _next_tick(datetime.utcnow(), cadence)
+    st["next_run_iso"] = nxt.strftime("%Y-%m-%dT%H:%M:%SZ")
+    if grid and sharding:
+        idx = collect_mod._shard_index(nxt, shards)
+        nxt_grid = [g for g in grid if collect_mod._itin_shard(g, shards) == idx]
+        st["next_shard"] = idx + 1
+        st["next_count"] = len(nxt_grid) + len(fixed)
+        if nxt_grid:
+            nd = sorted({g["depart_date"] for g in nxt_grid})
+            st["next_from"], st["next_to"] = nd[0], nd[-1]
+    else:
+        st["next_shard"], st["next_count"] = 1, st["grid_total"]
+
+    if df is None or df.empty or "scan_datetime" not in df.columns:
+        return st
+
+    st["has_data"] = True
+    sd = df["scan_datetime"].dropna().astype(str)
+    st["last_scan_iso"] = sd.max() if not sd.empty else ""
+
+    # Per-slot (per-run) summary for the most recent runs: how many itineraries
+    # came back OK vs empty vs errored, and how many fares were harvested.
+    g = df.copy()
+    g["scan_slot"] = g["scan_slot"].astype(str)
+    slots = sorted({s for s in g["scan_slot"].unique() if s and s != "nan"},
+                   reverse=True)[:8]
+    for s in slots:
+        sub = g[g["scan_slot"] == s]
+
+        def _itins(status):
+            x = sub[sub["status"] == status]
+            return {(r.origin, r.destination, r.depart_date, r.return_date)
+                    for r in x.itertuples()}
+
+        ok, nr, er = _itins("ok"), _itins("no_results"), _itins("error")
+        attempted = len(ok | nr | er)
+        st["recent"].append({
+            "slot": s, "ok": len(ok), "no_results": len(nr), "errors": len(er),
+            "attempted": attempted, "offers": int((sub["status"] == "ok").sum()),
+            "success": round(100 * len(ok) / attempted) if attempted else 0,
+        })
+    if st["recent"]:
+        st["latest"] = st["recent"][0]
+
+    okrows = df[df["status"] == "ok"]
+    if not okrows.empty:
+        dd = okrows["depart_date"].dropna().astype(str)
+        if not dd.empty:
+            st["covered_from"], st["covered_to"] = dd.min(), dd.max()
+    return st
+
+
 def build():
     df = storage.load_all()
     bundle = predict.train_model(df) if not df.empty else None
@@ -282,6 +374,7 @@ def build():
 
     payload = {
         "generated": datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC"),
+        "status": _scrape_status(df),
         "recs": recs,
         "history": history,
         "insights": insights,
@@ -561,6 +654,52 @@ tr.best td{background:var(--buy-bg)}
 .bigstat .u{color:var(--dim);font-size:13px}
 .sigrow{display:flex;gap:16px;flex-wrap:wrap;margin-top:12px;font-size:12.5px;color:var(--muted)}
 .sigrow b{font-family:'IBM Plex Mono',monospace;color:var(--ink)}
+
+/* ---- live scraper operations panel ---- */
+.ops{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+  box-shadow:var(--shadow);padding:20px 22px;margin:8px 0 26px;position:relative;overflow:hidden}
+.ops::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--dim);transition:.4s}
+.ops.live::before{background:linear-gradient(var(--buy),#14c98c)}
+.ops.due::before{background:var(--wait)}
+.ops.stale::before{background:var(--pink)}
+.ops-top{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.ops-badge{display:inline-flex;align-items:center;gap:8px;font-family:'IBM Plex Mono',monospace;
+  font-size:12px;font-weight:600;letter-spacing:.4px;padding:6px 12px;border-radius:30px;text-transform:uppercase}
+.ops-badge.live{color:#0a8f63;background:var(--buy-bg)}
+.ops-badge.due{color:#b9701a;background:var(--wait-bg)}
+.ops-badge.stale{color:#c0436a;background:#fdeaf0}
+.ops-badge .dot{width:8px;height:8px;border-radius:50%;background:currentColor;position:relative}
+.ops-badge.live .dot{animation:opspulse 1.6s ease-out infinite}
+@keyframes opspulse{0%{box-shadow:0 0 0 0 rgba(18,176,124,.55)}100%{box-shadow:0 0 0 9px rgba(18,176,124,0)}}
+.ops-title{font-weight:700;font-size:16px;letter-spacing:-.2px}
+.ops-sub{color:var(--dim);font-size:12.5px;margin-left:auto;font-family:'IBM Plex Mono',monospace}
+.ops-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-top:18px}
+.ops-cell{background:#f7faff;border:1px solid var(--line);border-radius:14px;padding:12px 14px}
+.ops-cell .k{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--dim);font-weight:600}
+.ops-cell .v{font-family:'IBM Plex Mono',monospace;font-size:18px;font-weight:600;color:var(--ink);margin-top:5px;letter-spacing:-.5px}
+.ops-cell .s{font-size:11.5px;color:var(--muted);margin-top:3px}
+.ops-cell .v small{font-size:12px;color:var(--muted);font-weight:400}
+.ops-next{margin-top:16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  background:linear-gradient(100deg,#eef3ff,#f3f0ff);border:1px solid var(--line2);border-radius:14px;padding:12px 15px;font-size:13px;color:var(--muted)}
+.ops-next b{color:var(--ink)}
+.ops-next .nxt-ic{width:26px;height:26px;border-radius:8px;flex:none;display:grid;place-items:center;
+  background:linear-gradient(135deg,var(--brand),var(--brand2));color:#fff;font-size:14px}
+.ops-runs{margin-top:16px}
+.ops-runs .rh{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--dim);font-weight:600;margin-bottom:9px}
+.ops-bars{display:flex;gap:7px;align-items:flex-end;flex-wrap:wrap}
+.runbar{flex:1;min-width:46px;max-width:90px}
+.runbar .stack{height:46px;display:flex;flex-direction:column-reverse;border-radius:7px;overflow:hidden;background:#eef2fa;border:1px solid var(--line)}
+.runbar .seg{width:100%}
+.runbar .seg.ok{background:linear-gradient(var(--buy),#16c78d)}
+.runbar .seg.nr{background:#cfd9ea}
+.runbar .seg.er{background:var(--pink)}
+.runbar .cap{font-size:10px;color:var(--dim);text-align:center;margin-top:5px;font-family:'IBM Plex Mono',monospace}
+.runbar.now .cap{color:var(--brand);font-weight:700}
+.ops-legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:10px;font-size:11.5px;color:var(--muted)}
+.ops-legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+.ops-routes{margin-top:14px;font-size:12px;color:var(--muted);display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.ops-routes .rt{background:#eef2fa;border:1px solid var(--line);border-radius:20px;padding:3px 10px;font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:var(--muted)}
+@media(max-width:560px){.ops-sub{margin-left:0;width:100%}}
 </style></head><body>
 
 <div class="aurora"><span class="blob b1"></span><span class="blob b2"></span></div>
@@ -568,7 +707,7 @@ tr.best td{background:var(--buy-bg)}
 <nav class="nav"><div class="row">
   <div class="brand"><span class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2"
     stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v3M9 8h6l1.5 11h-9L9 8zM7.5 19h9M10 8l.5-3h3l.5 3"/></svg></span>Faro</div>
-  <div class="links"><a href="#deals">Deals</a><a href="#trend">Trends</a><a href="#insights">Insights</a><a href="#fares">Fares</a></div>
+  <div class="links"><a href="#status">Status</a><a href="#deals">Deals</a><a href="#trend">Trends</a><a href="#insights">Insights</a><a href="#fares">Fares</a></div>
   <div class="ctx"><span class="pulse"></span><span id="clock">live</span><span id="navwx"></span></div>
 </div></nav>
 
@@ -590,7 +729,7 @@ tr.best td{background:var(--buy-bg)}
   <div id="body"></div>
 
   <div class="foot reveal">
-    Faro refreshes once a day. Fares are gathered from Google Flights across rotating browser profiles; airline logos
+    Faro refreshes several times a day (and on every update) — this page reloads itself to show the latest. Fares are gathered from Google Flights across rotating Chromium + Firefox browser profiles; airline logos
     from <a href="https://www.air-hex.com">avs.io</a>, live weather and currency from
     <a href="https://open-meteo.com">Open-Meteo</a> and <a href="https://www.exchangerate-api.com">ExchangeRate-API</a>.
     The buy / wait call is from a quantile gradient-boosting model trained on each route's own price history (heuristic
@@ -741,6 +880,100 @@ function animateCount(el){if(el.dataset.done)return;el.dataset.done='1';
 /* ---- body ---- */
 const body=document.getElementById('body');
 function add(html){const d=document.createElement('div');d.innerHTML=html;while(d.firstChild)body.appendChild(d.firstChild);}
+
+/* ===== live scraper operations panel ===== */
+function fdate(s){if(!s)return '—';const m=String(s).match(/(\d{4})-(\d{2})-(\d{2})/);
+  if(!m)return s;const d=new Date(+m[1],+m[2]-1,+m[3]);return d.getDate()+' '+MM[d.getMonth()]+' '+d.getFullYear();}
+function fdshort(s){if(!s)return '';const m=String(s).match(/(\d{4})-(\d{2})-(\d{2})/);
+  if(!m)return s;return (+m[3])+' '+MM[+m[2]-1];}
+function dhms(ms,short){if(ms<0)ms=0;const s=Math.floor(ms/1000),d=Math.floor(s/86400),h=Math.floor(s%86400/3600),
+  mn=Math.floor(s%3600/60),se=s%60;if(d>0)return d+'d '+h+'h';if(h>0)return h+'h '+mn+'m';
+  return short?(mn+'m '+String(se).padStart(2,'0')+'s'):(mn+'m '+se+'s');}
+function agoTxt(iso){if(!iso)return 'never';const ms=Date.now()-Date.parse(iso);if(ms<0)return 'just now';
+  const s=Math.floor(ms/1000),d=Math.floor(s/86400),h=Math.floor(s%86400/3600),mn=Math.floor(s%3600/60);
+  if(d>0)return d+'d '+h+'h ago';if(h>0)return h+'h '+mn+'m ago';if(mn>0)return mn+'m ago';return 'just now';}
+
+function nextTickUTC(cad){const n=new Date();const h=(Math.floor(n.getUTCHours()/cad)+1)*cad;
+  const d=new Date(Date.UTC(n.getUTCFullYear(),n.getUTCMonth(),n.getUTCDate(),0,0,0));d.setUTCHours(h);return d;}
+
+function opsState(){const ST=D.status||{};const cad=ST.cadence_hours||6;
+  if(!ST.last_scan_iso)return 'due';
+  const age=Date.now()-Date.parse(ST.last_scan_iso);const hr=3600000;
+  if(age <= (cad+2)*hr)return 'live';            // a run landed within the expected window
+  if(age <= (cad*2+2)*hr)return 'due';           // overdue but plausibly between runs
+  return 'stale';                                 // hasn't run in a long time
+}
+
+function renderOps(){const ST=D.status; if(!ST)return;
+  const cad=ST.cadence_hours||6;
+  const cell=(k,v,s)=>'<div class="ops-cell"><div class="k">'+k+'</div><div class="v">'+v+'</div>'+(s?'<div class="s">'+s+'</div>':'')+'</div>';
+  const L=ST.latest||null;
+  const cells=[];
+  cells.push(cell('Last scan','<span id="ops-ago">—</span>','<span id="ops-abs"></span>'));
+  cells.push(cell('Next scan','<span id="ops-next">—</span>','every '+cad+'h + on each update'));
+  if(L)cells.push(cell('Last run result',L.ok+'<small> / '+L.attempted+' ok</small>',
+    L.success+'% success'+(L.no_results?' · '+L.no_results+' empty':'')+(L.errors?' · '+L.errors+' err':'')));
+  if(L)cells.push(cell('Fares harvested',fmtv(L.offers),'in the latest run'));
+  if(ST.covered_from)cells.push(cell('Departures covered',fdshort(ST.covered_from)+' – '+fdshort(ST.covered_to),'dates with fares on file'));
+  cells.push(cell('Tracking grid',fmtv(ST.grid_total||0),(ST.grid_from?fdshort(ST.grid_from)+' – '+fdshort(ST.grid_to):'')+' · '+(ST.routes?ST.routes.length:1)+' route'+((ST.routes&&ST.routes.length>1)?'s':'')));
+
+  // recent runs as stacked bars (ok / empty / error)
+  let runs='';
+  if(ST.recent&&ST.recent.length){const mx=Math.max(1,...ST.recent.map(r=>r.attempted||1));
+    const bars=ST.recent.slice().reverse().map((r,i,arr)=>{const isnow=i===arr.length-1;
+      const h=v=>Math.round((v/mx)*100);const t=(String(r.slot).match(/T(\d{2})/)||[])[1];
+      const dm=(String(r.slot).match(/(\d{2})-(\d{2})T/)||[]);const lab=(t!=null?t+':00':'')+(dm[2]?' '+dm[2]+'/'+dm[1]:'');
+      return '<div class="runbar'+(isnow?' now':'')+'"><div class="stack" title="'+r.ok+' ok · '+r.no_results+' empty · '+r.errors+' err">'+
+        '<div class="seg ok" style="height:'+h(r.ok)+'%"></div>'+
+        '<div class="seg nr" style="height:'+h(r.no_results)+'%"></div>'+
+        '<div class="seg er" style="height:'+h(r.errors)+'%"></div></div>'+
+        '<div class="cap">'+lab+'</div></div>';}).join('');
+    runs='<div class="ops-runs"><div class="rh">Recent runs · success / empty / error</div>'+
+      '<div class="ops-bars">'+bars+'</div>'+
+      '<div class="ops-legend"><span><i style="background:var(--buy)"></i>got fares</span>'+
+      '<span><i style="background:#cfd9ea"></i>no results</span><span><i style="background:var(--pink)"></i>error</span></div></div>';}
+
+  // what's expected next
+  let next='';
+  const nc=ST.next_count||ST.grid_total||0;
+  const nrange=ST.next_from?(' · departures '+fdshort(ST.next_from)+' – '+fdshort(ST.next_to)):'';
+  next='<div class="ops-next"><span class="nxt-ic">⤓</span><div>Up next: the <b id="ops-next2">next run</b> will scrape '+
+    '<b>~'+fmtv(nc)+'</b> itineraries'+(ST.shards>1?' (shard <b>'+(ST.next_shard||1)+'/'+ST.shards+'</b> of the rolling '+
+    fmtv(ST.grid_total)+'-itinerary grid)':'')+nrange+'. The full grid is covered across the day’s '+ST.shards+' slots.</div></div>';
+
+  let routes='';
+  if(ST.routes&&ST.routes.length)routes='<div class="ops-routes">Routes: '+
+    ST.routes.slice(0,10).map(r=>'<span class="rt">'+esc(r.replace('-','→'))+'</span>').join('')+
+    (ST.routes.length>10?'<span class="rt">+'+(ST.routes.length-10)+'</span>':'')+'</div>';
+
+  add('<section class="section reveal" id="status" style="margin-bottom:2px"><h2>Live scraper status</h2>'+
+    '<span class="hint">updates automatically</span></section>'+
+    '<div class="ops reveal" id="opscard">'+
+      '<div class="ops-top"><span class="ops-badge" id="ops-badge"><span class="dot"></span><span id="ops-badge-txt">checking…</span></span>'+
+        '<span class="ops-title">Google Flights collector</span>'+
+        '<span class="ops-sub" id="ops-sub"></span></div>'+
+      '<div class="ops-grid">'+cells.join('')+'</div>'+
+      next+runs+routes+'</div>');
+
+  tickOps();
+}
+
+function tickOps(){const ST=D.status||{};const card=document.getElementById('opscard');if(!card)return;
+  const state=opsState();card.className='ops reveal '+state;
+  const badge=document.getElementById('ops-badge'),bt=document.getElementById('ops-badge-txt');
+  badge.className='ops-badge '+state;
+  bt.textContent=state==='live'?'Active':(state==='due'?'Scheduled':'Idle');
+  const ago=document.getElementById('ops-ago');if(ago)ago.textContent=agoTxt(ST.last_scan_iso);
+  const abs=document.getElementById('ops-abs');if(abs&&ST.last_scan_iso)abs.textContent=String(ST.last_scan_iso).replace('T',' ').replace(':00Z',' UTC');
+  const nx=document.getElementById('ops-next');if(nx){const t=nextTickUTC(ST.cadence_hours||6);nx.textContent='in '+dhms(t-Date.now(),true);}
+  const sub=document.getElementById('ops-sub');if(sub)sub.textContent='built '+(D.generated||'');
+  setTimeout(tickOps,1000);
+}
+renderOps();
+
+/* Pull a freshly deployed build without a manual refresh: every scan (and every
+   merge to main) redeploys docs/index.html, so reload periodically while visible. */
+setInterval(function(){if(document.visibilityState==='visible')location.reload();},300000);
 
 if(!D.recs.length){
   add('<div class="empty reveal"><h2>Collecting data…</h2><p>Faro has just started watching this route. Signals, trends and the '+
