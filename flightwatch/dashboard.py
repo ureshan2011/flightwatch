@@ -959,9 +959,12 @@ function renderOps(){const ST=D.status; if(!ST)return;
 }
 
 function tickOps(){const ST=D.status||{};const card=document.getElementById('opscard');if(!card)return;
-  const state=opsState();card.className='ops reveal '+state;
+  const state=opsState();
+  // Only toggle the state class -- never reset className, or we'd strip the
+  // scroll-reveal '.in' class and the whole panel would fade back out.
+  card.classList.remove('live','due','stale');card.classList.add(state);
   const badge=document.getElementById('ops-badge'),bt=document.getElementById('ops-badge-txt');
-  badge.className='ops-badge '+state;
+  badge.classList.remove('live','due','stale');badge.classList.add(state);
   bt.textContent=state==='live'?'Active':(state==='due'?'Scheduled':'Idle');
   const ago=document.getElementById('ops-ago');if(ago)ago.textContent=agoTxt(ST.last_scan_iso);
   const abs=document.getElementById('ops-abs');if(abs&&ST.last_scan_iso)abs.textContent=String(ST.last_scan_iso).replace('T',' ').replace(':00Z',' UTC');
