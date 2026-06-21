@@ -118,6 +118,67 @@ _FIREFOX_PREFS = {
 # predates the `engine` key.
 _ENGINES = ("chromium", "firefox")
 
+# --------------------------------------------------------------------------- #
+# Speed + success levers (the core of why scrapes now land more fares, faster).
+# --------------------------------------------------------------------------- #
+#
+# 1) RESOURCE BLOCKING. A Google Flights page pulls megabytes of images, fonts,
+#    map tiles, ads and analytics that carry ZERO fare data but dominate load
+#    time and CPU. On a 2-core CI runner driving several browser contexts at once,
+#    that contention is what stalls a page past our wait window and turns it into
+#    an empty `no_results`. We abort those requests at the network layer, so each
+#    page is ~80% lighter: it renders far faster and the runner stops choking --
+#    which lifts BOTH throughput and success rate. We keep scripts + stylesheets
+#    (Google Flights renders its fare list with JS, and we test button visibility).
+_BLOCK_RESOURCE_TYPES = {"image", "media", "font"}
+_BLOCK_URL_HINTS = (
+    "google-analytics", "googletagmanager", "googleadservices",
+    "googlesyndication", "doubleclick", "/gen_204", "/maps/vt", "/maps/api",
+    "play.google.com/log", "clients6.google.com",
+)
+
+
+def _should_block(resource_type, url):
+    if resource_type in _BLOCK_RESOURCE_TYPES:
+        return True
+    u = url or ""
+    return any(h in u for h in _BLOCK_URL_HINTS)
+
+
+# 2) FAST BLOCK DETECTION. When Google soft-blocks the runner it serves a
+#    sorry/unusual-traffic/captcha page, not fares. Rather than burn the full
+#    wait window on rows that will never appear, we sniff for those markers and
+#    bail in seconds so the retry can switch to a different real engine -- by far
+#    the most effective way to shake a soft-block.
+_FARE_READY_JS = "() => !!document.querySelector('[aria-label*=\"trip total\" i]')"
+_BLOCK_SIGNS = ("unusual traffic", "automated queries", "are you a robot",
+                "/sorry/", "recaptcha", "detected unusual", "not a robot")
+
+
+def _attempt_fingerprints(retries):
+    """One fingerprint per attempt, ALTERNATING engine across attempts.
+
+    A retry after an empty/blocked attempt is far more likely to succeed if it
+    flips Chromium<->Firefox: a genuinely different engine (TLS, JS, fingerprint)
+    is what dodges a soft-block, where a second try on the same engine just gets
+    blocked again. We round-robin the engines and pick a fresh fingerprint within
+    each, so attempt 1/2/3 hit different browsers.
+    """
+    by_engine = {}
+    for fp in _FINGERPRINTS:
+        by_engine.setdefault(_engine_of(fp), []).append(fp)
+    for lst in by_engine.values():
+        random.shuffle(lst)
+    engines = list(by_engine.keys())
+    random.shuffle(engines)
+    out, i = [], 0
+    while len(out) < max(retries, 1):
+        eng = engines[i % len(engines)]
+        pool = by_engine[eng]
+        out.append(pool[(i // len(engines)) % len(pool)])
+        i += 1
+    return out
+
 
 def _engine_of(fp) -> str:
     eng = (fp or {}).get("engine", "chromium")
@@ -193,11 +254,27 @@ _EXTRACT_JS = r"""
     const dm = text.match(/(\d+)\s*hr(?:\s*(\d+)\s*min)?/i) ||
                text.match(/(\d+)\s*h\s*(\d+)?\s*m/i);
     if (dm) minutes = parseInt(dm[1], 10) * 60 + (dm[2] ? parseInt(dm[2], 10) : 0);
-    // Airline: first non-empty line that isn't a time/price/duration.
+    // Airline. The text heuristic alone was weak (~half blank, plus garbage like
+    // route codes "CHC-CMB" and run-together names), so anchor on the carrier
+    // logos' alt text first -- Google labels each flight's airline logo with the
+    // operating carrier(s) -- and only fall back to scanning text lines.
+    const isJunk = (s) => !s
+      || /^[A-Z]{3}\s*[–—-]\s*[A-Z]{3}$/.test(s)   // "CHC-CMB" route label
+      || /^\$|\d{1,2}:\d{2}|\bhr\b|\bmin\b|stop|nonstop|round trip|select|operated/i.test(s);
     let airline = '';
-    for (const line of text.split('\n').map(s => s.trim()).filter(Boolean)) {
-      if (/^\$|\d{1,2}:\d{2}|hr|min|stop|nonstop|round trip|select/i.test(line)) continue;
-      if (line.length >= 2 && line.length <= 40) { airline = line; break; }
+    const alts = [...li.querySelectorAll('img[alt]')]
+      .map(im => (im.getAttribute('alt') || '').trim())
+      // keep logo alts that name a carrier, drop generic/UI/icon alts.
+      .filter(a => a && a.length >= 2 && a.length <= 60 && !/logo|icon|google|seat/i.test(a)
+                   && !isJunk(a));
+    if (alts.length) {
+      // de-dup (logos repeat per leg) and join multi-carrier itineraries cleanly.
+      airline = [...new Set(alts)].join(', ');
+    } else {
+      for (const line of text.split('\n').map(s => s.trim()).filter(Boolean)) {
+        if (isJunk(line)) continue;
+        if (line.length >= 2 && line.length <= 40) { airline = line; break; }
+      }
     }
     out.push({price, airline, stops, duration_minutes: minutes});
   }
@@ -239,6 +316,66 @@ def _dismiss_consent(page):
             pass
 
 
+_MORE_SELECTORS = (
+    "button:has-text('View more flights')",
+    "button:has-text('Show more flights')",
+    "button:has-text('More flights')",
+    "[aria-label*='more flights' i]",
+)
+_ROW_COUNT_JS = ("() => document.querySelectorAll("
+                 "'li [aria-label*=\"trip total\" i]').length")
+
+
+def _install_blocker(ctx):
+    """Drop fare-irrelevant heavy requests (images/fonts/media/ads/analytics)."""
+    def _route(route):
+        req = route.request
+        try:
+            if _should_block(req.resource_type, req.url):
+                route.abort()
+                return
+        except Exception:
+            pass
+        try:
+            route.continue_()
+        except Exception:
+            pass
+    try:
+        ctx.route("**/*", _route)
+    except Exception:
+        pass
+
+
+def _is_blocked(page):
+    """True if Google served a sorry/unusual-traffic/captcha page, not fares."""
+    try:
+        if "/sorry/" in (page.url or ""):
+            return True
+        blob = (page.evaluate(
+            "() => ((document.title||'') + ' ' + "
+            "(document.body ? document.body.innerText.slice(0,1500) : '')"
+            ").toLowerCase()") or "")
+    except Exception:
+        return False
+    return any(s in blob for s in _BLOCK_SIGNS)
+
+
+def _wait_for_fares(page, timeout_ms=38000):
+    """Poll for fares; return 'ok' once they appear, 'blocked' on a block page,
+    or 'empty' on timeout -- exiting early either way instead of a fixed wait."""
+    deadline = time.monotonic() + timeout_ms / 1000.0
+    while time.monotonic() < deadline:
+        try:
+            if page.evaluate(_FARE_READY_JS):
+                return "ok"
+        except Exception:
+            pass
+        if _is_blocked(page):
+            return "blocked"
+        page.wait_for_timeout(600)
+    return "empty"
+
+
 def _load_full_list(page):
     """
     Expand the results so the WHOLE fare list is in the DOM, not just the top few.
@@ -247,35 +384,33 @@ def _load_full_list(page):
     stops growing (or we hit a sane cap), which is what turns one scrape into many
     offers.
     """
-    more_selectors = (
-        "button:has-text('View more flights')",
-        "button:has-text('Show more flights')",
-        "button:has-text('More flights')",
-        "[aria-label*='more flights' i]",
-    )
-    last = -1
-    for _ in range(12):  # hard cap so a runaway page can't hang the scrape
-        for sel in more_selectors:
+    last, stable = -1, 0
+    for _ in range(16):  # hard cap so a runaway page can't hang the scrape
+        for sel in _MORE_SELECTORS:
             try:
                 btn = page.query_selector(sel)
                 if btn and btn.is_visible():
                     btn.click()
-                    page.wait_for_timeout(1200)
+                    page.wait_for_timeout(400)
             except Exception:
                 pass
         try:
             page.evaluate("() => window.scrollBy(0, document.body.scrollHeight)")
         except Exception:
             pass
-        page.wait_for_timeout(800)
+        page.wait_for_timeout(450)
         try:
-            count = page.evaluate(
-                "() => document.querySelectorAll("
-                "'li [aria-label*=\"trip total\" i]').length")
+            count = page.evaluate(_ROW_COUNT_JS)
         except Exception:
             count = last
-        if count <= last:          # nothing new loaded -- we've got the full list
-            break
+        # Stop only after the row count holds steady for two polls -- that absorbs
+        # a slow lazy-load without paying the old fixed multi-second waits.
+        if count <= last:
+            stable += 1
+            if stable >= 2:
+                break
+        else:
+            stable = 0
         last = count
 
 
@@ -296,21 +431,17 @@ def _scrape(url, fingerprint=None, debug_tag=None):
             viewport={"width": vw, "height": vh},
             extra_http_headers={"Accept-Language": fp["lang"]},
         )
+        _install_blocker(ctx)
         ctx.add_init_script(_stealth_js(fp))
         page = ctx.new_page()
         try:
-            page.goto(url, wait_until="domcontentloaded", timeout=60000)
+            page.goto(url, wait_until="domcontentloaded", timeout=45000)
             _dismiss_consent(page)
-            # Wait until at least one fare row appears, or give up after a while.
-            try:
-                page.wait_for_function(
-                    "() => !!document.querySelector('[aria-label*=\"trip total\" i]')",
-                    timeout=45000)
-            except Exception:
-                pass
-            page.wait_for_timeout(1500)  # let the list settle
-            _load_full_list(page)        # expand to the whole results list
-            offers = page.evaluate(_EXTRACT_JS) or []
+            # Poll for fares: return the instant rows appear, bail fast on a block.
+            state = _wait_for_fares(page)
+            if state == "ok":
+                _load_full_list(page)    # expand to the whole results list
+                offers = page.evaluate(_EXTRACT_JS) or []
             if not offers and debug_tag:
                 _save_debug(page, debug_tag)
         finally:
@@ -360,10 +491,8 @@ def search_flight_offers(origin, destination, depart_date, return_date,
     cur = (currency or "NZD").upper()
     tag = f"{origin}-{destination}-{depart_date}"
 
-    # A fresh fingerprint per attempt; the last attempt also dumps debug on empty.
-    fps = random.sample(_FINGERPRINTS, k=min(retries, len(_FINGERPRINTS)))
-    while len(fps) < retries:
-        fps.append(random.choice(_FINGERPRINTS))
+    # A fresh fingerprint per attempt, alternating engine; last attempt dumps debug.
+    fps = _attempt_fingerprints(retries)
 
     raw = []
     last_err = None
@@ -427,37 +556,82 @@ async def _dismiss_consent_async(page):
             pass
 
 
+async def _install_blocker_async(ctx):
+    """Async twin of _install_blocker: abort fare-irrelevant heavy requests."""
+    async def _route(route):
+        req = route.request
+        try:
+            if _should_block(req.resource_type, req.url):
+                await route.abort()
+                return
+        except Exception:
+            pass
+        try:
+            await route.continue_()
+        except Exception:
+            pass
+    try:
+        await ctx.route("**/*", _route)
+    except Exception:
+        pass
+
+
+async def _is_blocked_async(page):
+    try:
+        if "/sorry/" in (page.url or ""):
+            return True
+        blob = (await page.evaluate(
+            "() => ((document.title||'') + ' ' + "
+            "(document.body ? document.body.innerText.slice(0,1500) : '')"
+            ").toLowerCase()") or "")
+    except Exception:
+        return False
+    return any(s in blob for s in _BLOCK_SIGNS)
+
+
+async def _wait_for_fares_async(page, timeout_ms=38000):
+    """Async twin of _wait_for_fares: early-exit poll for fares / block / timeout."""
+    loop = asyncio.get_event_loop()
+    deadline = loop.time() + timeout_ms / 1000.0
+    while loop.time() < deadline:
+        try:
+            if await page.evaluate(_FARE_READY_JS):
+                return "ok"
+        except Exception:
+            pass
+        if await _is_blocked_async(page):
+            return "blocked"
+        await page.wait_for_timeout(600)
+    return "empty"
+
+
 async def _load_full_list_async(page):
     """Async twin of _load_full_list: expand the whole results list into the DOM."""
-    more_selectors = (
-        "button:has-text('View more flights')",
-        "button:has-text('Show more flights')",
-        "button:has-text('More flights')",
-        "[aria-label*='more flights' i]",
-    )
-    last = -1
-    for _ in range(12):
-        for sel in more_selectors:
+    last, stable = -1, 0
+    for _ in range(16):
+        for sel in _MORE_SELECTORS:
             try:
                 btn = await page.query_selector(sel)
                 if btn and await btn.is_visible():
                     await btn.click()
-                    await page.wait_for_timeout(1200)
+                    await page.wait_for_timeout(400)
             except Exception:
                 pass
         try:
             await page.evaluate("() => window.scrollBy(0, document.body.scrollHeight)")
         except Exception:
             pass
-        await page.wait_for_timeout(800)
+        await page.wait_for_timeout(450)
         try:
-            count = await page.evaluate(
-                "() => document.querySelectorAll("
-                "'li [aria-label*=\"trip total\" i]').length")
+            count = await page.evaluate(_ROW_COUNT_JS)
         except Exception:
             count = last
         if count <= last:
-            break
+            stable += 1
+            if stable >= 2:
+                break
+        else:
+            stable = 0
         last = count
 
 
@@ -492,21 +666,17 @@ async def _scrape_async(browsers, url, fingerprint=None, debug_tag=None):
         viewport={"width": vw, "height": vh},
         extra_http_headers={"Accept-Language": fp["lang"]},
     )
+    await _install_blocker_async(ctx)
     await ctx.add_init_script(_stealth_js(fp))
     page = await ctx.new_page()
     offers = []
     try:
-        await page.goto(url, wait_until="domcontentloaded", timeout=60000)
+        await page.goto(url, wait_until="domcontentloaded", timeout=45000)
         await _dismiss_consent_async(page)
-        try:
-            await page.wait_for_function(
-                "() => !!document.querySelector('[aria-label*=\"trip total\" i]')",
-                timeout=45000)
-        except Exception:
-            pass
-        await page.wait_for_timeout(1500)
-        await _load_full_list_async(page)
-        offers = await page.evaluate(_EXTRACT_JS) or []
+        state = await _wait_for_fares_async(page)
+        if state == "ok":
+            await _load_full_list_async(page)
+            offers = await page.evaluate(_EXTRACT_JS) or []
         if not offers and debug_tag:
             await _save_debug_async(page, debug_tag)
     finally:
@@ -528,9 +698,7 @@ async def search_flight_offers_async(browsers, origin, destination, depart_date,
     cur = (currency or "NZD").upper()
     tag = f"{origin}-{destination}-{depart_date}"
 
-    fps = random.sample(_FINGERPRINTS, k=min(retries, len(_FINGERPRINTS)))
-    while len(fps) < retries:
-        fps.append(random.choice(_FINGERPRINTS))
+    fps = _attempt_fingerprints(retries)
 
     raw, last_err = [], None
     for attempt in range(max(retries, 1)):

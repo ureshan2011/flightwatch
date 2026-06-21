@@ -10,10 +10,13 @@ max_offers_per_search: 50   # store up to this many fares per itinerary per scan
 
 # Shared browsers (one per engine: Chromium + Firefox) run all itineraries;
 # `concurrency` caps how many scrape at once (one lightweight context each).
-# 4 concurrent "bots" run in parallel, each grabbing its own rotating
-# fingerprint+engine so Google sees a real Chrome/Firefox mix.
-concurrency: 4
-jitter_seconds: 6           # random 0-N s stagger before each scrape (less robotic)
+# Each context now blocks images/fonts/media/ads (see provider.py), so a page is
+# ~80% lighter and a bot finishes far quicker -- which lets us run MORE bots in
+# parallel on the same free runner without starving it into timeouts. Each still
+# grabs its own rotating fingerprint+engine so Google sees a real Chrome/Firefox
+# mix. Bumped 4 -> 6 to push throughput now that each scrape is cheaper.
+concurrency: 6
+jitter_seconds: 5           # random 0-N s stagger before each scrape (less robotic)
 
 # Rolling 3-month coverage. In ADDITION to the dense fixed itineraries below,
 # auto-generate a broad grid of departures across the next ~3 months for each
