@@ -19,6 +19,7 @@ In CI this is invoked by .github/workflows/daily-scan.yml.
 """
 
 import asyncio
+import hashlib
 import random
 import traceback
 from datetime import datetime, date, timedelta
@@ -33,44 +34,102 @@ def load_config():
         return yaml.safe_load(f)
 
 
-def expand_itineraries(cfg):
-    """Return the full itinerary list: the fixed ones plus an auto-generated grid.
+def _itin_key(it):
+    return (str(it["origin"]), str(it["destination"]),
+            str(it["depart_date"]), str(it["return_date"]))
 
-    The `auto_generate` block (if enabled) sweeps a rolling window of departures
-    across the next few months for each route, pairing every departure with one
-    return per configured trip length. Because it's computed relative to TODAY on
-    every run, the window always rolls forward -- so the dataset keeps covering
-    "the next ~3 months" instead of a frozen set of dates. Generated itineraries
-    that duplicate a fixed one are dropped.
+
+def generate_grid(cfg, existing_keys=None):
+    """Build ONLY the auto-generated itinerary grid (not the fixed ones).
+
+    The `auto_generate` block sweeps a rolling window of departures across the
+    next few months for each route, pairing every departure with every trip
+    length in a configured range. It's computed relative to TODAY on every run,
+    so the window always rolls forward -- the grid keeps covering "the next ~3
+    months" instead of a frozen set of dates. Itineraries whose key is already in
+    `existing_keys` (e.g. a fixed one) are skipped.
     """
-    itins = list(cfg.get("itineraries") or [])
     gen = cfg.get("auto_generate") or {}
     if not gen.get("enabled"):
-        return itins
+        return []
 
     horizon = int(gen.get("horizon_days", 90) or 90)
     min_out = int(gen.get("min_days_out", 7) or 0)
     step = max(int(gen.get("depart_step_days", 3) or 1), 1)
-    lengths = [int(x) for x in (gen.get("trip_lengths") or [21]) if int(x) > 0]
     routes = gen.get("routes") or []
 
-    seen = {(str(i["origin"]), str(i["destination"]),
-             str(i["depart_date"]), str(i["return_date"])) for i in itins}
+    # Trip lengths: either an explicit list, or a min..max range (inclusive) swept
+    # at `trip_length_step`. The range form is what lets us cover "20 to 40 days".
+    if gen.get("trip_lengths"):
+        lengths = [int(x) for x in gen["trip_lengths"] if int(x) > 0]
+    else:
+        lmin = int(gen.get("trip_length_min", 21) or 1)
+        lmax = int(gen.get("trip_length_max", lmin) or lmin)
+        lstep = max(int(gen.get("trip_length_step", 1) or 1), 1)
+        lengths = [n for n in range(lmin, lmax + 1, lstep) if n > 0]
+
+    seen = set(existing_keys or set())
     today = date.today()
+    out = []
     for route in routes:
         origin, dest = route["origin"], route["destination"]
         for offset in range(min_out, horizon + 1, step):
             dep = today + timedelta(days=offset)
             for length in lengths:
                 ret = dep + timedelta(days=length)
-                key = (str(origin), str(dest), dep.isoformat(), ret.isoformat())
+                it = {"origin": origin, "destination": dest,
+                      "depart_date": dep.isoformat(),
+                      "return_date": ret.isoformat()}
+                key = _itin_key(it)
                 if key in seen:
                     continue
                 seen.add(key)
-                itins.append({"origin": origin, "destination": dest,
-                              "depart_date": dep.isoformat(),
-                              "return_date": ret.isoformat()})
-    return itins
+                out.append(it)
+    return out
+
+
+def expand_itineraries(cfg):
+    """Full itinerary list: the fixed ones plus the ENTIRE generated grid."""
+    fixed = list(cfg.get("itineraries") or [])
+    keys = {_itin_key(i) for i in fixed}
+    return fixed + generate_grid(cfg, keys)
+
+
+def _shard_index(now, shards):
+    """Which shard this run owns, derived from the scan hour (0..shards-1).
+
+    With a 6-hourly cron there are 4 daily slots, so shards=4 maps each run to a
+    distinct quarter of the day. Manual/push-triggered runs at any hour still map
+    deterministically into one of the shards.
+    """
+    return (now.hour * shards) // 24 if shards > 1 else 0
+
+
+def _itin_shard(it, shards):
+    """Stable shard for an itinerary, so the SAME date/length lands in the same
+    daily slot every day -- which keeps its per-slot history a clean curve."""
+    h = int(hashlib.md5("|".join(_itin_key(it)).encode()).hexdigest(), 16)
+    return h % shards
+
+
+def select_itineraries(cfg, now):
+    """Itineraries to scrape THIS run.
+
+    The dense fixed itineraries are always scanned (tight intraday curves). The
+    big auto-generated grid is sharded across the day's scan slots, so each run
+    scrapes only ~1/shards of it and the whole grid is covered once per day --
+    keeping any single job well inside CI limits.
+    """
+    fixed = list(cfg.get("itineraries") or [])
+    keys = {_itin_key(i) for i in fixed}
+    grid = generate_grid(cfg, keys)
+
+    gen = cfg.get("auto_generate") or {}
+    shards = max(int(gen.get("shards", 4) or 1), 1)
+    if gen.get("shard_across_slots", True) and shards > 1 and grid:
+        idx = _shard_index(now, shards)
+        grid = [it for it in grid if _itin_shard(it, shards) == idx]
+    return fixed + grid
 
 
 def _base_row(it, cfg, now, scan_date, slot):
@@ -139,8 +198,17 @@ async def _collect_async(cfg, now, scan_date, slot, market):
 
     workers = max(int(cfg.get("concurrency", 3) or 1), 1)
     sem = asyncio.Semaphore(workers)
-    itineraries = expand_itineraries(cfg)
+    itineraries = select_itineraries(cfg, now)
     rows = []
+
+    gen = cfg.get("auto_generate") or {}
+    shards = max(int(gen.get("shards", 4) or 1), 1)
+    if gen.get("enabled") and gen.get("shard_across_slots", True) and shards > 1:
+        print(f"Scanning {len(itineraries)} itineraries this run "
+              f"(shard {_shard_index(now, shards) + 1}/{shards} of the rolling grid, "
+              f"plus fixed itineraries), {workers} concurrent bots.")
+    else:
+        print(f"Scanning {len(itineraries)} itineraries, {workers} concurrent bots.")
 
     headless = provider.headless_mode()
     async with async_playwright() as p:

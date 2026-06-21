@@ -24,11 +24,22 @@ jitter_seconds: 6           # random 0-N s stagger before each scrape (less robo
 auto_generate:
   enabled: true
   horizon_days: 90          # scan departures up to ~3 months out
-  min_days_out: 7           # skip departures sooner than a week away
-  depart_step_days: 3       # one departure every N days across the window
-  trip_lengths: [21, 30]    # for each departure, a return this many days later
+  min_days_out: 1           # start from tomorrow
+  depart_step_days: 1       # EVERY day in the window is a departure date
+  # Trip duration swept as a range: every length from 20 to 40 days inclusive.
+  trip_length_min: 20
+  trip_length_max: 40
+  trip_length_step: 1
   routes:
     - {origin: CHC, destination: CMB}
+  # Every-day x (20..40)-day sweep is ~1,900 itineraries -- far too many for one
+  # run. So the GENERATED grid is sharded across the day's scan slots: each
+  # 6-hourly run scrapes one shard (~1/4), and across the day every date/length
+  # is covered exactly once. The dense fixed `itineraries:` above are NOT sharded
+  # -- they're scanned every run for tight intraday curves. Set shards = number
+  # of daily cron slots (cron is every 6h -> 4 slots).
+  shard_across_slots: true
+  shards: 4
 
 # Cadence is set by the workflow cron (currently every 6h -> 4 intraday slots a
 # day). Rows are stamped with an hourly scan_slot, so slots accumulate instead of
