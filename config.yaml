@@ -8,11 +8,38 @@ market: nz                  # Google Flights region (gl=) -- match the route's c
 adults: 1
 max_offers_per_search: 50   # store up to this many fares per itinerary per scan (0 = all)
 
-# A single shared Chromium runs all itineraries; `concurrency` caps how many
-# scrape at once (one lightweight context each). The async, shared-browser path
-# is cheap, so this can go higher than the old browser-per-scrape model.
-concurrency: 5
+# Shared browsers (one per engine: Chromium + Firefox) run all itineraries;
+# `concurrency` caps how many scrape at once (one lightweight context each).
+# 4 concurrent "bots" run in parallel, each grabbing its own rotating
+# fingerprint+engine so Google sees a real Chrome/Firefox mix.
+concurrency: 4
 jitter_seconds: 6           # random 0-N s stagger before each scrape (less robotic)
+
+# Rolling 3-month coverage. In ADDITION to the dense fixed itineraries below,
+# auto-generate a broad grid of departures across the next ~3 months for each
+# route, so the dataset captures the whole booking landscape rather than a handful
+# of dates. It's recomputed relative to TODAY every run, so the window always
+# rolls forward and stays "the next 3 months". Generated dates that duplicate a
+# fixed itinerary are dropped.
+auto_generate:
+  enabled: true
+  horizon_days: 90          # scan departures up to ~3 months out
+  min_days_out: 1           # start from tomorrow
+  depart_step_days: 1       # EVERY day in the window is a departure date
+  # Trip duration swept as a range: every length from 20 to 40 days inclusive.
+  trip_length_min: 20
+  trip_length_max: 40
+  trip_length_step: 1
+  routes:
+    - {origin: CHC, destination: CMB}
+  # Every-day x (20..40)-day sweep is ~1,900 itineraries -- far too many for one
+  # run. So the GENERATED grid is sharded across the day's scan slots: each
+  # 6-hourly run scrapes one shard (~1/4), and across the day every date/length
+  # is covered exactly once. The dense fixed `itineraries:` above are NOT sharded
+  # -- they're scanned every run for tight intraday curves. Set shards = number
+  # of daily cron slots (cron is every 6h -> 4 slots).
+  shard_across_slots: true
+  shards: 4
 
 # Cadence is set by the workflow cron (currently every 6h -> 4 intraday slots a
 # day). Rows are stamped with an hourly scan_slot, so slots accumulate instead of

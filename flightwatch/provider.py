@@ -13,11 +13,12 @@ Why a browser and not an HTTP client?
 How it scrapes at volume without getting blocked:
   1. `fast_flights` builds Google's `?tfs=` Protobuf query (origin/dest/dates/seat),
      which is the hard part of forming a valid Google Flights URL.
-  2. Each scrape picks a different *browser fingerprint* (user-agent + platform +
-     viewport + language + timezone) from a rotating pool, plus anti-automation
-     launch flags and a stealth init script. Rotating the "browser tag" is what
-     stops Google soft-blocking us into empty `no_results` pages, so most scrapes
-     now return a full list instead of nothing.
+  2. Each scrape picks a different *browser fingerprint* from a rotating pool --
+     and crucially across two REAL engines, Chromium (Chrome/Edge) and Firefox
+     (Gecko), not just different UA strings on one engine -- plus anti-automation
+     launch flags/prefs and a stealth init script. Rotating a genuinely diverse
+     browser mix is what stops Google soft-blocking us into empty `no_results`
+     pages, so most scrapes now return a full list instead of nothing.
   3. After the first fare rows appear we scroll and click "View more flights" to
      pull the WHOLE results list out of the DOM -- not just the top "Best" few --
      so a single scrape yields many offers (massive data, free tier).
@@ -47,42 +48,98 @@ DEBUG_DIR = os.path.join(ROOT_DIR, "debug")
 
 # A pool of realistic desktop browser fingerprints. Each scrape picks one (and a
 # retry picks a *different* one), so Google sees varied "browser tags" instead of
-# the same headless Chromium tell every time -- the key to not getting blocked.
-# We stay on Chromium-consistent UAs (Chrome/Edge across OSes) so the client hints
-# Google reads don't contradict the user-agent string.
+# the same headless tell every time -- the key to not getting blocked.
+#
+# We deliberately mix TWO real engines -- Chromium (Chrome/Edge) and Firefox
+# (Gecko) -- not just different UA strings on the same engine. A spoofed UA alone
+# is shallow: the JS engine, TLS handshake and feature detection still betray the
+# real engine. Driving an actual Firefox for the Gecko fingerprints means those
+# deeper tells line up with the UA, so Google sees a genuinely diverse browser mix.
+# Each fingerprint declares which `engine` Playwright should launch for it.
 _FINGERPRINTS = [
-    {"ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+    # --- Chromium-family (Chrome / Edge) -------------------------------------
+    {"engine": "chromium",
+     "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
            "(KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36",
      "platform": "MacIntel", "viewport": (1440, 900),
      "locale": "en-US", "tz": "Pacific/Auckland", "lang": "en-US,en;q=0.9"},
-    {"ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    {"engine": "chromium",
+     "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
            "(KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36",
      "platform": "Win32", "viewport": (1536, 864),
      "locale": "en-US", "tz": "Pacific/Auckland", "lang": "en-US,en;q=0.9"},
-    {"ua": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+    {"engine": "chromium",
+     "ua": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
            "(KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36",
      "platform": "Linux x86_64", "viewport": (1366, 768),
      "locale": "en-NZ", "tz": "Pacific/Auckland", "lang": "en-NZ,en;q=0.9"},
-    {"ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    {"engine": "chromium",
+     "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
            "(KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36 Edg/144.0.0.0",
      "platform": "Win32", "viewport": (1600, 900),
      "locale": "en-GB", "tz": "Europe/London", "lang": "en-GB,en;q=0.9"},
-    {"ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
-           "(KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36",
-     "platform": "MacIntel", "viewport": (1512, 982),
-     "locale": "en-AU", "tz": "Australia/Sydney", "lang": "en-AU,en;q=0.9"},
-    {"ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-           "(KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+    # --- Firefox-family (Gecko) ----------------------------------------------
+    {"engine": "firefox",
+     "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:139.0) "
+           "Gecko/20100101 Firefox/139.0",
      "platform": "Win32", "viewport": (1920, 1080),
-     "locale": "en-US", "tz": "America/New_York", "lang": "en-US,en;q=0.9"},
+     "locale": "en-US", "tz": "America/New_York", "lang": "en-US,en;q=0.5"},
+    {"engine": "firefox",
+     "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:138.0) "
+           "Gecko/20100101 Firefox/138.0",
+     "platform": "MacIntel", "viewport": (1512, 982),
+     "locale": "en-AU", "tz": "Australia/Sydney", "lang": "en-AU,en;q=0.5"},
+    {"engine": "firefox",
+     "ua": "Mozilla/5.0 (X11; Linux x86_64; rv:139.0) "
+           "Gecko/20100101 Firefox/139.0",
+     "platform": "Linux x86_64", "viewport": (1680, 1050),
+     "locale": "en-NZ", "tz": "Pacific/Auckland", "lang": "en-NZ,en;q=0.5"},
 ]
 
-# Launch flags that strip the most obvious automation tells.
-_LAUNCH_ARGS = [
+# Chromium launch flags that strip the most obvious automation tells. Firefox
+# rejects these CLI flags, so it gets its own (empty) arg list plus user prefs.
+_CHROMIUM_ARGS = [
     "--no-sandbox",
     "--disable-blink-features=AutomationControlled",
     "--disable-dev-shm-usage",
 ]
+# Backwards-compatible alias: older callers (and the collector) reference this.
+_LAUNCH_ARGS = _CHROMIUM_ARGS
+
+# Firefox prefs that hide the automation tells Gecko exposes (the navigator
+# .webdriver flag and Marionette's automation extension).
+_FIREFOX_PREFS = {
+    "dom.webdriver.enabled": False,
+    "useAutomationExtension": False,
+    "media.peerconnection.enabled": False,
+}
+
+# Engines we know how to launch. Defaults to chromium for any fingerprint that
+# predates the `engine` key.
+_ENGINES = ("chromium", "firefox")
+
+
+def _engine_of(fp) -> str:
+    eng = (fp or {}).get("engine", "chromium")
+    return eng if eng in _ENGINES else "chromium"
+
+
+def _launch_kwargs(engine, headless):
+    """Per-engine launch arguments for Playwright's `*.launch(...)`."""
+    if engine == "firefox":
+        return {"headless": headless, "firefox_user_prefs": dict(_FIREFOX_PREFS)}
+    return {"headless": headless, "args": list(_CHROMIUM_ARGS)}
+
+
+def engines_in_use(fingerprints=None) -> list:
+    """Distinct engines referenced by the fingerprint pool (for shared launch)."""
+    pool = fingerprints if fingerprints is not None else _FINGERPRINTS
+    seen = []
+    for fp in pool:
+        eng = _engine_of(fp)
+        if eng not in seen:
+            seen.append(eng)
+    return seen
 
 
 def headless_mode() -> bool:
@@ -91,15 +148,22 @@ def headless_mode() -> bool:
 
 
 def _stealth_js(fp):
-    """Per-context init script: hide webdriver and match navigator to the fingerprint."""
-    langs = "['" + "','".join(fp["lang"].split(",")[0:2]).replace(";q=0.9", "") + "']"
-    return (
+    """Per-context init script: hide webdriver and match navigator to the fingerprint.
+
+    Engine-aware: the `window.chrome` shim is a Chrome-only object, so injecting
+    it under a Firefox fingerprint would itself be a tell -- we skip it there.
+    """
+    langs = "['" + "','".join(fp["lang"].split(",")[0:2]).replace(";q=0.5", "")\
+        .replace(";q=0.9", "") + "']"
+    js = (
         "Object.defineProperty(navigator,'webdriver',{get:()=>undefined});"
         f"Object.defineProperty(navigator,'platform',{{get:()=>'{fp['platform']}'}});"
         f"Object.defineProperty(navigator,'languages',{{get:()=>{langs}}});"
         "Object.defineProperty(navigator,'plugins',{get:()=>[1,2,3,4,5]});"
-        "window.chrome = window.chrome || {runtime:{}};"
     )
+    if _engine_of(fp) == "chromium":
+        js += "window.chrome = window.chrome || {runtime:{}};"
+    return js
 
 
 # JS run inside the page to pull fare rows out of the DOM. Returns a list of
@@ -221,10 +285,12 @@ def _scrape(url, fingerprint=None, debug_tag=None):
 
     fp = fingerprint or random.choice(_FINGERPRINTS)
     headless = os.environ.get("FLIGHTWATCH_HEADFUL", "") != "1"
+    engine = _engine_of(fp)
     vw, vh = fp["viewport"]
     offers = []
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=headless, args=_LAUNCH_ARGS)
+        launcher = getattr(p, engine)
+        browser = launcher.launch(**_launch_kwargs(engine, headless))
         ctx = browser.new_context(
             user_agent=fp["ua"], locale=fp["locale"], timezone_id=fp["tz"],
             viewport={"width": vw, "height": vh},
@@ -406,9 +472,20 @@ async def _save_debug_async(page, tag):
         pass
 
 
-async def _scrape_async(browser, url, fingerprint=None, debug_tag=None):
-    """Open one URL in a fresh context on the SHARED browser; return raw offers."""
+def _pick_browser(browsers, fp):
+    """Pick the shared browser matching this fingerprint's engine.
+
+    `browsers` is an engine->browser dict (e.g. {"chromium": ..., "firefox": ...}).
+    Falls back to any available browser if the exact engine wasn't launched.
+    """
+    eng = _engine_of(fp)
+    return browsers.get(eng) or next(iter(browsers.values()))
+
+
+async def _scrape_async(browsers, url, fingerprint=None, debug_tag=None):
+    """Open one URL in a fresh context on the matching SHARED browser; return offers."""
     fp = fingerprint or random.choice(_FINGERPRINTS)
+    browser = _pick_browser(browsers, fp)
     vw, vh = fp["viewport"]
     ctx = await browser.new_context(
         user_agent=fp["ua"], locale=fp["locale"], timezone_id=fp["tz"],
@@ -437,13 +514,14 @@ async def _scrape_async(browser, url, fingerprint=None, debug_tag=None):
     return offers
 
 
-async def search_flight_offers_async(browser, origin, destination, depart_date,
+async def search_flight_offers_async(browsers, origin, destination, depart_date,
                                      return_date, adults=1, currency="NZD",
                                      max_offers=50, market="nz", retries=3):
-    """Async twin of search_flight_offers that reuses a shared browser.
+    """Async twin of search_flight_offers that reuses shared browsers.
 
-    Returns the same normalised offer dicts. Each retry uses a different
-    fingerprint so a soft-block on one browser tag doesn't poison the rest.
+    `browsers` is an engine->browser dict; each retry picks a different
+    fingerprint (and therefore possibly a different engine), so a soft-block on
+    one browser tag doesn't poison the rest.
     """
     url = _build_url(origin, destination, depart_date, return_date,
                      adults, currency, market)
@@ -457,7 +535,7 @@ async def search_flight_offers_async(browser, origin, destination, depart_date,
     raw, last_err = [], None
     for attempt in range(max(retries, 1)):
         try:
-            raw = await _scrape_async(browser, url, fingerprint=fps[attempt],
+            raw = await _scrape_async(browsers, url, fingerprint=fps[attempt],
                                       debug_tag=tag if attempt == retries - 1 else None)
             if raw:
                 break
