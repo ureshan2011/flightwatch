@@ -204,6 +204,65 @@ def _latest_offers(ok, per_itin=10):
     return out
 
 
+def _explore(ok, cap=2000):
+    """Flat, filterable list of bookable trip options for the trip finder + fare
+    calendar.
+
+    Unlike `_insights` / `_latest_offers` (which only surface the dense fixed
+    itineraries), this spans the WHOLE rolling grid -- every departure date x
+    trip length we have ever scraped -- using each itinerary's freshest scan.
+    That is what lets the client filter by date range, trip length, price,
+    stops and airline, and paint a cheapest-fare-by-day calendar entirely
+    client-side. Kept to small per-row dicts (and capped) so the embedded JSON
+    stays light even as the grid grows.
+    """
+    out = []
+    for itin, h in ok.groupby("itin"):
+        day = h[h["scan_date"] == h["scan_date"].max()]
+        prices = day["price"].astype(float)
+        if prices.empty:
+            continue
+        cheap = day.loc[prices.idxmin()]
+        durs = day["duration_minutes"].dropna()
+        durs = durs[durs > 0]
+        stops_s = day["stops"].dropna().astype(int)
+        air = clean_airline(getattr(cheap, "airline", cheap["airline"]))
+        out.append({
+            "o": str(cheap["origin"]), "d": str(cheap["destination"]),
+            "dep": str(cheap["depart_date"]), "ret": str(cheap["return_date"]),
+            "len": (int(cheap["trip_length"]) if pd.notna(cheap["trip_length"]) else None),
+            "min": round(float(prices.min())),
+            "airline": air, "iata": airline_iata(air),
+            "stops": (int(stops_s.min()) if not stops_s.empty else None),
+            "nonstop": bool((stops_s == 0).any()) if not stops_s.empty else False,
+            "fastest": int(durs.min()) if not durs.empty else 0,
+            "offers": int(len(day)),
+            "dtd": (int(day["days_to_departure"].dropna().iloc[0])
+                    if day["days_to_departure"].notna().any() else None),
+        })
+    out.sort(key=lambda r: (r["dep"], r["len"] or 0))
+    return out[:cap]
+
+
+def _explore_meta(explore):
+    """Bounds + option lists that seed the trip-finder's filter controls."""
+    if not explore:
+        return {}
+    prices = [e["min"] for e in explore]
+    lens = [e["len"] for e in explore if e["len"]]
+    return {
+        "count": len(explore),
+        "price_min": min(prices), "price_max": max(prices),
+        "dep_min": min(e["dep"] for e in explore),
+        "dep_max": max(e["dep"] for e in explore),
+        "len_min": min(lens) if lens else None,
+        "len_max": max(lens) if lens else None,
+        "airlines": sorted({e["airline"] for e in explore if e["airline"]}),
+        "routes": sorted({e["o"] + "-" + e["d"] for e in explore}),
+        "nonstop_any": any(e["nonstop"] for e in explore),
+    }
+
+
 def _airline_market(ok):
     """Across every route's latest scan: each airline's reach and best fare."""
     latest_day = ok["scan_date"].max()
@@ -319,6 +378,7 @@ def build():
     ai = analytics.build(df, recs, bundle) if not df.empty and (df["status"] == "ok").any() else None
 
     history, insights, latest_offers, airline_market = {}, [], {}, []
+    explore, explore_meta = [], {}
     stats = {"scans": 0, "total_offers": 0, "routes": 0, "airlines": 0,
              "avg_price": None, "fastest": None, "cheapest_ever": None}
     cities, primary = {}, None
@@ -352,6 +412,8 @@ def build():
         insights = _insights(ok)
         latest_offers = _latest_offers(ok)
         airline_market = _airline_market(ok)
+        explore = _explore(ok)
+        explore_meta = _explore_meta(explore)
 
         cheap_idx = ok["price"].astype(float).idxmin()
         cheap = ok.loc[cheap_idx]
@@ -380,6 +442,8 @@ def build():
         "insights": insights,
         "latest_offers": latest_offers,
         "airline_market": airline_market,
+        "explore": explore,
+        "explore_meta": explore_meta,
         "stats": stats,
         "cities": cities,
         "primary": primary,
@@ -700,6 +764,76 @@ tr.best td{background:var(--buy-bg)}
 .ops-routes{margin-top:14px;font-size:12px;color:var(--muted);display:flex;gap:6px;flex-wrap:wrap;align-items:center}
 .ops-routes .rt{background:#eef2fa;border:1px solid var(--line);border-radius:20px;padding:3px 10px;font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:var(--muted)}
 @media(max-width:560px){.ops-sub{margin-left:0;width:100%}}
+
+/* ---- trip finder (filters + fare calendar) ---- */
+.finder{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:20px 22px;margin-top:16px}
+.filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px}
+.fld{display:flex;flex-direction:column;gap:6px}
+.fld label{font-size:10.5px;text-transform:uppercase;letter-spacing:.1em;color:var(--dim);font-weight:600}
+.fld input,.fld select{font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--ink);background:#f7faff;
+  border:1px solid var(--line2);border-radius:11px;padding:9px 11px;width:100%;transition:.15s}
+.fld input:focus,.fld select:focus{outline:none;border-color:var(--brand);box-shadow:0 0 0 3px rgba(59,110,245,.12);background:#fff}
+.fld.range{gap:8px}
+.fld .rangeval{font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--brand);font-weight:600}
+.fld input[type=range]{padding:0;accent-color:var(--brand);background:transparent;border:0}
+.seg-ctrl{display:flex;background:#eef2fa;border:1px solid var(--line2);border-radius:11px;padding:3px;gap:2px}
+.seg-ctrl button{flex:1;border:0;background:transparent;font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--muted);
+  padding:6px 4px;border-radius:8px;cursor:pointer;transition:.15s;white-space:nowrap}
+.seg-ctrl button.on{background:#fff;color:var(--brand);box-shadow:var(--shadow);font-weight:600}
+.finder-bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:16px;padding-top:14px;border-top:1px solid var(--line)}
+.finder-bar .count{font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--ink);font-weight:600}
+.finder-bar .count b{color:var(--brand)}
+.finder-bar .reset{margin-left:auto;font-size:12px;color:var(--muted);background:none;border:0;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+.finder-bar .reset:hover{color:var(--brand)}
+.viewtoggle{display:flex;background:#eef2fa;border:1px solid var(--line2);border-radius:10px;padding:3px;gap:2px}
+.viewtoggle button{border:0;background:transparent;font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--muted);padding:5px 12px;border-radius:7px;cursor:pointer}
+.viewtoggle button.on{background:#fff;color:var(--brand);box-shadow:var(--shadow);font-weight:600}
+
+/* calendar */
+.cal-wrap{margin-top:16px}
+.cal-legend{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--muted);margin-bottom:10px;flex-wrap:wrap}
+.cal-legend .scale{display:flex;height:9px;width:120px;border-radius:5px;overflow:hidden}
+.cal-legend .scale i{flex:1}
+.cal-months{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:18px}
+.cal-month .mlabel{font-weight:700;font-size:14px;margin-bottom:9px}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:5px}
+.cal-grid .dow{font-size:9.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--dim);text-align:center;font-family:'IBM Plex Mono',monospace;padding-bottom:2px}
+.cal-cell{aspect-ratio:1;border-radius:9px;border:1px solid var(--line);display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:2px;cursor:default;position:relative;transition:transform .12s,box-shadow .12s}
+.cal-cell .dnum{font-size:10px;color:var(--dim);font-family:'IBM Plex Mono',monospace;line-height:1}
+.cal-cell .cp{font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;line-height:1.1;margin-top:2px}
+.cal-cell.has{cursor:pointer;color:#0d2a4d}
+.cal-cell.has:hover{transform:translateY(-2px);box-shadow:var(--shadow);z-index:2}
+.cal-cell.empty{background:#f4f7fc;opacity:.55}
+.cal-cell.blank{border:0;background:transparent}
+.cal-cell.sel{outline:2px solid var(--brand);outline-offset:1px;box-shadow:0 6px 16px -6px rgba(59,110,245,.6)}
+.cal-cell.cheapest:after{content:"★";position:absolute;top:2px;right:4px;font-size:9px;color:var(--buy)}
+
+/* trip result cards */
+.trips{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:14px;margin-top:16px}
+.trip{background:#fff;border:1px solid var(--line);border-radius:16px;padding:15px 16px;box-shadow:var(--shadow);
+  display:flex;flex-direction:column;gap:9px;transition:transform .2s,box-shadow .2s}
+.trip:hover{transform:translateY(-3px);box-shadow:var(--shadow-lg)}
+.trip .th{display:flex;align-items:center;gap:10px}
+.trip .rt{font-weight:700;font-size:14px;letter-spacing:-.2px}
+.trip .pr{margin-left:auto;font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:17px;letter-spacing:-.5px}
+.trip .dt{font-size:12px;color:var(--muted);font-family:'IBM Plex Mono',monospace}
+.trip .mt{display:flex;gap:6px;flex-wrap:wrap}
+.trip .mt span{font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--muted);background:#eef3fd;border-radius:7px;padding:2px 7px}
+.trip .mt span.ns{background:var(--buy-bg);color:var(--buy)}
+.trip .go{display:flex;align-items:center;gap:10px;margin-top:2px}
+.trip .go .btnbook{padding:8px 13px;font-size:12px}
+.trip .go .cmp{font-size:11px;color:var(--dim)}
+.trip .go .cmp a{color:var(--muted);text-decoration:underline;text-underline-offset:2px}
+.finder-empty{text-align:center;color:var(--muted);padding:34px 20px;font-size:13.5px}
+.morebtn{display:block;margin:16px auto 2px;background:#fff;border:1px solid var(--line2);border-radius:11px;
+  padding:9px 18px;font-family:'IBM Plex Mono',monospace;font-size:12.5px;color:var(--brand);cursor:pointer;box-shadow:var(--shadow)}
+.morebtn:hover{box-shadow:var(--shadow-lg)}
+/* book link inside fare tables */
+td .bookrow{display:inline-flex;align-items:center;gap:5px;font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:var(--brand);white-space:nowrap}
+td .bookrow svg{width:12px;height:12px;stroke:var(--brand);fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+td .bookrow:hover{text-decoration:underline}
+@media(max-width:560px){.cal-months{grid-template-columns:1fr}}
 </style></head><body>
 
 <div class="aurora"><span class="blob b1"></span><span class="blob b2"></span></div>
@@ -707,7 +841,7 @@ tr.best td{background:var(--buy-bg)}
 <nav class="nav"><div class="row">
   <div class="brand"><span class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2"
     stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v3M9 8h6l1.5 11h-9L9 8zM7.5 19h9M10 8l.5-3h3l.5 3"/></svg></span>Faro</div>
-  <div class="links"><a href="#status">Status</a><a href="#deals">Deals</a><a href="#trend">Trends</a><a href="#insights">Insights</a><a href="#fares">Fares</a></div>
+  <div class="links"><a href="#status">Status</a><a href="#deals">Deals</a><a href="#finder">Find a trip</a><a href="#trend">Trends</a><a href="#insights">Insights</a><a href="#fares">Fares</a></div>
   <div class="ctx"><span class="pulse"></span><span id="clock">live</span><span id="navwx"></span></div>
 </div></nav>
 
@@ -788,6 +922,10 @@ function bookBar(itin){const L=bookLinks(itin);if(!L)return '';
   return '<div class="booklinks">'+bookBtn(itin,'Book on Google Flights')+
     '<span class="altbook">or compare on <a href="'+L.kayak+'" target="_blank" rel="noopener nofollow">Kayak</a> · '+
     '<a href="'+L.sky+'" target="_blank" rel="noopener nofollow">Skyscanner</a></span></div>';}
+/* compact inline "Book ↗" link for table rows / cards -- every fare we show
+   gets a direct, deep-linked way to open it on Google Flights. */
+function bookRowLink(itin,label){const L=bookLinks(itin);if(!L)return '';
+  return '<a class="bookrow" href="'+L.google+'" target="_blank" rel="noopener nofollow">'+_EXT+esc(label||'Book')+'</a>';}
 
 /* ---- clocks ---- */
 const dest=(D.primary&&D.primary.dest)||null, orig=(D.primary&&D.primary.origin)||null;
@@ -1005,7 +1143,10 @@ if(!D.recs.length){
         '<div class="conf"><div class="lab"><span>confidence</span><span>'+conf+'%</span></div><div class="bar"><i data-w="'+conf+'"></i></div></div>'+
         '<div class="tags">'+tags.map(t=>'<span class="tag'+(t[1]?' b':'')+'">'+esc(t[0])+'</span>').join('')+'</div></div>'+
       '<canvas class="spark" id="spark'+i+'"></canvas>'+
-      '<div class="pricebox"><div class="price">'+fmt(r.price)+'</div><div class="pricelbl">low '+fmt(r.trailing_min)+' · '+r.points+' pts</div></div></div>');});
+      '<div class="pricebox"><div class="price">'+fmt(r.price)+'</div><div class="pricelbl">low '+fmt(r.trailing_min)+' · '+r.points+' pts</div>'+
+        '<div style="margin-top:8px">'+bookRowLink(r.itinerary,'Book ↗')+'</div></div></div>');});
+
+  buildFinder();
 
   add('<div class="section reveal" id="trend"><h2>Price trends &amp; airlines</h2></div>'+
     '<div class="grid2"><div class="panel reveal"><h3>Cheapest fare over time</h3><div class="ph">one cheapest-per-day point per route</div>'+
@@ -1073,7 +1214,8 @@ if(!D.recs.length){
         '<div class="stopkey"><span><i class="swatch" style="background:#12b07c"></i>'+sb.nonstop+' nonstop</span>'+
           '<span><i class="swatch" style="background:#3b6ef5"></i>'+sb.one+' · 1 stop</span>'+
           '<span><i class="swatch" style="background:#e8902a"></i>'+sb.two_plus+' · 2+ stops</span></div>'+
-        '<div class="alist">'+alist+'</div></div>';});
+        '<div class="alist">'+alist+'</div>'+
+        '<div style="margin-top:14px">'+bookRowLink(r.itinerary,'Book this trip ↗')+'</div></div>';});
     add(h+'</div>');}
 
   if(D.latest_offers&&Object.keys(D.latest_offers).length){
@@ -1082,13 +1224,162 @@ if(!D.recs.length){
       const pi=parseItin(itin),best=Math.min.apply(null,rows.map(o=>o.price));
       let t='<details class="reveal"><summary><span>'+esc(pi.title)+' · '+esc(pi.dates)+'</span><span class="pill">'+rows.length+' offers · from '+fmt(best)+'</span></summary>'+
         bookBar(itin)+
-        '<table><thead><tr><th>Airline</th><th>Stops</th><th>Flight time</th><th class="num">Price</th></tr></thead><tbody>';
+        '<table><thead><tr><th>Airline</th><th>Stops</th><th>Flight time</th><th class="num">Price</th><th></th></tr></thead><tbody>';
       rows.forEach(o=>{const isb=o.price===best;
         t+='<tr class="'+(isb?'best':'')+'"><td><span class="airline">'+avatar(o.airline,o.iata,24)+
           (esc(o.airline)||'<span style="color:var(--dim)">—</span>')+(isb?'<span class="cheapest">CHEAPEST</span>':'')+'</span></td>'+
           '<td><span class="chip'+(o.stops===0?' ns':'')+'">'+stops(o.stops)+'</span></td>'+
-          '<td class="mono">'+dur(o.duration)+'</td><td class="num">'+fmt(o.price)+'</td></tr>';});
+          '<td class="mono">'+dur(o.duration)+'</td><td class="num">'+fmt(o.price)+'</td>'+
+          '<td class="num">'+bookRowLink(itin,'Book ↗')+'</td></tr>';});
       add(t+'</tbody></table></details>');});}
+}
+
+/* ===== trip finder: filters + fare calendar =====
+   All client-side over the embedded D.explore grid (every departure date x trip
+   length we have scraped), so a visitor can narrow by dates / length / price /
+   stops / airline, see the cheapest fare painted on a calendar, and deep-link
+   straight to the booking page for any option. */
+function buildFinder(){
+  const EX=D.explore||[], EXM=D.explore_meta||{};
+  if(!EX.length)return;
+  const lmin=EXM.len_min, lmax=EXM.len_max, hasLen=(lmin!=null&&lmax!=null&&lmax>lmin);
+  const F={depFrom:EXM.dep_min,depTo:EXM.dep_max,lenMin:lmin,lenMax:lmax,
+           maxPrice:EXM.price_max,stops:'any',airline:'',route:'',sort:'price',day:'',view:'cal'};
+  let lim=24;
+  const $=id=>document.getElementById(id);
+  const cn=c=>(D.cities&&D.cities[c])||c;
+
+  const exDate=s=>{const m=(s||'').match(/(\d{4})-(\d{2})-(\d{2})/);return m?new Date(+m[1],+m[2]-1,+m[3]):null;};
+  const exFmt=s=>{const d=exDate(s);return d?d.getDate()+' '+MM[d.getMonth()]:s;};
+  const kprice=n=>n>=1000?(n/1000).toFixed(n>=10000?0:1).replace(/\.0$/,'')+'k':String(Math.round(n));
+  const itinOf=e=>e.o+'-'+e.d+' '+e.dep+' -> '+e.ret;
+
+  function match(e,ignoreDay){
+    if(F.depFrom&&e.dep<F.depFrom)return false;
+    if(F.depTo&&e.dep>F.depTo)return false;
+    if(F.lenMin!=null&&(e.len==null||e.len<F.lenMin))return false;
+    if(F.lenMax!=null&&(e.len==null||e.len>F.lenMax))return false;
+    if(F.maxPrice!=null&&e.min>F.maxPrice)return false;
+    if(F.stops==='nonstop'&&!e.nonstop)return false;
+    if(F.stops==='1'&&(e.stops==null||e.stops>1))return false;
+    if(F.airline&&e.airline!==F.airline)return false;
+    if(F.route&&(e.o+'-'+e.d)!==F.route)return false;
+    if(!ignoreDay&&F.day&&e.dep!==F.day)return false;
+    return true;
+  }
+  const SORT={price:(a,b)=>a.min-b.min,
+    date:(a,b)=>a.dep<b.dep?-1:a.dep>b.dep?1:(a.len||0)-(b.len||0),
+    length:(a,b)=>(a.len||0)-(b.len||0),
+    fast:(a,b)=>(a.fastest||1e9)-(b.fastest||1e9)};
+  const heat=(p,lo,hi)=>{if(hi<=lo)return 'hsl(150 62% 90%)';
+    const t=Math.max(0,Math.min(1,(p-lo)/(hi-lo)));return 'hsl('+(132-(132-6)*t).toFixed(0)+' 72% '+(91-t*16).toFixed(0)+'%)';};
+
+  function buildCalendar(){
+    const cal=$('cal');if(!cal)return;
+    const list=EX.filter(e=>match(e,true)),perDay={};
+    list.forEach(e=>{const c=perDay[e.dep];if(!c){perDay[e.dep]={min:e.min,n:1};}else{c.n++;if(e.min<c.min)c.min=e.min;}});
+    const days=Object.keys(perDay);
+    if(!days.length){cal.innerHTML='<div class="finder-empty">No departure days match these filters.</div>';return;}
+    const ps=days.map(d=>perDay[d].min),lo=Math.min.apply(null,ps),hi=Math.max.apply(null,ps);
+    const cheapDay=days.reduce((a,b)=>perDay[b].min<perDay[a].min?b:a);
+    const sorted=days.map(exDate).sort((a,b)=>a-b);
+    let cur=new Date(sorted[0].getFullYear(),sorted[0].getMonth(),1);
+    const end=new Date(sorted[sorted.length-1].getFullYear(),sorted[sorted.length-1].getMonth(),1);
+    const DH=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];let html='';
+    while(cur<=end){const y=cur.getFullYear(),mo=cur.getMonth();
+      html+='<div class="cal-month"><div class="mlabel">'+MM[mo]+' '+y+'</div><div class="cal-grid">'+
+        DH.map(d=>'<div class="dow">'+d+'</div>').join('');
+      const lead=(new Date(y,mo,1).getDay()+6)%7;
+      for(let i=0;i<lead;i++)html+='<div class="cal-cell blank"></div>';
+      const dim=new Date(y,mo+1,0).getDate();
+      for(let dd=1;dd<=dim;dd++){const iso=y+'-'+String(mo+1).padStart(2,'0')+'-'+String(dd).padStart(2,'0'),rec=perDay[iso];
+        if(!rec){html+='<div class="cal-cell empty"><span class="dnum">'+dd+'</span></div>';continue;}
+        html+='<div class="cal-cell has'+(F.day===iso?' sel':'')+(iso===cheapDay?' cheapest':'')+'" data-day="'+iso+'" '+
+          'style="background:'+heat(rec.min,lo,hi)+'" title="'+rec.n+' trips · from '+fmt(rec.min)+'">'+
+          '<span class="dnum">'+dd+'</span><span class="cp">'+kprice(rec.min)+'</span></div>';}
+      html+='</div></div>';cur=new Date(y,mo+1,1);}
+    cal.innerHTML='<div class="cal-legend">Cheapest fare by departure day · <span>'+fmt(lo)+'</span>'+
+      '<span class="scale"><i style="background:'+heat(lo,lo,hi)+'"></i><i style="background:'+heat((lo+hi)/2,lo,hi)+'"></i><i style="background:'+heat(hi,lo,hi)+'"></i></span>'+
+      '<span>'+fmt(hi)+'</span> · ★ cheapest day · tap a day to filter</div><div class="cal-months">'+html+'</div>';
+    cal.querySelectorAll('.cal-cell.has').forEach(c=>c.addEventListener('click',()=>{
+      F.day=F.day===c.dataset.day?'':c.dataset.day;lim=24;render();}));
+  }
+
+  function card(e){const L=bookLinks(itinOf(e));
+    const st=e.nonstop?'<span class="ns">Nonstop</span>':(e.stops!=null?'<span>'+stops(e.stops)+'</span>':'');
+    return '<div class="trip"><div class="th">'+avatar(e.airline,e.iata,26)+
+      '<span class="rt">'+esc(cn(e.o))+' → '+esc(cn(e.d))+'</span><span class="pr">'+fmt(e.min)+'</span></div>'+
+      '<div class="dt">'+exFmt(e.dep)+' – '+exFmt(e.ret)+(e.len!=null?' · '+e.len+' nights':'')+'</div>'+
+      '<div class="mt">'+st+(e.fastest?'<span>⏱ '+dur(e.fastest)+'</span>':'')+
+        (e.airline?'<span>'+esc(e.airline)+'</span>':'')+(e.offers?'<span>'+e.offers+' fares</span>':'')+'</div>'+
+      (L?'<div class="go"><a class="btnbook" href="'+L.google+'" target="_blank" rel="noopener nofollow">'+_EXT+'Book</a>'+
+        '<span class="cmp">or <a href="'+L.kayak+'" target="_blank" rel="noopener nofollow">Kayak</a> · '+
+        '<a href="'+L.sky+'" target="_blank" rel="noopener nofollow">Skyscanner</a></span></div>':'')+'</div>';}
+
+  function buildTrips(){const wrap=$('trips');if(!wrap)return;
+    const list=EX.filter(e=>match(e,false)).sort(SORT[F.sort]||SORT.price),total=list.length;
+    const cEl=$('ex-count');
+    if(cEl)cEl.innerHTML=total?'<b>'+total+'</b> trip'+(total===1?'':'s')+(F.day?' on '+exFmt(F.day):'')+' · from '+fmt(Math.min.apply(null,list.map(e=>e.min))):'<b>0</b> trips match';
+    if(!total){wrap.innerHTML='<div class="finder-empty">No trips match these filters. Try widening the dates, price or trip length.</div>';
+      const mb=$('ex-more');if(mb)mb.style.display='none';return;}
+    wrap.innerHTML=list.slice(0,lim).map(card).join('');
+    const mb=$('ex-more');if(mb)mb.style.display=total>lim?'block':'none';}
+
+  function render(){const box=$('calbox');if(box)box.style.display=F.view==='cal'?'block':'none';
+    if(F.view==='cal')buildCalendar();buildTrips();}
+
+  // ---- controls ----
+  const airOpts='<option value="">Any airline</option>'+(EXM.airlines||[]).map(a=>'<option value="'+esc(a)+'">'+esc(a)+'</option>').join('');
+  const nopts=sel=>{let o='';for(let n=lmin;n<=lmax;n++)o+='<option value="'+n+'"'+(n===sel?' selected':'')+'>'+n+' nights</option>';return o;};
+  const lenFlds=hasLen?'<div class="fld"><label>Min nights</label><select id="f-lmin">'+nopts(lmin)+'</select></div>'+
+      '<div class="fld"><label>Max nights</label><select id="f-lmax">'+nopts(lmax)+'</select></div>':'';
+  const routeFld=(EXM.routes&&EXM.routes.length>1)?'<div class="fld"><label>Route</label><select id="f-route"><option value="">All routes</option>'+
+      EXM.routes.map(r=>'<option value="'+esc(r)+'">'+esc(r.replace('-','→'))+'</option>').join('')+'</select></div>':'';
+  const stopsBtns='<button data-v="any" class="on">Any</button><button data-v="1">≤1 stop</button>'+(EXM.nonstop_any?'<button data-v="nonstop">Nonstop</button>':'');
+
+  add('<div class="section reveal" id="finder"><h2>Find a trip</h2><span class="hint">'+(EXM.count||EX.length)+' date combos · live filters</span></div>'+
+   '<div class="finder reveal"><div class="filters">'+
+     '<div class="fld"><label>Depart from</label><input type="date" id="f-df" min="'+EXM.dep_min+'" max="'+EXM.dep_max+'" value="'+EXM.dep_min+'"></div>'+
+     '<div class="fld"><label>Depart to</label><input type="date" id="f-dt" min="'+EXM.dep_min+'" max="'+EXM.dep_max+'" value="'+EXM.dep_max+'"></div>'+
+     lenFlds+
+     '<div class="fld range"><label>Max price <span class="rangeval" id="f-pv">'+fmt(EXM.price_max)+'</span></label>'+
+       '<input type="range" id="f-price" min="'+EXM.price_min+'" max="'+EXM.price_max+'" value="'+EXM.price_max+'" step="10"></div>'+
+     routeFld+
+     '<div class="fld"><label>Airline</label><select id="f-air">'+airOpts+'</select></div>'+
+     '<div class="fld"><label>Stops</label><div class="seg-ctrl" id="f-stops">'+stopsBtns+'</div></div>'+
+     '<div class="fld"><label>Sort by</label><select id="f-sort"><option value="price">Cheapest</option>'+
+       '<option value="date">Departure date</option><option value="length">Trip length</option><option value="fast">Fastest</option></select></div>'+
+   '</div>'+
+   '<div class="finder-bar"><span class="count" id="ex-count"></span>'+
+     '<div class="viewtoggle" id="f-view"><button data-v="cal" class="on">Calendar</button><button data-v="list">List</button></div>'+
+     '<button class="reset" id="f-reset">Reset</button></div>'+
+   '<div class="cal-wrap" id="calbox"><div id="cal"></div></div>'+
+   '<div class="trips" id="trips"></div>'+
+   '<button class="morebtn" id="ex-more" style="display:none">Show more trips</button></div>');
+
+  // ---- wiring ----
+  $('f-df').addEventListener('change',e=>{F.depFrom=e.target.value;F.day='';lim=24;render();});
+  $('f-dt').addEventListener('change',e=>{F.depTo=e.target.value;F.day='';lim=24;render();});
+  if($('f-lmin'))$('f-lmin').addEventListener('change',e=>{F.lenMin=+e.target.value;lim=24;render();});
+  if($('f-lmax'))$('f-lmax').addEventListener('change',e=>{F.lenMax=+e.target.value;lim=24;render();});
+  $('f-price').addEventListener('input',e=>{F.maxPrice=+e.target.value;$('f-pv').textContent=fmt(F.maxPrice);lim=24;render();});
+  $('f-air').addEventListener('change',e=>{F.airline=e.target.value;lim=24;render();});
+  if($('f-route'))$('f-route').addEventListener('change',e=>{F.route=e.target.value;lim=24;render();});
+  $('f-sort').addEventListener('change',e=>{F.sort=e.target.value;lim=24;render();});
+  $('f-stops').querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{
+    F.stops=b.dataset.v;$('f-stops').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));lim=24;render();}));
+  $('f-view').querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{
+    F.view=b.dataset.v;$('f-view').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));render();}));
+  $('ex-more').addEventListener('click',()=>{lim+=24;buildTrips();});
+  $('f-reset').addEventListener('click',()=>{
+    F.depFrom=EXM.dep_min;F.depTo=EXM.dep_max;F.lenMin=lmin;F.lenMax=lmax;F.maxPrice=EXM.price_max;
+    F.stops='any';F.airline='';F.route='';F.sort='price';F.day='';lim=24;
+    $('f-df').value=EXM.dep_min;$('f-dt').value=EXM.dep_max;$('f-price').value=EXM.price_max;$('f-pv').textContent=fmt(EXM.price_max);
+    if($('f-lmin'))$('f-lmin').value=lmin;if($('f-lmax'))$('f-lmax').value=lmax;
+    $('f-air').value='';if($('f-route'))$('f-route').value='';$('f-sort').value='price';
+    $('f-stops').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x.dataset.v==='any'));render();});
+
+  render();
 }
 
 /* ---- charts ---- */
