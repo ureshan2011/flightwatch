@@ -8,11 +8,27 @@ market: nz                  # Google Flights region (gl=) -- match the route's c
 adults: 1
 max_offers_per_search: 50   # store up to this many fares per itinerary per scan (0 = all)
 
-# A single shared Chromium runs all itineraries; `concurrency` caps how many
-# scrape at once (one lightweight context each). The async, shared-browser path
-# is cheap, so this can go higher than the old browser-per-scrape model.
-concurrency: 5
+# Shared browsers (one per engine: Chromium + Firefox) run all itineraries;
+# `concurrency` caps how many scrape at once (one lightweight context each).
+# 4 concurrent "bots" run in parallel, each grabbing its own rotating
+# fingerprint+engine so Google sees a real Chrome/Firefox mix.
+concurrency: 4
 jitter_seconds: 6           # random 0-N s stagger before each scrape (less robotic)
+
+# Rolling 3-month coverage. In ADDITION to the dense fixed itineraries below,
+# auto-generate a broad grid of departures across the next ~3 months for each
+# route, so the dataset captures the whole booking landscape rather than a handful
+# of dates. It's recomputed relative to TODAY every run, so the window always
+# rolls forward and stays "the next 3 months". Generated dates that duplicate a
+# fixed itinerary are dropped.
+auto_generate:
+  enabled: true
+  horizon_days: 90          # scan departures up to ~3 months out
+  min_days_out: 7           # skip departures sooner than a week away
+  depart_step_days: 3       # one departure every N days across the window
+  trip_lengths: [21, 30]    # for each departure, a return this many days later
+  routes:
+    - {origin: CHC, destination: CMB}
 
 # Cadence is set by the workflow cron (currently every 6h -> 4 intraday slots a
 # day). Rows are stamped with an hourly scan_slot, so slots accumulate instead of

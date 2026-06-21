@@ -7,7 +7,8 @@ calibrated model, and shows a **buy / wait** decision with a **confidence rate**
 plus deal scores, a predicted booking curve, a cheapest-day heatmap and free push
 alerts — all running for **$0** on GitHub's free tier.
 
-- **Data:** **Google Flights**, scraped with real headless browsers (Playwright) — no API key, no token, no paid proxy. One **shared** Chromium runs every itinerary concurrently (a lightweight context + rotating **fingerprint** each), harvesting **every** offer per scan to build a large open dataset
+- **Data:** **Google Flights**, scraped with real headless browsers (Playwright) — no API key, no token, no paid proxy. Shared **Chromium *and* Firefox** browsers run every itinerary concurrently (a lightweight context + rotating **fingerprint/engine** each — a genuine Chrome/Firefox mix, not just spoofed UA strings), harvesting **every** offer per scan to build a large open dataset
+- **Coverage:** a rolling **~3-month** sweep of departures across each route (auto-generated relative to *today*, so the window always rolls forward) on top of a dense fixed set — broad landscape *and* deep intraday curves
 - **Cadence:** multiple scans/day; rows carry an hourly `scan_slot` so intraday moves accumulate instead of overwriting
 - **Intelligence (100% offline):** quantile gradient-boosting + **split-conformal** bands, seasonality features, a walk-forward **backtest**, deal scores, anomaly detection, best-time-to-book and templated natural-language summaries — no LLM, no API cost
 - **Alerts:** optional free **Telegram / email** pushes for new lows, price drops and BUY calls
@@ -40,9 +41,11 @@ config.yaml ──► flightwatch/collect.py ──► data/flights_YYYY_MM.csv 
                      flightwatch/alerts.py ────►  Telegram / email ┘ (optional)
 ```
 
-A GitHub Actions cron runs the collector several times a day. A single shared Chromium
-scrapes every itinerary concurrently (each context using a different fingerprint to
-dodge soft-blocks), appends **every** fare found as its own CSV row stamped with an
+A GitHub Actions cron runs the collector several times a day — **and again on every
+merge to `main`**, so the published dashboard refreshes the moment a change lands.
+Shared Chromium + Firefox browsers scrape every itinerary concurrently (each context
+using a different fingerprint/engine to dodge soft-blocks), appends **every** fare
+found as its own CSV row stamped with an
 hourly `scan_slot`, retrains the forecast model, regenerates the dashboard, sends any
 fresh alerts, and commits everything back to the repo. Over weeks, the per-itinerary
 history becomes an intraday *booking curve* — which is what makes a real "should I book
@@ -105,7 +108,7 @@ download the **scrape-debug** artifact from that run to see exactly what Google 
 
 ```bash
 pip install -r requirements.txt
-python -m playwright install --with-deps chromium   # one-time browser download
+python -m playwright install --with-deps chromium firefox   # one-time browser download (both engines)
 
 python -m flightwatch collect    # one scrape -> appends to data/
 python -m flightwatch build      # regenerate docs/index.html
@@ -118,15 +121,15 @@ open docs/index.html
 
 Run the tests with `pytest` (they use synthetic data — no network or browser needed).
 
-Set `FLIGHTWATCH_HEADFUL=1` (the CI default, via `xvfb-run`) to drive a non-headless
-Chromium, which Google is less likely to soft-block than pure headless.
+Set `FLIGHTWATCH_HEADFUL=1` (the CI default, via `xvfb-run`) to drive non-headless
+browsers, which Google is less likely to soft-block than pure headless.
 
 ---
 
 ## Configure what gets tracked
 
-Edit `config.yaml`. Keep the list **small and dense** — daily depth on a few
-itineraries beats sparse coverage of a huge grid:
+Edit `config.yaml`. The fixed `itineraries:` list is the **dense** core — daily
+depth on a few date-pairs that builds tight intraday curves:
 
 ```yaml
 itineraries:
@@ -134,7 +137,22 @@ itineraries:
   - {origin: AKL, destination: CMB, depart_date: 2026-09-01, return_date: 2026-09-22}
 ```
 
-Tune `concurrency` / `jitter_seconds` here too. Change the scan frequency in
+For **breadth**, the `auto_generate:` block sweeps a rolling window of departures
+across the next ~3 months for each route (recomputed from *today* every run, so it
+always covers the next 3 months) — tune `horizon_days`, `depart_step_days` and
+`trip_lengths`:
+
+```yaml
+auto_generate:
+  enabled: true
+  horizon_days: 90
+  depart_step_days: 3
+  trip_lengths: [21, 30]
+  routes:
+    - {origin: CHC, destination: CMB}
+```
+
+Tune `concurrency` (how many bots scrape at once) / `jitter_seconds` here too. Change the scan frequency in
 `.github/workflows/daily-scan.yml` (the `cron`, in UTC — currently every 6 hours).
 Scheduled runs only fire on the **default branch**, so a new cadence takes effect once
 it's merged there.
@@ -224,12 +242,13 @@ the run, so you can debug a remote run without reproducing it locally.
 | Automation (several runs/day) | GitHub Actions (public repo, standard runner) | Free, unlimited |
 | Dashboard hosting | GitHub Pages | Free |
 | Data storage | CSV in the repo | Free |
-| Fare data | Google Flights scrape (headless Chromium) | Free, no key |
+| Fare data | Google Flights scrape (headless Chromium + Firefox) | Free, no key |
 | Alerts | Telegram Bot API / SMTP | Free |
 | Forecasts & AI features | scikit-learn, offline (no LLM) | Free |
 
-Each run uses ~2–3 Actions minutes (most of it installing Chromium); a few runs a day
-stays comfortably inside the free **unlimited** allowance for public repos.
+Each run takes a few Actions minutes (browser install + scraping the rolling
+~3-month grid across Chromium + Firefox); several runs a day plus per-merge refreshes
+stay comfortably inside the free **unlimited** allowance for public repos.
 
 ---
 

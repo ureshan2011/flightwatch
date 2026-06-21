@@ -8,6 +8,15 @@ on:
     # takes effect once merged there. Tune the frequency to taste (free for public
     # repos); spacing runs >1h apart keeps each in its own slot.
     - cron: "0 */6 * * *"
+  push:
+    # Auto-run on every merge to main: re-scrape and rebuild the published site so
+    # the dashboard refreshes the moment a change lands. `paths-ignore` skips the
+    # bot's OWN data/docs commits, so a scan's push can't retrigger itself into a
+    # loop -- only real code/config merges kick off a fresh run.
+    branches: [main]
+    paths-ignore:
+      - "data/**"
+      - "docs/**"
   workflow_dispatch:           # lets you trigger a run manually from the Actions tab
 
 # Queue overlapping runs instead of letting two jobs push at once.
@@ -33,8 +42,9 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Install Chromium for Playwright
-        run: python -m playwright install --with-deps chromium
+      - name: Install browsers for Playwright
+        # Both engines: scrapes rotate across a real Chromium + Firefox mix.
+        run: python -m playwright install --with-deps chromium firefox
 
       - name: Collect fares and build dashboard
         # xvfb-run gives Chromium a virtual display; non-headless is less likely to
