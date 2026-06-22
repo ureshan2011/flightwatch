@@ -1055,9 +1055,9 @@ tr.best td{background:var(--buy-bg)}
   padding:9px 18px;font-family:'IBM Plex Mono',monospace;font-size:12.5px;color:var(--brand);cursor:pointer;box-shadow:var(--shadow)}
 .morebtn:hover{box-shadow:var(--shadow-lg)}
 /* book link inside fare tables */
-td .bookrow{display:inline-flex;align-items:center;gap:5px;font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:var(--brand);white-space:nowrap}
-td .bookrow svg{width:12px;height:12px;stroke:var(--brand);fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
-td .bookrow:hover{text-decoration:underline}
+.bookrow{display:inline-flex;align-items:center;gap:5px;font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:var(--brand);white-space:nowrap}
+.bookrow svg{width:12px;height:12px;stroke:var(--brand);fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.bookrow:hover{text-decoration:underline}
 @media(max-width:560px){.cal-months{grid-template-columns:1fr}}
 
 /* ---- bento command center: live market pulse fused with the headline stats ---- */
@@ -1288,7 +1288,7 @@ function bookLinks(itin){
     sky:'https://www.skyscanner.net/transport/flights/'+o.toLowerCase()+'/'+d.toLowerCase()+'/'+yy(dep)+'/'+yy(ret)+'/'
   };
 }
-const _EXT='<svg viewBox="0 0 24 24"><path d="M8 7h9v9M17 7 7 17"/></svg>';
+const _EXT='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 7h9v9M17 7 7 17"/></svg>';
 function bookBtn(itin,label){const L=bookLinks(itin);if(!L)return '';
   return '<a class="btnbook" href="'+L.google+'" target="_blank" rel="noopener nofollow">'+_EXT+esc(label||'Book on Google Flights')+'</a>';}
 function bookBar(itin){const L=bookLinks(itin);if(!L)return '';
@@ -1405,7 +1405,7 @@ function renderBento(){
   const P=(D.ai&&D.ai.market&&D.ai.market.pulse)||null;
   const tile=(icon,label,to,kind,extra,cls)=>{
     const cur=kind==='cur'?'<span class="cur">'+CUR+'</span>':'';
-    return '<div class="btile '+(cls||'')+' reveal"><div class="b-ic"><svg viewBox="0 0 24 24">'+ICON[icon]+'</svg></div>'+
+    return '<div class="btile '+(cls||'')+' reveal"><div class="b-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">'+ICON[icon]+'</svg></div>'+
       '<div class="b-n">'+cur+'<span class="vn" data-to="'+to+'" data-kind="'+kind+'">0</span></div>'+
       '<div class="b-l">'+label+'</div>'+(extra?'<div class="b-x">'+extra+'</div>':'')+'</div>';
   };
