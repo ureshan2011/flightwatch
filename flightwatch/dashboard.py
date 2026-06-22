@@ -358,6 +358,70 @@ def _explore_meta(explore):
     }
 
 
+def _carrier_rows(df, carrier):
+    """Successful offers that `carrier` actually operates (incl. as one leg of a
+    connection, e.g. "Air New Zealand + Singapore Airlines")."""
+    ok = df[df["status"] == "ok"].copy()
+    keep = ok["airline"].map(lambda a: carrier in clean_airline(a).split(" + "))
+    return ok[keep]
+
+
+def _carrier_focus(df, explore, carrier):
+    """Spotlight one carrier for the dashboard's command center.
+
+    Returns its lowest *current* fare across the whole rolling grid, a buy / wait
+    call + forecast for that specific fare, and its cheapest fare for each of the
+    next few departure months. The decision engine is rerun on the carrier's OWN
+    fare history (cheapest carrier fare per itinerary per day) so the call and the
+    forecast reflect that airline -- not the itinerary's overall-cheapest airline,
+    which is usually someone else. With little history it falls back to the honest
+    low-confidence heuristic, exactly like the main recommendations.
+
+    On a thin corridor a premium carrier often only flies a leg of a connection
+    (Singapore Airlines is CHC->SIN->CMB with Air New Zealand), so "its fare" is
+    the cheapest offer it operates any part of -- there is no solo-metal option.
+    """
+    items = [(f'{e["o"]}-{e["d"]} {e["dep"]} -> {e["ret"]}', e, e["byair"][carrier])
+             for e in explore if carrier in (e.get("byair") or {})]
+    if not items:
+        return None
+
+    # Buy/wait calls from the carrier's own fare curve (model when it has enough
+    # history, heuristic otherwise -- bundle=None so any model is carrier-specific).
+    recs = {r["itinerary"]: r
+            for r in predict.recommendations(_carrier_rows(df, carrier))}
+
+    def _rec_bits(key):
+        r = recs.get(key, {})
+        return {"signal": r.get("signal", "WATCH"), "confidence": r.get("confidence"),
+                "reason": r.get("reason", ""), "method": r.get("method"),
+                "points": r.get("points"), "predicted_low": r.get("predicted_low"),
+                "expected_savings": r.get("expected_savings"),
+                "prob_drop": r.get("prob_drop"), "percentile": r.get("percentile"),
+                "trailing_min": r.get("trailing_min")}
+
+    # Headline: the single cheapest current fare this carrier operates.
+    key, e, b = min(items, key=lambda t: t[2]["min"])
+    cheapest = {"itinerary": key, "o": e["o"], "d": e["d"], "dep": e["dep"],
+                "ret": e["ret"], "len": e["len"], "price": b["min"],
+                "label": b["label"], "iata": b["iata"], "stops": b["stops"],
+                "nonstop": b["ns"], "fastest": b["fast"], "dtd": e.get("dtd"),
+                **_rec_bits(key)}
+
+    # Cheapest fare for each of the next departure months (a quick 3-month read).
+    bym = {}
+    for k, ee, bb in items:
+        m = ee["dep"][:7]
+        if m not in bym or bb["min"] < bym[m]["price"]:
+            bym[m] = {"month": m, "itinerary": k, "price": bb["min"],
+                      "dep": ee["dep"], "ret": ee["ret"], "len": ee["len"],
+                      "signal": recs.get(k, {}).get("signal", "WATCH")}
+    upcoming = [bym[m] for m in sorted(bym)][:3]
+
+    return {"name": carrier, "iata": airline_iata(carrier), "trips": len(items),
+            "cheapest": cheapest, "upcoming": upcoming}
+
+
 def _airline_market(ok):
     """Across every route's latest scan: each airline's reach and best fare."""
     latest_day = ok["scan_date"].max()
@@ -485,7 +549,7 @@ def build():
     ai = analytics.build(df, recs, bundle) if not df.empty and (df["status"] == "ok").any() else None
 
     history, insights, latest_offers, airline_market = {}, [], {}, []
-    explore, explore_meta = [], {}
+    explore, explore_meta, focus = [], {}, None
     stats = {"scans": 0, "total_offers": 0, "routes": 0, "airlines": 0,
              "avg_price": None, "fastest": None, "cheapest_ever": None}
     cities, primary = {}, None
@@ -530,6 +594,17 @@ def build():
         explore = _explore(ok)
         explore_meta = _explore_meta(explore)
 
+        # Spotlight a configured carrier (default Singapore Airlines): its lowest
+        # fare, a buy/wait call for it, and its next-3-months lows.
+        try:
+            from . import collect as collect_mod
+            focus_airline = (collect_mod.load_config() or {}).get(
+                "featured_airline", "Singapore Airlines")
+        except Exception:
+            focus_airline = "Singapore Airlines"
+        focus = (_carrier_focus(df, explore, focus_airline)
+                 if focus_airline else None)
+
         cheap_idx = ok["price"].astype(float).idxmin()
         cheap = ok.loc[cheap_idx]
         durs_all = ok["duration_minutes"].dropna()
@@ -569,6 +644,7 @@ def build():
         "airline_market": airline_market,
         "explore": explore,
         "explore_meta": explore_meta,
+        "focus": focus,
         "stats": stats,
         "cities": cities,
         "primary": primary,
@@ -1009,6 +1085,33 @@ td .bookrow:hover{text-decoration:underline}
 .b-lowest .b-ic{background:linear-gradient(135deg,rgba(18,176,124,.20),rgba(15,182,168,.16))}
 .b-lowest .b-ic svg{stroke:var(--buy)}
 .b-lowest .b-n{color:#0c8f63}
+/* spotlight carrier tile: lowest fare + buy/wait call + next-3-months lows */
+.b-focus{grid-column:span 2;grid-row:span 2;gap:0;
+  background:linear-gradient(155deg,#ffffff,#f4f1ff 58%,#eef3ff);border-color:#ddd6f3}
+.b-focus::after{background:radial-gradient(420px circle at var(--mx,70%) var(--my,0%),rgba(122,92,240,.12),transparent 55%)}
+.b-focus .bf-head{display:flex;align-items:center;gap:9px}
+.b-focus .bf-name{font-weight:700;font-size:14px;letter-spacing:-.2px}
+.b-focus .bf-head .sig{margin-left:auto}
+.b-focus .bf-price{font-family:'IBM Plex Mono',monospace;font-weight:600;letter-spacing:-1px;
+  display:flex;align-items:baseline;gap:6px;margin-top:14px}
+.b-focus .bf-price .cur{font-size:12px;color:var(--dim);font-weight:500}
+.b-focus .bf-price .v{font-size:33px;color:#5b43c9}
+.b-focus .bf-price small{font-size:10px;color:var(--dim);font-weight:400;letter-spacing:.1em;
+  text-transform:uppercase;margin-left:3px}
+.b-focus .bf-trip{font-size:13px;font-weight:600;color:var(--ink);margin-top:9px}
+.b-focus .bf-via{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px}
+.b-focus .bf-via span{font-size:11px;color:var(--muted);background:rgba(255,255,255,.7);
+  border:1px solid var(--line);border-radius:8px;padding:3px 8px}
+.b-focus .bf-call{font-size:12.5px;color:var(--muted);margin-top:13px;line-height:1.45}
+.b-focus .bf-call b{color:var(--ink)}.b-focus .bf-call i{color:var(--dim);font-style:normal}
+.b-focus .bf-months{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:13px}
+.b-focus .bf-lbl{font-size:9px;text-transform:uppercase;letter-spacing:.12em;color:var(--dim)}
+.b-focus .mchip{display:flex;flex-direction:column;line-height:1.25;padding:5px 10px;
+  background:rgba(255,255,255,.75);border:1px solid var(--line);border-radius:10px}
+.b-focus .mchip i{font-style:normal;font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.07em}
+.b-focus .mchip b{font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600}
+.b-focus .bf-go{margin-top:auto;padding-top:14px}
+.b-focus .bf-go .btnbook{width:100%;justify-content:center}
 /* live market-pulse hero tile (the centrepiece) */
 .b-pulse{grid-column:span 2;grid-row:span 2;flex-direction:row;align-items:center;gap:22px;padding:22px 24px;
   background:linear-gradient(150deg,#ffffff,#f3f7ff 55%,#eef3ff);border-color:var(--line2)}
@@ -1030,7 +1133,7 @@ td .bookrow:hover{text-decoration:underline}
 .bp-metrics .v.down{color:var(--buy)}.bp-metrics .v.up{color:var(--wait)}
 .bp-metrics .sigmix{display:flex;height:7px;width:128px;border-radius:5px;overflow:hidden;background:#eef2fa;margin-top:7px}
 .bp-metrics .sigmix i{display:block;height:100%}
-@media(max-width:900px){.bento{grid-template-columns:repeat(2,1fr)}.b-pulse,.b-lowest{grid-column:span 2}.b-pulse{grid-row:span 2}}
+@media(max-width:900px){.bento{grid-template-columns:repeat(2,1fr)}.b-pulse,.b-lowest,.b-focus{grid-column:span 2}.b-pulse{grid-row:span 2}.b-focus{grid-row:auto}}
 @media(max-width:560px){
   .bento{gap:10px}
   .btile{border-radius:15px;padding:13px 14px}
@@ -1266,6 +1369,34 @@ if(D.primary)document.getElementById('lead').innerHTML='Faro watches fares for <
   '</b> every day and tells you whether to book now or wait — with the airline, stops and flight time for every option.';
 renderBento();
 
+/* Spotlight-carrier tile (replaces the old "lowest ever" stat): the featured
+   airline's lowest live fare, the decision engine's buy/wait call + forecast for
+   that exact fare, and its cheapest fare in each of the next few months. Returns
+   '' when there's no focus data, so renderBento can fall back to the old tile. */
+function focusTile(){
+  const F=D.focus; if(!F||!F.cheapest)return '';
+  const c=F.cheapest,pi=parseItin(c.itinerary),sig=c.signal||'WATCH';
+  const verdict=sig==='BUY'?'Book now':sig==='WAIT'?'Worth waiting':'Watching';
+  const bits=[];
+  if(sig==='WAIT'&&c.predicted_low!=null)bits.push('model low ~'+fmt(c.predicted_low));
+  if(c.confidence!=null)bits.push(c.confidence+'% confidence');
+  const extra=bits.length?' <i>('+bits.join(' · ')+')</i>':'';
+  const stp=c.nonstop?'Nonstop':(c.stops!=null?stops(c.stops):'');
+  const months=(F.upcoming||[]).map(u=>{const m=String(u.dep||'').match(/-(\d{2})-/);
+    return '<span class="mchip"><i>'+(m?MM[+m[1]-1]:'')+'</i><b>'+fmt(u.price)+'</b></span>';}).join('');
+  return '<div class="btile b-focus reveal">'+
+    '<div class="bf-head">'+avatar(F.name,F.iata,24)+'<span class="bf-name">'+esc(F.name)+'</span>'+
+      '<span class="sig '+sig+'">'+sig+'</span></div>'+
+    '<div class="bf-price"><span class="cur">'+CUR+'</span><span class="v">'+fmtv(c.price)+'</span>'+
+      '<small>lowest fare now</small></div>'+
+    '<div class="bf-trip">'+esc(pi.title)+' · '+esc(pi.dates)+(c.len!=null?' · '+c.len+' nights':'')+'</div>'+
+    '<div class="bf-via">'+(stp?'<span>'+stp+'</span>':'')+(c.fastest?'<span>⏱ '+dur(c.fastest)+'</span>':'')+
+      '<span>'+esc(c.label||F.name)+'</span></div>'+
+    '<div class="bf-call"><b>'+verdict+'</b> — '+esc(c.reason||'Tracking this fare.')+extra+'</div>'+
+    (months?'<div class="bf-months"><span class="bf-lbl">Lowest by month</span>'+months+'</div>':'')+
+    '<div class="bf-go">'+bookBtn(c.itinerary,'Book this '+F.name+' fare')+'</div></div>';
+}
+
 /* The bento command center: the live "buy index" market pulse fused with the
    headline dataset stats in one clean, modern grid. Falls back gracefully to
    just the stats when there's no market read yet. */
@@ -1296,7 +1427,9 @@ function renderBento(){
           '<div><span class="k">'+P.buy+' buy · '+P.wait+' wait · '+P.watch+' watch</span><span class="sigmix">'+seg(P.buy,'#12b07c')+seg(P.wait,'#e8902a')+seg(P.watch,'#6b7ba0')+'</span></div>'+
         '</div></div></div>';
   }
-  if(S.cheapest_ever){const ce=S.cheapest_ever;
+  const ft=focusTile();
+  if(ft)h+=ft;
+  else if(S.cheapest_ever){const ce=S.cheapest_ever;
     h+=tile('gem','Lowest ever',Math.round(ce.price),'cur',
       (ce.airline?avatar(ce.airline,ce.iata,18)+esc(ce.airline):''),'b-lowest');}
   if(S.avg_price)h+=tile('avg','Average fare',Math.round(S.avg_price),'cur');

@@ -8,6 +8,14 @@ market: nz                  # Google Flights region (gl=) -- match the route's c
 adults: 1
 max_offers_per_search: 50   # store up to this many fares per itinerary per scan (0 = all)
 
+# Spotlight one carrier in the dashboard's command center: its lowest current
+# fare, a buy/wait call + forecast for that fare, and its cheapest fares over the
+# next ~3 months. On CHC<->CMB, Singapore Airlines always flies the trip in a
+# connection with Air New Zealand (CHC->SIN->CMB), so this means "trips operated
+# by Singapore Airlines", not 100%-SQ-metal (which the route never has). Set to
+# "" / remove to hide the spotlight tile.
+featured_airline: Singapore Airlines
+
 # Shared browsers (one per engine: Chromium + Firefox) run all itineraries;
 # `concurrency` caps how many scrape at once (one lightweight context each).
 # Each context now blocks images/fonts/media/ads (see provider.py), so a page is
