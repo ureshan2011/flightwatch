@@ -87,3 +87,48 @@ def test_explore_exposes_carrier_list_and_filter_options():
     assert "al" in explore[0] and "Singapore Airlines" in explore[0]["al"]
     meta = DB._explore_meta(explore)
     assert "Singapore Airlines" in meta["airlines"]
+
+
+def _one_day(offers):
+    """A single itinerary's offers (price, airline[, stops[, dur]]) as a frame."""
+    import pandas as pd
+    rows = []
+    for o in offers:
+        price, air = o[0], o[1]
+        st = o[2] if len(o) > 2 else 1
+        du = o[3] if len(o) > 3 else 900
+        rows.append(dict(
+            scan_datetime="2026-06-20T09:00:00Z", scan_date=pd.Timestamp("2026-06-20"),
+            scan_slot="2026-06-20T09:00Z", origin="CHC", destination="CMB",
+            depart_date="2026-09-10", return_date="2026-10-01", trip_length=21,
+            days_to_departure=80, offer_index=0, price=price, currency="NZD",
+            airline=air, stops=st, duration_minutes=du, status="ok", source="x"))
+    return DB._with_itin(pd.DataFrame(rows))
+
+
+def test_explore_byair_holds_each_carriers_own_cheapest_fare():
+    # The itinerary's overall cheapest is Jetstar @ 1000; Singapore Airlines only
+    # flies a connection priced at 1500. Filtering for Singapore Airlines must
+    # surface SQ's OWN 1500 fare -- never Jetstar's 1000 (the original bug).
+    ok = _one_day([(1000, "Jetstar", 0), (1500, "Air New Zealand, Singapore Airlines", 1)])
+    e = DB._explore(ok)[0]
+    assert e["min"] == 1000                              # headline = true cheapest
+    assert "Jetstar" in e["airline"]
+    sq = e["byair"]["Singapore Airlines"]
+    assert sq["min"] == 1500                             # NOT the 1000 Jetstar fare
+    assert sq["label"] == "Air New Zealand + Singapore Airlines"
+    assert sq["iata"] == "SQ"                            # SQ's own logo, not Jetstar's
+    assert e["byair"]["Jetstar"]["min"] == 1000
+    # Nonstop flag is per-carrier: only Jetstar is nonstop here.
+    assert e["byair"]["Jetstar"]["ns"] is True
+    assert sq["ns"] is False
+
+
+def test_explore_blank_cheapest_airline_falls_back_to_named_carrier():
+    # The cheapest offer's "airline" is scraper noise that cleans to "" -- the
+    # headline must fall back to a real carrier, never render blank.
+    ok = _one_day([(900, "706 kg CO2e"), (1100, "SriLankan")])
+    e = DB._explore(ok)[0]
+    assert e["min"] == 900                               # overall cheapest preserved
+    assert e["airline"] == "SriLankan" and e["iata"] == "UL"
+    assert "" not in e["byair"]                          # noise never becomes a carrier
