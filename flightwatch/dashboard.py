@@ -35,6 +35,11 @@ from . import DOCS_DIR, storage, predict, analytics
 # dashboard can actually tell you *who* flies the fare.
 _ROUTE_CODE = re.compile(r"^[A-Z]{3}\s*[-–—]\s*[A-Z]{3}$")
 
+# Non-airline noise the scraper sometimes mistakes for a carrier name: Google's
+# per-itinerary CO2 emissions line ("706 kg CO2e"), bare units/numbers, etc.
+# Rejecting these keeps the airline mix honest (and out of the filter list).
+_AIRLINE_NOISE = re.compile(r"co2e?|co₂|emission|\bkg\b", re.I)
+
 # Carriers that fly (or connect on) this corridor. Used to split fares whose
 # scraped label glues two operating carriers together -- "JetstarQantas" or
 # "Singapore AirlinesAir New Zealand" -- without breaking single names that
@@ -92,6 +97,10 @@ def clean_airline(name):
     name = re.sub(r"\s{2,}", " ", str(name).strip())
     if not name or _ROUTE_CODE.match(name):
         return ""
+    # Drop emissions/unit noise and anything with no actual letters (stray
+    # numbers, prices) -- these are never real carrier names.
+    if _AIRLINE_NOISE.search(name) or not re.search(r"[A-Za-z]", name):
+        return ""
     toks = _tokenize_airlines(name)
     if toks:
         # de-dupe while preserving order, then join distinct carriers
@@ -112,6 +121,21 @@ def _airlines_in(day):
         if a and a not in seen:
             seen.add(a)
             out.append(a)
+    return out
+
+
+def _carriers_in(day):
+    """Every INDIVIDUAL operating carrier in a day's offers, split out of the
+    combined "A + B" labels (cheapest first). This is what lets a visitor filter
+    for, say, Singapore Airlines even when it only flies a leg of a connection
+    (e.g. "Air New Zealand + Singapore Airlines")."""
+    seen, out = [], []
+    for combined in _airlines_in(day):
+        for part in combined.split(" + "):
+            part = part.strip()
+            if part and part not in seen:
+                seen.append(part)
+                out.append(part)
     return out
 
 
@@ -233,6 +257,7 @@ def _explore(ok, cap=2000):
             "len": (int(cheap["trip_length"]) if pd.notna(cheap["trip_length"]) else None),
             "min": round(float(prices.min())),
             "airline": air, "iata": airline_iata(air),
+            "al": _carriers_in(day),
             "stops": (int(stops_s.min()) if not stops_s.empty else None),
             "nonstop": bool((stops_s == 0).any()) if not stops_s.empty else False,
             "fastest": int(durs.min()) if not durs.empty else 0,
@@ -257,7 +282,9 @@ def _explore_meta(explore):
         "dep_max": max(e["dep"] for e in explore),
         "len_min": min(lens) if lens else None,
         "len_max": max(lens) if lens else None,
-        "airlines": sorted({e["airline"] for e in explore if e["airline"]}),
+        # Filter options are individual carriers (incl. those that only fly a leg
+        # of a connection), so e.g. Singapore Airlines is selectable on its own.
+        "airlines": sorted({c for e in explore for c in (e.get("al") or [])}),
         "routes": sorted({e["o"] + "-" + e["d"] for e in explore}),
         "nonstop_any": any(e["nonstop"] for e in explore),
     }
@@ -618,7 +645,7 @@ h1 .grad{background:linear-gradient(110deg,var(--brand),var(--brand2) 46%,var(--
 .av img{position:relative;width:100%;height:100%;object-fit:contain;background:#fff;padding:13%}
 
 /* stats */
-.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(172px,1fr));gap:14px;margin-top:34px;perspective:1200px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,172px),1fr));gap:14px;margin-top:34px;perspective:1200px}
 .tilt{background:#fff;border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);
   position:relative;transform-style:preserve-3d;
   transform:perspective(900px) rotateX(calc(var(--rx,0deg) + var(--srx,0deg))) rotateY(var(--ry,0deg)) translateY(calc(var(--lift,0px) * -1));
@@ -669,7 +696,7 @@ h1 .grad{background:linear-gradient(110deg,var(--brand),var(--brand2) 46%,var(--
 .canvas-wrap{position:relative;height:252px}
 
 /* insight cards */
-.icards{display:grid;grid-template-columns:repeat(auto-fill,minmax(334px,1fr));gap:16px;margin-top:16px}
+.icards{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,334px),1fr));gap:16px;margin-top:16px}
 .icard{background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:20px;box-shadow:var(--shadow);transition:transform .25s,box-shadow .25s}
 .icard:hover{transform:translateY(-3px);box-shadow:var(--shadow-lg)}
 .icard .top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
@@ -698,12 +725,24 @@ summary::-webkit-details-marker{display:none}
 summary .pill{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--brand);background:rgba(59,110,245,.1);padding:3px 9px;border-radius:20px;white-space:nowrap}
 summary:after{content:"+";color:var(--dim);font-size:18px;margin-left:6px;transition:.2s}
 details[open] summary:after{transform:rotate(45deg)}
+.tscroll{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 -4px}
 table{width:100%;border-collapse:collapse;font-size:13px;margin-bottom:8px}
 th,td{text-align:left;padding:10px 8px;border-top:1px solid var(--line)}
 th{color:var(--dim);font-family:'IBM Plex Mono',monospace;font-weight:500;font-size:10.5px;text-transform:uppercase;letter-spacing:.1em}
 td.num,th.num{text-align:right;font-family:'IBM Plex Mono',monospace}
-td .airline{display:flex;align-items:center;gap:10px}
+td .airline{display:flex;align-items:center;gap:10px;min-width:0}
+td .airline .anm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 tr.best td{background:var(--buy-bg)}
+/* fares table: stay legible and never clip on small screens */
+@media(max-width:600px){
+  details{padding:2px 13px}
+  table{font-size:12px}
+  th,td{padding:8px 5px}
+  td .airline{gap:7px}
+  td .airline .anm{max-width:38vw}
+  .ft{display:none}              /* drop "flight time" col on phones */
+  .cheapest{display:none}
+}
 .cheapest{font-size:10px;color:var(--buy);font-weight:700;font-family:'IBM Plex Mono',monospace;margin-left:8px}
 .chip{font-family:'IBM Plex Mono',monospace;font-size:11px;padding:2px 8px;border-radius:20px;background:#eef3fd;color:var(--muted)}
 .chip.ns{background:var(--buy-bg);color:var(--buy)}
@@ -731,7 +770,7 @@ tr.best td{background:var(--buy-bg)}
   border-radius:16px;padding:14px 18px;margin-top:18px;box-shadow:var(--shadow)}
 .alertbar .ab-ic{font-size:20px;line-height:1}
 .alertbar .ab-t{font-weight:700;font-size:14px}.alertbar .ab-s{color:var(--muted);font-size:12.5px;margin-top:2px}
-.cols3{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:16px;margin-top:16px}
+.cols3{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,250px),1fr));gap:16px;margin-top:16px}
 .bookcard{background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:18px;box-shadow:var(--shadow)}
 .bookcard .rt{font-weight:700;font-size:14.5px}.bookcard .when{font-size:12px;color:var(--dim);font-family:'IBM Plex Mono',monospace;margin-top:2px}
 .bookcard .verdict{font-family:'IBM Plex Mono',monospace;font-weight:600;margin-top:12px;font-size:14px}
@@ -771,7 +810,7 @@ tr.best td{background:var(--buy-bg)}
 @keyframes opspulse{0%{box-shadow:0 0 0 0 rgba(18,176,124,.55)}100%{box-shadow:0 0 0 9px rgba(18,176,124,0)}}
 .ops-title{font-weight:700;font-size:16px;letter-spacing:-.2px}
 .ops-sub{color:var(--dim);font-size:12.5px;margin-left:auto;font-family:'IBM Plex Mono',monospace}
-.ops-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-top:18px}
+.ops-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,150px),1fr));gap:12px;margin-top:18px}
 .ops-cell{background:#f7faff;border:1px solid var(--line);border-radius:14px;padding:12px 14px}
 .ops-cell .k{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--dim);font-weight:600}
 .ops-cell .v{font-family:'IBM Plex Mono',monospace;font-size:18px;font-weight:600;color:var(--ink);margin-top:5px;letter-spacing:-.5px}
@@ -801,12 +840,17 @@ tr.best td{background:var(--buy-bg)}
 
 /* ---- trip finder (filters + fare calendar) ---- */
 .finder{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:20px 22px;margin-top:16px}
-.filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px}
+.filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,150px),1fr));gap:14px}
 .fld{display:flex;flex-direction:column;gap:6px}
 .fld label{font-size:10.5px;text-transform:uppercase;letter-spacing:.1em;color:var(--dim);font-weight:600}
 .fld input,.fld select{font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--ink);background:#f7faff;
   border:1px solid var(--line2);border-radius:11px;padding:9px 11px;width:100%;transition:.15s}
-.fld input:focus,.fld select:focus{outline:none;border-color:var(--brand);box-shadow:0 0 0 3px rgba(59,110,245,.12);background:#fff}
+/* replace the browser's default dark dropdown triangle with a soft branded chevron */
+.fld select{appearance:none;-webkit-appearance:none;-moz-appearance:none;padding-right:34px;cursor:pointer;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2356678a' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 11px center;background-size:13px}
+.fld select::-ms-expand{display:none}
+.fld input:focus,.fld select:focus{outline:none;border-color:var(--brand);box-shadow:0 0 0 3px rgba(59,110,245,.12);background-color:#fff}
 .fld.range{gap:8px}
 .fld .rangeval{font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--brand);font-weight:600}
 .fld input[type=range]{padding:0;accent-color:var(--brand);background:transparent;border:0}
@@ -828,9 +872,12 @@ tr.best td{background:var(--buy-bg)}
 .cal-legend{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--muted);margin-bottom:10px;flex-wrap:wrap}
 .cal-legend .scale{display:flex;height:9px;width:120px;border-radius:5px;overflow:hidden}
 .cal-legend .scale i{flex:1}
-.cal-months{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:18px}
+.cal-months{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:18px}
+/* let the calendar tracks/cells shrink below their content so 7 columns always
+   fit the container instead of being clipped by body{overflow-x:hidden} */
+.cal-months,.cal-month,.cal-grid,.cal-cell,.cal-grid .dow{min-width:0}
 .cal-month .mlabel{font-weight:700;font-size:14px;margin-bottom:9px}
-.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:5px}
+.cal-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:5px}
 .cal-grid .dow{font-size:9.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--dim);text-align:center;font-family:'IBM Plex Mono',monospace;padding-bottom:2px}
 .cal-cell{aspect-ratio:1;border-radius:9px;border:1px solid var(--line);display:flex;flex-direction:column;align-items:center;justify-content:center;
   padding:2px;cursor:default;position:relative;transition:transform .12s,box-shadow .12s}
@@ -844,7 +891,7 @@ tr.best td{background:var(--buy-bg)}
 .cal-cell.cheapest:after{content:"★";position:absolute;top:2px;right:4px;font-size:9px;color:var(--buy)}
 
 /* trip result cards */
-.trips{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:14px;margin-top:16px}
+.trips{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,290px),1fr));gap:14px;margin-top:16px}
 .trip{background:#fff;border:1px solid var(--line);border-radius:16px;padding:15px 16px;box-shadow:var(--shadow);
   display:flex;flex-direction:column;gap:9px;transition:transform .2s,box-shadow .2s}
 .trip:hover{transform:translateY(-3px);box-shadow:var(--shadow-lg)}
@@ -883,7 +930,7 @@ td .bookrow:hover{text-decoration:underline}
 .gauge .gt{font-size:10.5px;text-transform:uppercase;letter-spacing:.12em;color:var(--dim);margin-top:2px}
 .gauge-lbl{font-weight:700;font-size:17px;letter-spacing:-.3px;margin-top:8px}
 .gauge-note{color:var(--muted);font-size:12.5px;margin-top:4px;max-width:260px}
-.pulse-bits{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;align-content:center}
+.pulse-bits{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,120px),1fr));gap:12px;align-content:center}
 .pbit{background:#f7faff;border:1px solid var(--line);border-radius:14px;padding:14px 15px}
 .pbit .k{font-size:10.5px;text-transform:uppercase;letter-spacing:.1em;color:var(--dim);font-weight:600}
 .pbit .v{font-family:'IBM Plex Mono',monospace;font-size:22px;font-weight:600;letter-spacing:-.5px;margin-top:6px;display:flex;align-items:baseline;gap:6px}
@@ -907,6 +954,32 @@ td .bookrow:hover{text-decoration:underline}
 .lead-row .ld-p .was{font-size:11px;color:var(--dim);text-decoration:line-through}
 .lead-row .ld-s{font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;color:var(--buy);background:var(--buy-bg);border-radius:8px;padding:4px 9px;white-space:nowrap}
 @media(max-width:560px){.lead-row{grid-template-columns:22px 1fr auto}.lead-row .ld-p{grid-column:2/4;text-align:left;display:flex;gap:10px;align-items:baseline}}
+
+/* ---- global mobile polish: reclaim width, tighten dense components ---- */
+@media(max-width:560px){
+  .wrap{padding:0 14px 70px}
+  .nav .row{padding:11px 14px}
+  .panel{padding:16px}
+  .finder{padding:16px 14px}
+  .ops{padding:16px 15px}
+  .icard,.rec,.bookcard{padding:16px}
+  .section{margin:48px 0 4px}
+  .section h2{font-size:19px}
+  .gauge{width:160px;height:160px}
+  .deal{padding:20px}
+  .deal .pricebig .v{font-size:40px}
+  /* denser fare calendar so a month fits a phone comfortably */
+  .cal-grid{gap:3px}
+  .cal-cell{border-radius:7px}
+  .cal-cell .dnum{font-size:8.5px}
+  .cal-cell .cp{font-size:9.5px;margin-top:1px}
+  .cal-cell.cheapest:after{font-size:8px;top:1px;right:3px}
+  .cal-legend{font-size:11px;gap:6px}
+}
+@media(max-width:380px){
+  .cal-cell .cp{font-size:8.5px}
+  .stat .n{font-size:22px}
+}
 </style></head><body>
 
 <div class="aurora"><span class="blob b1"></span><span class="blob b2"></span></div>
@@ -1183,7 +1256,6 @@ function tickOps(){const ST=D.status||{};const card=document.getElementById('ops
   const sub=document.getElementById('ops-sub');if(sub)sub.textContent='built '+(D.generated||'');
   setTimeout(tickOps,1000);
 }
-renderOps();
 
 /* Pull a freshly deployed build without a manual refresh: every scan (and every
    merge to main) redeploys docs/index.html, so reload periodically while visible. */
@@ -1219,9 +1291,9 @@ if(!D.recs.length){
       '<div class="pricebox"><div class="price">'+fmt(r.price)+'</div><div class="pricelbl">low '+fmt(r.trailing_min)+' · '+r.points+' pts</div>'+
         '<div style="margin-top:8px">'+bookRowLink(r.itinerary,'Book ↗')+'</div></div></div>');});
 
-  renderMarket();
-
   buildFinder();
+
+  renderMarket();
 
   add('<div class="section reveal" id="trend"><h2>Price trends &amp; airlines</h2></div>'+
     '<div class="grid2"><div class="panel reveal"><h3>Cheapest fare over time</h3><div class="ph">one cheapest-per-day point per route</div>'+
@@ -1299,15 +1371,19 @@ if(!D.recs.length){
       const pi=parseItin(itin),best=Math.min.apply(null,rows.map(o=>o.price));
       let t='<details class="reveal"><summary><span>'+esc(pi.title)+' · '+esc(pi.dates)+'</span><span class="pill">'+rows.length+' offers · from '+fmt(best)+'</span></summary>'+
         bookBar(itin)+
-        '<table><thead><tr><th>Airline</th><th>Stops</th><th>Flight time</th><th class="num">Price</th><th></th></tr></thead><tbody>';
+        '<div class="tscroll"><table><thead><tr><th>Airline</th><th>Stops</th><th class="ft">Flight time</th><th class="num">Price</th><th></th></tr></thead><tbody>';
       rows.forEach(o=>{const isb=o.price===best;
         t+='<tr class="'+(isb?'best':'')+'"><td><span class="airline">'+avatar(o.airline,o.iata,24)+
-          (esc(o.airline)||'<span style="color:var(--dim)">—</span>')+(isb?'<span class="cheapest">CHEAPEST</span>':'')+'</span></td>'+
+          '<span class="anm">'+(esc(o.airline)||'<span style="color:var(--dim)">—</span>')+'</span>'+(isb?'<span class="cheapest">CHEAPEST</span>':'')+'</span></td>'+
           '<td><span class="chip'+(o.stops===0?' ns':'')+'">'+stops(o.stops)+'</span></td>'+
-          '<td class="mono">'+dur(o.duration)+'</td><td class="num">'+fmt(o.price)+'</td>'+
+          '<td class="mono ft">'+dur(o.duration)+'</td><td class="num">'+fmt(o.price)+'</td>'+
           '<td class="num">'+bookRowLink(itin,'Book ↗')+'</td></tr>';});
-      add(t+'</tbody></table></details>');});}
+      add(t+'</tbody></table></div></details>');});}
 }
+
+/* Live scraper status -- useful but secondary, so it renders last (deprioritised
+   below the deals, trip finder and analytics). */
+renderOps();
 
 /* ===== trip finder: filters + fare calendar =====
    All client-side over the embedded D.explore grid (every departure date x trip
@@ -1338,7 +1414,7 @@ function buildFinder(){
     if(F.maxPrice!=null&&e.min>F.maxPrice)return false;
     if(F.stops==='nonstop'&&!e.nonstop)return false;
     if(F.stops==='1'&&(e.stops==null||e.stops>1))return false;
-    if(F.airline&&e.airline!==F.airline)return false;
+    if(F.airline&&!((e.al||[]).includes(F.airline)))return false;
     if(F.route&&(e.o+'-'+e.d)!==F.route)return false;
     if(!ignoreDay&&F.day&&e.dep!==F.day)return false;
     return true;

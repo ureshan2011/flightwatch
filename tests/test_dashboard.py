@@ -50,3 +50,40 @@ def test_explore_cap_is_respected(synth):
 
 def test_empty_explore_meta():
     assert DB._explore_meta([]) == {}
+
+
+def test_clean_airline_rejects_noise():
+    assert DB.clean_airline("706 kg CO2e") == ""
+    assert DB.clean_airline("751 kg CO2e") == ""
+    assert DB.clean_airline("CHC–CMB") == ""
+    assert DB.clean_airline("12,345") == ""
+    # legitimate carriers (incl. combined) survive
+    assert DB.clean_airline("SriLankan") == "SriLankan"
+    assert DB.clean_airline("Air New Zealand, Singapore Airlines") == \
+        "Air New Zealand + Singapore Airlines"
+
+
+def test_carriers_split_into_individuals():
+    import pandas as pd
+    day = pd.DataFrame({"price": [100, 200],
+                        "airline": ["Air New Zealand, Singapore Airlines", "SriLankan"]})
+    carriers = DB._carriers_in(day)
+    # Singapore Airlines is findable even though it only flies a leg of a combo.
+    assert {"Air New Zealand", "Singapore Airlines", "SriLankan"} <= set(carriers)
+
+
+def test_explore_exposes_carrier_list_and_filter_options():
+    import pandas as pd
+    df = pd.DataFrame([
+        dict(scan_datetime="2026-06-20T09:00:00Z", scan_date=pd.Timestamp("2026-06-20"),
+             scan_slot="2026-06-20T09:00Z", origin="CHC", destination="CMB",
+             depart_date="2026-09-10", return_date="2026-10-01", trip_length=21,
+             days_to_departure=80, offer_index=0, price=p, currency="NZD",
+             airline=a, stops=1, duration_minutes=900, status="ok", source="x")
+        for p, a in [(1500, "Air New Zealand, Singapore Airlines"), (1600, "SriLankan")]
+    ])
+    ok = DB._with_itin(df[df["status"] == "ok"])
+    explore = DB._explore(ok)
+    assert "al" in explore[0] and "Singapore Airlines" in explore[0]["al"]
+    meta = DB._explore_meta(explore)
+    assert "Singapore Airlines" in meta["airlines"]
