@@ -260,6 +260,7 @@ _EXTRACT_JS = r"""
     // operating carrier(s) -- and only fall back to scanning text lines.
     const isJunk = (s) => !s
       || /^[A-Z]{3}\s*[–—-]\s*[A-Z]{3}$/.test(s)   // "CHC-CMB" route label
+      || /co2e?|co₂|emission|\bkg\b/i.test(s)       // "706 kg CO2e" emissions line
       || /^\$|\d{1,2}:\d{2}|\bhr\b|\bmin\b|stop|nonstop|round trip|select|operated/i.test(s);
     let airline = '';
     const alts = [...li.querySelectorAll('img[alt]')]
@@ -529,7 +530,20 @@ def _normalize_offers(raw, currency, max_offers):
             "duration_minutes": int(o.get("duration_minutes", 0) or 0),
         })
     offers.sort(key=lambda x: x["price"])
-    return offers[:max_offers] if max_offers else offers
+    if not max_offers or len(offers) <= max_offers:
+        return offers
+    # Keep the cheapest `max_offers`, but never let the cap hide a carrier
+    # entirely: also retain the cheapest fare of any airline not already kept.
+    # That's what surfaces premium end-to-end carriers (e.g. a full Singapore
+    # Airlines routing via SIN) that sit above the cheapest connecting combos.
+    kept = offers[:max_offers]
+    seen = {o["airline"] for o in kept if o["airline"]}
+    for o in offers[max_offers:]:
+        a = o["airline"]
+        if a and a not in seen:
+            kept.append(o)
+            seen.add(a)
+    return kept
 
 
 # --------------------------------------------------------------------------- #
