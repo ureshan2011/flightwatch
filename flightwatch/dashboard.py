@@ -868,6 +868,45 @@ td .bookrow{display:inline-flex;align-items:center;gap:5px;font-family:'IBM Plex
 td .bookrow svg{width:12px;height:12px;stroke:var(--brand);fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
 td .bookrow:hover{text-decoration:underline}
 @media(max-width:560px){.cal-months{grid-template-columns:1fr}}
+
+/* ---- market analytics: pulse gauge, leaderboard, mini-stats ---- */
+@property --gp{syntax:'<number>';inherits:false;initial-value:0}
+.mkt-hero{display:grid;grid-template-columns:300px 1fr;gap:16px;margin-top:16px}
+@media(max-width:820px){.mkt-hero{grid-template-columns:1fr}}
+.gauge-panel{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
+.gauge{--gp:0;--gcol:var(--brand);width:184px;height:184px;border-radius:50%;position:relative;
+  background:conic-gradient(var(--gcol) calc(var(--gp)*1%),#e8eef8 0);transition:--gp 1.3s cubic-bezier(.2,.7,.2,1);margin:6px 0 4px}
+.gauge::before{content:"";position:absolute;inset:15px;border-radius:50%;background:#fff;box-shadow:inset 0 2px 10px rgba(24,46,92,.06)}
+.gauge .gv{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.gauge .gn{font-family:'IBM Plex Mono',monospace;font-size:46px;font-weight:600;letter-spacing:-2px;line-height:1}
+.gauge .gn small{font-size:15px;color:var(--dim);letter-spacing:0}
+.gauge .gt{font-size:10.5px;text-transform:uppercase;letter-spacing:.12em;color:var(--dim);margin-top:2px}
+.gauge-lbl{font-weight:700;font-size:17px;letter-spacing:-.3px;margin-top:8px}
+.gauge-note{color:var(--muted);font-size:12.5px;margin-top:4px;max-width:260px}
+.pulse-bits{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;align-content:center}
+.pbit{background:#f7faff;border:1px solid var(--line);border-radius:14px;padding:14px 15px}
+.pbit .k{font-size:10.5px;text-transform:uppercase;letter-spacing:.1em;color:var(--dim);font-weight:600}
+.pbit .v{font-family:'IBM Plex Mono',monospace;font-size:22px;font-weight:600;letter-spacing:-.5px;margin-top:6px;display:flex;align-items:baseline;gap:6px}
+.pbit .v small{font-size:12px;color:var(--muted);font-weight:400}
+.pbit .s{font-size:11.5px;color:var(--muted);margin-top:3px}
+.pbit .v.down{color:var(--buy)}.pbit .v.up{color:var(--wait)}
+.sigmix{display:flex;height:9px;border-radius:6px;overflow:hidden;margin-top:9px;background:#eef2fa}
+.sigmix i{display:block;height:100%}
+.callout{display:inline-flex;align-items:center;gap:8px;background:linear-gradient(100deg,#eef3ff,#f3f0ff);
+  border:1px solid var(--line2);border-radius:12px;padding:8px 13px;margin-top:14px;font-size:12.5px;color:var(--muted)}
+.callout b{color:var(--ink);font-family:'IBM Plex Mono',monospace}
+.lead-list{display:flex;flex-direction:column;gap:10px;margin-top:6px}
+.lead-row{display:grid;grid-template-columns:26px 1fr auto auto;gap:12px;align-items:center;padding:11px 13px;
+  background:#f7faff;border:1px solid var(--line);border-radius:14px;transition:transform .18s,box-shadow .18s}
+.lead-row:hover{transform:translateX(3px);box-shadow:var(--shadow)}
+.lead-row .rk{font-family:'IBM Plex Mono',monospace;font-weight:600;color:var(--dim);font-size:13px;text-align:center}
+.lead-row .ld-r{font-weight:700;font-size:13.5px;letter-spacing:-.2px}
+.lead-row .ld-d{font-size:11.5px;color:var(--muted);font-family:'IBM Plex Mono',monospace;margin-top:1px}
+.lead-row .ld-p{text-align:right}
+.lead-row .ld-p .now{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:15px}
+.lead-row .ld-p .was{font-size:11px;color:var(--dim);text-decoration:line-through}
+.lead-row .ld-s{font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;color:var(--buy);background:var(--buy-bg);border-radius:8px;padding:4px 9px;white-space:nowrap}
+@media(max-width:560px){.lead-row{grid-template-columns:22px 1fr auto}.lead-row .ld-p{grid-column:2/4;text-align:left;display:flex;gap:10px;align-items:baseline}}
 </style></head><body>
 
 <div class="aurora"><span class="blob b1"></span><span class="blob b2"></span></div>
@@ -875,7 +914,7 @@ td .bookrow:hover{text-decoration:underline}
 <nav class="nav"><div class="row">
   <div class="brand"><span class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2"
     stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v3M9 8h6l1.5 11h-9L9 8zM7.5 19h9M10 8l.5-3h3l.5 3"/></svg></span>Faro</div>
-  <div class="links"><a href="#status">Status</a><a href="#deals">Deals</a><a href="#finder">Find a trip</a><a href="#trend">Trends</a><a href="#insights">Insights</a><a href="#fares">Fares</a></div>
+  <div class="links"><a href="#status">Status</a><a href="#deals">Deals</a><a href="#market">Market</a><a href="#finder">Find a trip</a><a href="#trend">Trends</a><a href="#insights">Insights</a><a href="#fares">Fares</a></div>
   <div class="ctx"><span class="pulse"></span><span id="clock">live</span><span id="navwx"></span></div>
 </div></nav>
 
@@ -1180,6 +1219,8 @@ if(!D.recs.length){
       '<div class="pricebox"><div class="price">'+fmt(r.price)+'</div><div class="pricelbl">low '+fmt(r.trailing_min)+' · '+r.points+' pts</div>'+
         '<div style="margin-top:8px">'+bookRowLink(r.itinerary,'Book ↗')+'</div></div></div>');});
 
+  renderMarket();
+
   buildFinder();
 
   add('<div class="section reveal" id="trend"><h2>Price trends &amp; airlines</h2></div>'+
@@ -1424,6 +1465,62 @@ function buildFinder(){
     $('f-stops').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x.dataset.v==='any'));if(loaded){render();}});
 }
 
+/* ===== market analytics: pulse gauge, booking-window curve, trip-length value,
+   fare distribution and a standout-deals leaderboard -- all derived offline
+   from the whole rolling grid (D.ai.market). ===== */
+function renderMarket(){
+  const M=(D.ai&&D.ai.market)||null; if(!M)return;
+  const P=M.pulse;
+  add('<div class="section reveal" id="market"><h2>Market analytics</h2><span class="hint">whole-grid intelligence</span></div>');
+
+  if(P){
+    const col=P.score>=70?'#12b07c':P.score>=56?'#3b6ef5':P.score>=44?'#6b7ba0':P.score>=30?'#e8902a':'#e0567d';
+    const tot=Math.max(1,P.buy+P.wait+P.watch);
+    const seg=(n,c)=>n?'<i style="width:'+(n/tot*100)+'%;background:'+c+'"></i>':'';
+    const mom=P.momentum_pct,momCls=mom==null?'':(mom<0?'down':mom>0?'up':''),
+          momTxt=mom==null?'—':(mom>0?'+':'')+mom+'%';
+    add('<div class="mkt-hero">'+
+      '<div class="panel reveal gauge-panel">'+
+        '<div class="gauge" id="pulseGauge" style="--gcol:'+col+'"><div class="gv">'+
+          '<div class="gn"><span id="pulseNum">0</span><small>/100</small></div><div class="gt">buy index</div></div></div>'+
+        '<div class="gauge-lbl" style="color:'+col+'">'+esc(P.label)+'</div>'+
+        '<div class="gauge-note">'+esc(P.note)+'</div></div>'+
+      '<div class="panel reveal"><h3>What the market is doing</h3><div class="ph">a live read across every tracked departure</div>'+
+        '<div class="pulse-bits">'+
+          '<div class="pbit"><div class="k">Fare value</div><div class="v">'+P.value+'<small>/100</small></div><div class="s">how cheap fares sit in their own recent range</div></div>'+
+          '<div class="pbit"><div class="k">Since last scan</div><div class="v '+momCls+'">'+momTxt+'</div><div class="s">typical fare, matched trips</div></div>'+
+          '<div class="pbit"><div class="k">Engine calls</div><div class="v">'+P.buy+'<small>buy now</small></div><div class="s">'+P.wait+' wait · '+P.watch+' watch</div>'+
+            '<div class="sigmix">'+seg(P.buy,'#12b07c')+seg(P.wait,'#e8902a')+seg(P.watch,'#6b7ba0')+'</div></div>'+
+        '</div></div></div>');
+  }
+
+  const AC=M.advance_curve,LC=M.length_curve;
+  add('<div class="grid2">'+
+    '<div class="panel reveal"><h3>How far ahead to book</h3><div class="ph">median cheapest fare by days before departure, across the grid</div>'+
+      (AC?'<div class="callout">📅 Cheapest around <b>'+AC.best_dtd+' days</b> out (~'+fmt(AC.best_price)+') · last-minute can cost <b>'+fmt(AC.save_vs_worst)+'</b> more</div>':'')+
+      '<div class="canvas-wrap"><canvas id="advChart"></canvas></div></div>'+
+    '<div class="panel reveal"><h3>Best value by trip length</h3><div class="ph">cheapest return fare for each trip duration</div>'+
+      (LC?'<div class="callout">🎯 Sweet spot: <b>'+LC.best_len+' nights</b> from <b>'+fmt(LC.best_price)+'</b></div>':'')+
+      '<div class="canvas-wrap"><canvas id="lenChart"></canvas></div></div></div>');
+
+  const PD=M.price_distribution,SV=M.savings||[];
+  add('<div class="grid2">'+
+    '<div class="panel reveal"><h3>Where fares sit today</h3><div class="ph">'+(PD?PD.n+' trips · median '+fmt(PD.median)+' · '+fmt(PD.min)+'–'+fmt(PD.max):'spread of current fares')+'</div>'+
+      '<div class="canvas-wrap"><canvas id="distChart"></canvas></div></div>'+
+    '<div class="panel reveal"><h3>Standout deals right now</h3><div class="ph">priced furthest below the typical fare for their length</div>'+
+      (SV.length?'<div class="lead-list">'+SV.map((s,i)=>{const pi=parseItin(s.itin);
+        return '<div class="lead-row"><div class="rk">'+(i+1)+'</div>'+
+          '<div><div class="ld-r">'+esc(pi.title)+'</div><div class="ld-d">'+fdshort(s.dep)+' – '+fdshort(s.ret)+' · '+s.len+' nights'+(s.dtd!=null?' · '+s.dtd+'d out':'')+'</div></div>'+
+          '<div class="ld-p"><div class="now">'+fmt(s.price)+'</div><div class="was">'+fmt(s.typical)+'</div></div>'+
+          '<div class="ld-s">'+s.pct+'% off<br>−'+fmt(s.save)+'</div></div>';}).join('')+'</div>'
+        :'<div class="finder-empty">No trips are sitting below their typical fare right now.</div>')+
+      '</div></div>');
+
+  if(P)requestAnimationFrame(()=>{const g=document.getElementById('pulseGauge');if(g)g.style.setProperty('--gp',P.score);
+    const n=document.getElementById('pulseNum');if(!n)return;let st=null;
+    (function step(ts){st=st||ts;const k=Math.min(1,(ts-st)/1200);n.textContent=Math.round(P.score*(1-Math.pow(1-k,3)));if(k<1)requestAnimationFrame(step);})(performance.now());});
+}
+
 /* ---- charts ---- */
 function gridOpts(){return{responsive:true,maintainAspectRatio:false,
   plugins:{legend:{labels:{font:{family:'Sora',size:11},color:'#56678a',boxWidth:12,padding:14}}},
@@ -1433,7 +1530,8 @@ function placeholder(id,msg){const c=document.getElementById(id);if(!c)return;
   (c.closest('.canvas-wrap')||c.parentNode).innerHTML='<div style="height:100%;display:grid;place-items:center;color:var(--dim);font-size:13px;text-align:center;padding:0 20px">'+msg+'</div>';}
 let charted=false;
 function drawCharts(){if(charted)return;charted=true;
-  if(typeof Chart==='undefined'){placeholder('trendChart','Chart library unavailable.');placeholder('airChart','Chart library unavailable.');return;}
+  if(typeof Chart==='undefined'){['trendChart','airChart','advChart','lenChart','distChart','fanChart','accChart']
+    .forEach(id=>placeholder(id,'Chart library unavailable.'));return;}
   D.recs.forEach((r,i)=>{const h=D.history[r.itinerary]||[],c=document.getElementById('spark'+i);if(!c||h.length<2)return;
     const g=c.getContext('2d').createLinearGradient(0,0,0,46);g.addColorStop(0,'rgba(59,110,245,.28)');g.addColorStop(1,'rgba(59,110,245,0)');
     new Chart(c,{type:'line',data:{labels:h.map(x=>x.d),datasets:[{data:h.map(x=>x.p),borderColor:'#3b6ef5',borderWidth:2,pointRadius:0,tension:.35,fill:true,backgroundColor:g}]},
@@ -1464,7 +1562,37 @@ function drawCharts(){if(charted)return;charted=true;
   if(acc&&D.ai&&D.ai.backtest&&(D.ai.backtest.series||[]).length>=2){const s=D.ai.backtest.series;
     new Chart(acc,{type:'line',data:{labels:s.map(x=>x.d),datasets:[{data:s.map(x=>x.acc),borderColor:'#12b07c',backgroundColor:'rgba(18,176,124,.14)',borderWidth:2,pointRadius:0,tension:.3,fill:true}]},
       options:Object.assign(gridOpts(),{plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+c.raw+'% right'}}},scales:{x:{display:false},y:{min:0,max:100,grid:{color:'#eef2f9'},ticks:{color:'#8a99b8',font:{family:'IBM Plex Mono',size:10},callback:v=>v+'%'}}}})});}
-  else if(acc)placeholder('accChart','Accuracy history builds as more calls can be graded.');}
+  else if(acc)placeholder('accChart','Accuracy history builds as more calls can be graded.');
+  /* ---- market analytics graphs ---- */
+  const MK=(D.ai&&D.ai.market)||null;
+  if(MK){
+    const adv=document.getElementById('advChart');
+    if(adv&&MK.advance_curve&&MK.advance_curve.points.length>=3){const pts=MK.advance_curve.points;
+      const g=adv.getContext('2d').createLinearGradient(0,0,0,252);g.addColorStop(0,'rgba(122,92,240,.22)');g.addColorStop(1,'rgba(122,92,240,0)');
+      new Chart(adv,{type:'line',data:{labels:pts.map(p=>p.dtd),datasets:[{data:pts.map(p=>p.p),borderColor:'#7a5cf0',borderWidth:2,pointRadius:0,tension:.35,fill:true,backgroundColor:g}]},
+        options:Object.assign(gridOpts(),{plugins:{legend:{display:false},tooltip:{callbacks:{title:it=>it[0].label+' days before departure',label:c=>' '+fmt(c.raw)+' median'}}},
+          scales:{x:{reverse:true,title:{display:true,text:'days before departure',color:'#8a99b8',font:{family:'IBM Plex Mono',size:10}},grid:{color:'#eef2f9'},ticks:{color:'#8a99b8',font:{family:'IBM Plex Mono',size:9},maxTicksLimit:9}},
+                  y:{grid:{color:'#eef2f9'},ticks:{color:'#8a99b8',font:{family:'IBM Plex Mono',size:10}}}}})});}
+    else if(adv)placeholder('advChart','The booking-window curve appears once the grid spans a range of departure dates.');
+
+    const len=document.getElementById('lenChart');
+    if(len&&MK.length_curve&&MK.length_curve.points.length>=2){const pts=MK.length_curve.points,best=MK.length_curve.best_len;
+      new Chart(len,{type:'bar',data:{labels:pts.map(p=>p.len),datasets:[{data:pts.map(p=>p.min),
+        backgroundColor:pts.map(p=>p.len===best?'#12b07c':'rgba(59,110,245,.55)'),borderRadius:6,maxBarThickness:24}]},
+        options:Object.assign(gridOpts(),{plugins:{legend:{display:false},tooltip:{callbacks:{title:it=>it[0].label+' nights',label:c=>' from '+fmt(c.raw)}}},
+          scales:{x:{title:{display:true,text:'trip length (nights)',color:'#8a99b8',font:{family:'IBM Plex Mono',size:10}},grid:{display:false},ticks:{color:'#8a99b8',font:{family:'IBM Plex Mono',size:9},maxTicksLimit:11}},
+                  y:{grid:{color:'#eef2f9'},ticks:{color:'#8a99b8',font:{family:'IBM Plex Mono',size:10}}}}})});}
+    else if(len)placeholder('lenChart','Trip-length value appears once several durations have been scanned.');
+
+    const dist=document.getElementById('distChart');
+    if(dist&&MK.price_distribution&&MK.price_distribution.bins.length){const b=MK.price_distribution.bins,med=MK.price_distribution.median;
+      new Chart(dist,{type:'bar',data:{labels:b.map(x=>x.lo),datasets:[{data:b.map(x=>x.count),
+        backgroundColor:b.map(x=>(med>=x.lo&&med<x.hi)?'#3b6ef5':'rgba(59,110,245,.4)'),borderRadius:5,barPercentage:1,categoryPercentage:.97}]},
+        options:Object.assign(gridOpts(),{plugins:{legend:{display:false},tooltip:{callbacks:{title:it=>{const x=b[it[0].dataIndex];return fmt(x.lo)+' – '+fmt(x.hi);},label:c=>' '+c.raw+' trips'}}},
+          scales:{x:{grid:{display:false},ticks:{color:'#8a99b8',font:{family:'IBM Plex Mono',size:9},maxTicksLimit:8,callback:function(v){return b[v]?fmtv(b[v].lo):'';}}},
+                  y:{grid:{color:'#eef2f9'},ticks:{color:'#8a99b8',font:{family:'IBM Plex Mono',size:10},precision:0}}}})});}
+    else if(dist)placeholder('distChart','The fare-distribution histogram needs a handful of fares to draw.');
+  }}
 
 /* ---- tilt ---- */
 const fine=matchMedia('(hover:hover) and (pointer:fine)').matches&&!matchMedia('(prefers-reduced-motion:reduce)').matches;
