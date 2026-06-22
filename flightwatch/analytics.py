@@ -113,7 +113,7 @@ def cheapest_day(df):
     date_pairs = [{"depart": r.depart_date, "return": r.return_date,
                    "min": round(float(r.price)),
                    "save_vs_dearest": round(most - float(r.price))}
-                  for r in pairs.itertuples()]
+                  for r in pairs.head(20).itertuples()]
     dep, ret = by("dep_dow"), by("ret_dow")
     return {"dep_dow": dep, "ret_dow": ret, "date_pairs": date_pairs,
             "best_dep": dep[0] if dep else None, "best_ret": ret[0] if ret else None}

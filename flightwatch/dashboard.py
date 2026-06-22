@@ -371,6 +371,18 @@ def _scrape_status(df):
     return st
 
 
+def _fixed_itin_keys():
+    """Build the set of itin strings for the dense fixed itineraries from config."""
+    from . import collect as collect_mod
+    try:
+        cfg = collect_mod.load_config() or {}
+    except Exception:
+        return set()
+    fixed = list(cfg.get("itineraries") or [])
+    return {f"{it['origin']}-{it['destination']} {it['depart_date']} -> {it['return_date']}"
+            for it in fixed}
+
+
 def build():
     df = storage.load_all()
     bundle = predict.train_model(df) if not df.empty else None
@@ -382,6 +394,8 @@ def build():
     stats = {"scans": 0, "total_offers": 0, "routes": 0, "airlines": 0,
              "avg_price": None, "fastest": None, "cheapest_ever": None}
     cities, primary = {}, None
+
+    fixed_keys = _fixed_itin_keys()
 
     if not df.empty and (df["status"] == "ok").any():
         ok = _with_itin(df[df["status"] == "ok"])
@@ -403,14 +417,20 @@ def build():
                      "tz": dest_info.get("tz")},
         }
 
-        # One cheapest point per day for the booking-curve sparklines + trend chart.
+        # Heavy per-itinerary sections (insights, offers, history, sparklines)
+        # are restricted to the dense fixed itineraries to keep the page light.
+        # The full grid is available via the lazy-loaded trip finder.
+        ok_fixed = ok[ok["itin"].isin(fixed_keys)] if fixed_keys else ok
+
         daily = predict.daily_min(df)
         for itin, h in daily.groupby("itin"):
+            if fixed_keys and itin not in fixed_keys:
+                continue
             history[itin] = [{"d": d.strftime("%Y-%m-%d"), "p": float(p)}
                              for d, p in zip(h["scan_date"], h["price"])]
 
-        insights = _insights(ok)
-        latest_offers = _latest_offers(ok)
+        insights = _insights(ok_fixed) if not ok_fixed.empty else []
+        latest_offers = _latest_offers(ok_fixed) if not ok_fixed.empty else {}
         airline_market = _airline_market(ok)
         explore = _explore(ok)
         explore_meta = _explore_meta(explore)
@@ -433,6 +453,16 @@ def build():
                               "iata": airline_iata(clean_airline(cheap["airline"])),
                               "date": cheap["scan_date"].strftime("%Y-%m-%d")},
         }
+
+    if fixed_keys:
+        recs = [r for r in recs if r["itinerary"] in fixed_keys]
+        if ai:
+            if ai.get("deals"):
+                ai["deals"] = {k: v for k, v in ai["deals"].items() if k in fixed_keys}
+            if ai.get("narratives"):
+                ai["narratives"] = {k: v for k, v in ai["narratives"].items() if k in fixed_keys}
+            if ai.get("anomalies"):
+                ai["anomalies"] = [a for a in ai["anomalies"] if a.get("itin") in fixed_keys]
 
     payload = {
         "generated": datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC"),
