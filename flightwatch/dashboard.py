@@ -916,6 +916,62 @@ td .bookrow svg{width:12px;height:12px;stroke:var(--brand);fill:none;stroke-widt
 td .bookrow:hover{text-decoration:underline}
 @media(max-width:560px){.cal-months{grid-template-columns:1fr}}
 
+/* ---- bento command center: live market pulse fused with the headline stats ---- */
+.bento{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:34px;
+  grid-auto-rows:minmax(102px,auto);grid-auto-flow:row dense}
+.btile{position:relative;overflow:hidden;background:var(--card);border:1px solid var(--line);
+  border-radius:18px;padding:15px 16px;box-shadow:var(--shadow);display:flex;flex-direction:column;
+  transition:transform .22s cubic-bezier(.2,.7,.2,1),box-shadow .25s ease}
+.btile::after{content:"";position:absolute;inset:0;border-radius:18px;pointer-events:none;opacity:0;transition:opacity .35s;
+  background:radial-gradient(280px circle at var(--mx,50%) var(--my,0%),rgba(59,110,245,.13),transparent 55%)}
+.btile:hover{transform:translateY(-4px);box-shadow:var(--shadow-lg)}
+.btile:hover::after{opacity:1}
+.btile .b-ic{width:36px;height:36px;border-radius:11px;display:grid;place-items:center;flex:none;
+  background:linear-gradient(135deg,rgba(59,110,245,.14),rgba(122,92,240,.14))}
+.btile .b-ic svg{width:18px;height:18px;stroke:var(--brand);fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.btile .b-n{font-family:'IBM Plex Mono',monospace;font-size:25px;font-weight:600;letter-spacing:-1px;
+  margin-top:auto;padding-top:12px;display:flex;align-items:baseline;gap:5px;white-space:nowrap}
+.btile .b-n .cur{font-size:12px;color:var(--dim);font-weight:500;letter-spacing:0}
+.btile .b-l{color:var(--dim);font-size:10px;text-transform:uppercase;letter-spacing:.13em;margin-top:5px}
+.btile .b-x{color:var(--muted);font-size:12px;margin-top:7px;display:flex;align-items:center;gap:6px;min-width:0;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.btile .b-x .av{flex:none}
+/* lowest-ever accent tile (the trophy stat) */
+.b-lowest{grid-column:span 2;background:linear-gradient(150deg,#ffffff,#ecfaf3);border-color:#cdeede}
+.b-lowest .b-ic{background:linear-gradient(135deg,rgba(18,176,124,.20),rgba(15,182,168,.16))}
+.b-lowest .b-ic svg{stroke:var(--buy)}
+.b-lowest .b-n{color:#0c8f63}
+/* live market-pulse hero tile (the centrepiece) */
+.b-pulse{grid-column:span 2;grid-row:span 2;flex-direction:row;align-items:center;gap:22px;padding:22px 24px;
+  background:linear-gradient(150deg,#ffffff,#f3f7ff 55%,#eef3ff);border-color:var(--line2)}
+.b-pulse::after{background:radial-gradient(420px circle at var(--mx,70%) var(--my,0%),rgba(122,92,240,.12),transparent 55%)}
+.b-pulse .bp-gauge{flex:none}
+.b-pulse .gauge{width:150px;height:150px}
+.b-pulse .gn{font-size:42px}
+.bp-body{flex:1;min-width:0}
+.bp-live{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.16em;font-weight:600;
+  color:var(--buy);display:flex;align-items:center;gap:7px}
+.bp-live .dot{width:7px;height:7px;border-radius:50%;background:var(--buy);animation:opspulse 1.6s ease-out infinite}
+.bp-label{font-size:23px;font-weight:800;letter-spacing:-.5px;margin-top:9px;line-height:1.1}
+.bp-note{color:var(--muted);font-size:13px;margin-top:5px;max-width:390px}
+.bp-metrics{display:flex;gap:10px;margin-top:16px;flex-wrap:wrap}
+.bp-metrics>div{background:rgba(255,255,255,.7);border:1px solid var(--line);border-radius:12px;padding:8px 12px}
+.bp-metrics .k{display:block;font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--dim)}
+.bp-metrics .v{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:15px;margin-top:4px;display:block}
+.bp-metrics .v small{font-size:10px;color:var(--dim);font-weight:400}
+.bp-metrics .v.down{color:var(--buy)}.bp-metrics .v.up{color:var(--wait)}
+.bp-metrics .sigmix{display:flex;height:7px;width:128px;border-radius:5px;overflow:hidden;background:#eef2fa;margin-top:7px}
+.bp-metrics .sigmix i{display:block;height:100%}
+@media(max-width:900px){.bento{grid-template-columns:repeat(2,1fr)}.b-pulse,.b-lowest{grid-column:span 2}.b-pulse{grid-row:span 2}}
+@media(max-width:560px){
+  .bento{gap:10px}
+  .btile{border-radius:15px;padding:13px 14px}
+  .btile .b-n{font-size:21px}
+  .b-pulse{flex-direction:column;text-align:center;align-items:center;gap:14px;grid-row:auto}
+  .b-pulse .gauge{width:130px;height:130px}.b-pulse .gn{font-size:34px}
+  .bp-note{max-width:none}.bp-metrics{justify-content:center}
+}
+
 /* ---- market analytics: pulse gauge, leaderboard, mini-stats ---- */
 @property --gp{syntax:'<number>';inherits:false;initial-value:0}
 .mkt-hero{display:grid;grid-template-columns:300px 1fr;gap:16px;margin-top:16px}
@@ -1005,7 +1061,7 @@ td .bookrow:hover{text-decoration:underline}
     </div>
   </header>
 
-  <div class="stats" id="stats"></div>
+  <div class="bento" id="bento"></div>
   <div id="body"></div>
 
   <div class="foot reveal">
@@ -1140,21 +1196,60 @@ const S=D.stats;
 document.getElementById('eyebrow').textContent=D.primary?(D.primary.origin.name+' → '+D.primary.dest.name+' · SMART FARE TIMING'):'SMART FARE TIMING';
 if(D.primary)document.getElementById('lead').innerHTML='Faro watches fares for <b>'+esc(D.primary.origin.name)+' → '+esc(D.primary.dest.name)+
   '</b> every day and tells you whether to book now or wait — with the airline, stops and flight time for every option.';
-const cells=[
-  ['records','Fare records',S.total_offers||0,'num'],
-  ['routes','Routes tracked',S.routes||0,'num'],
-  ['airlines','Airlines seen',S.airlines||0,'num'],
-  ['scans','Daily scans',S.scans||0,'num'],
-];
-if(S.avg_price)cells.push(['avg','Average fare',Math.round(S.avg_price),'cur']);
-if(S.fastest)cells.push(['fast','Fastest trip',S.fastest,'dur']);
-if(S.cheapest_ever)cells.push(['gem','Lowest ever',Math.round(S.cheapest_ever.price),'cur',
-  (S.cheapest_ever.airline?avatar(S.cheapest_ever.airline,S.cheapest_ever.iata,18)+esc(S.cheapest_ever.airline):'')]);
-document.getElementById('stats').innerHTML=cells.map(c=>{
-  const cur=c[3]==='cur'?'<span class="cur">'+CUR+'</span>':'';
-  return '<div class="tilt stat reveal"><div class="ic"><svg viewBox="0 0 24 24">'+ICON[c[0]]+'</svg></div>'+
-    '<div class="n">'+cur+'<span class="vn" data-to="'+c[2]+'" data-kind="'+c[3]+'">0</span></div>'+
-    '<div class="l">'+c[1]+'</div>'+(c[4]?'<div class="x">'+c[4]+'</div>':'')+'</div>';}).join('');
+renderBento();
+
+/* The bento command center: the live "buy index" market pulse fused with the
+   headline dataset stats in one clean, modern grid. Falls back gracefully to
+   just the stats when there's no market read yet. */
+function renderBento(){
+  const el=document.getElementById('bento'); if(!el)return;
+  const P=(D.ai&&D.ai.market&&D.ai.market.pulse)||null;
+  const tile=(icon,label,to,kind,extra,cls)=>{
+    const cur=kind==='cur'?'<span class="cur">'+CUR+'</span>':'';
+    return '<div class="btile '+(cls||'')+' reveal"><div class="b-ic"><svg viewBox="0 0 24 24">'+ICON[icon]+'</svg></div>'+
+      '<div class="b-n">'+cur+'<span class="vn" data-to="'+to+'" data-kind="'+kind+'">0</span></div>'+
+      '<div class="b-l">'+label+'</div>'+(extra?'<div class="b-x">'+extra+'</div>':'')+'</div>';
+  };
+  let h='';
+  if(P){
+    const col=P.score>=70?'#12b07c':P.score>=56?'#3b6ef5':P.score>=44?'#6b7ba0':P.score>=30?'#e8902a':'#e0567d';
+    const tot=Math.max(1,P.buy+P.wait+P.watch),seg=(n,c)=>n?'<i style="width:'+(n/tot*100)+'%;background:'+c+'"></i>':'';
+    const mom=P.momentum_pct,momCls=mom==null?'':(mom<0?'down':mom>0?'up':''),momTxt=mom==null?'—':(mom>0?'+':'')+mom+'%';
+    h+='<div class="btile b-pulse reveal" style="--gcol:'+col+'">'+
+      '<div class="bp-gauge"><div class="gauge" id="pulseGauge" style="--gcol:'+col+'"><div class="gv">'+
+        '<div class="gn"><span id="pulseNum">0</span><small>/100</small></div><div class="gt">buy index</div></div></div></div>'+
+      '<div class="bp-body">'+
+        '<div class="bp-live"><span class="dot"></span>LIVE MARKET</div>'+
+        '<div class="bp-label" style="color:'+col+'">'+esc(P.label)+'</div>'+
+        '<div class="bp-note">'+esc(P.note)+'</div>'+
+        '<div class="bp-metrics">'+
+          '<div><span class="k">Fare value</span><span class="v">'+P.value+'<small>/100</small></span></div>'+
+          '<div><span class="k">Since last scan</span><span class="v '+momCls+'">'+momTxt+'</span></div>'+
+          '<div><span class="k">'+P.buy+' buy · '+P.wait+' wait · '+P.watch+' watch</span><span class="sigmix">'+seg(P.buy,'#12b07c')+seg(P.wait,'#e8902a')+seg(P.watch,'#6b7ba0')+'</span></div>'+
+        '</div></div></div>';
+  }
+  if(S.cheapest_ever){const ce=S.cheapest_ever;
+    h+=tile('gem','Lowest ever',Math.round(ce.price),'cur',
+      (ce.airline?avatar(ce.airline,ce.iata,18)+esc(ce.airline):''),'b-lowest');}
+  if(S.avg_price)h+=tile('avg','Average fare',Math.round(S.avg_price),'cur');
+  h+=tile('records','Fare records',S.total_offers||0,'num');
+  h+=tile('routes','Routes tracked',S.routes||0,'num');
+  h+=tile('airlines','Airlines seen',S.airlines||0,'num');
+  h+=tile('scans','Daily scans',S.scans||0,'num');
+  if(S.fastest)h+=tile('fast','Fastest trip',S.fastest,'dur');
+  el.innerHTML=h;
+
+  if(P)requestAnimationFrame(()=>{const g=document.getElementById('pulseGauge');if(g)g.style.setProperty('--gp',P.score);
+    const n=document.getElementById('pulseNum');if(!n)return;let st=null;
+    (function step(ts){st=st||ts;const k=Math.min(1,(ts-st)/1200);n.textContent=Math.round(P.score*(1-Math.pow(1-k,3)));if(k<1)requestAnimationFrame(step);})(performance.now());});
+
+  // pointer-follow glow on each tile (skipped on touch) -- the addictive bit
+  if(matchMedia('(hover:hover) and (pointer:fine)').matches)
+    el.querySelectorAll('.btile').forEach(t=>t.addEventListener('pointermove',e=>{
+      const r=t.getBoundingClientRect();
+      t.style.setProperty('--mx',((e.clientX-r.left)/r.width*100)+'%');
+      t.style.setProperty('--my',((e.clientY-r.top)/r.height*100)+'%');}));
+}
 
 function animateCount(el){if(el.dataset.done)return;el.dataset.done='1';
   const to=+el.dataset.to,kind=el.dataset.kind,sh=t=>kind==='dur'?dur(t):fmtv(t);let st=null;
@@ -1272,24 +1367,6 @@ if(!D.recs.length){
       s=esc(pi.title)+' fell to '+fmt(drops[0].price)+' — '+Math.abs(drops[0].pct)+'% below its recent norm.';}
     else{const pi=parseItin(nl[0].itin);t=nl.length+' new low'+(nl.length>1?'s':'');s=esc(pi.title)+' just hit a fresh low of '+fmt(nl[0].price)+'.';}
     add('<div class="alertbar reveal"><span class="ab-ic">📉</span><div><div class="ab-t">'+t+'</div><div class="ab-s">'+s+'</div></div></div>');})();
-  add('<div class="section reveal" id="deals"><h2>Today’s signals</h2><span class="hint">act-now first</span></div>');
-  D.recs.forEach((r,i)=>{const pi=parseItin(r.itinerary),conf=r.confidence||0,tags=[];
-    const deal=(D.ai&&D.ai.deals&&D.ai.deals[r.itinerary])||null;
-    const narr=(D.ai&&D.ai.narratives&&D.ai.narratives[r.itinerary])||'';
-    if(r.predicted_low)tags.push(['forecast low '+fmt(r.predicted_low),1]);
-    if(r.signal==='WAIT'&&r.expected_savings)tags.push(['save ~'+fmt(r.expected_savings)+' by waiting',1]);
-    if(r.prob_drop!=null)tags.push([r.prob_drop+'% chance of a drop',0]);
-    if(r.days_to_departure!=null)tags.push([r.days_to_departure+' days to go',0]);
-    const db=deal?'<span class="dealbadge '+esc(deal.label.toLowerCase())+'">'+deal.score+' · '+esc(deal.label)+' deal</span>':'';
-    add('<div class="rec reveal"><span class="sig '+r.signal+'">'+r.signal+'</span>'+
-      '<div><div class="route">'+esc(pi.title)+' '+db+'</div><div class="dates">'+esc(pi.dates)+(pi.nights?' · '+pi.nights+' nights':'')+'</div>'+
-        '<div class="reason">'+esc(r.reason)+'</div>'+
-        (narr?'<div class="narr">'+esc(narr)+'</div>':'')+
-        '<div class="conf"><div class="lab"><span>confidence</span><span>'+conf+'%</span></div><div class="bar"><i data-w="'+conf+'"></i></div></div>'+
-        '<div class="tags">'+tags.map(t=>'<span class="tag'+(t[1]?' b':'')+'">'+esc(t[0])+'</span>').join('')+'</div></div>'+
-      '<canvas class="spark" id="spark'+i+'"></canvas>'+
-      '<div class="pricebox"><div class="price">'+fmt(r.price)+'</div><div class="pricelbl">low '+fmt(r.trailing_min)+' · '+r.points+' pts</div>'+
-        '<div style="margin-top:8px">'+bookRowLink(r.itinerary,'Book ↗')+'</div></div></div>');});
 
   buildFinder();
 
@@ -1379,6 +1456,26 @@ if(!D.recs.length){
           '<td class="mono ft">'+dur(o.duration)+'</td><td class="num">'+fmt(o.price)+'</td>'+
           '<td class="num">'+bookRowLink(itin,'Book ↗')+'</td></tr>';});
       add(t+'</tbody></table></div></details>');});}
+
+  /* Today's BUY/WAIT/WATCH signals -- moved to the bottom of the page. */
+  add('<div class="section reveal" id="deals"><h2>Today’s signals</h2><span class="hint">act-now first</span></div>');
+  D.recs.forEach((r,i)=>{const pi=parseItin(r.itinerary),conf=r.confidence||0,tags=[];
+    const deal=(D.ai&&D.ai.deals&&D.ai.deals[r.itinerary])||null;
+    const narr=(D.ai&&D.ai.narratives&&D.ai.narratives[r.itinerary])||'';
+    if(r.predicted_low)tags.push(['forecast low '+fmt(r.predicted_low),1]);
+    if(r.signal==='WAIT'&&r.expected_savings)tags.push(['save ~'+fmt(r.expected_savings)+' by waiting',1]);
+    if(r.prob_drop!=null)tags.push([r.prob_drop+'% chance of a drop',0]);
+    if(r.days_to_departure!=null)tags.push([r.days_to_departure+' days to go',0]);
+    const db=deal?'<span class="dealbadge '+esc(deal.label.toLowerCase())+'">'+deal.score+' · '+esc(deal.label)+' deal</span>':'';
+    add('<div class="rec reveal"><span class="sig '+r.signal+'">'+r.signal+'</span>'+
+      '<div><div class="route">'+esc(pi.title)+' '+db+'</div><div class="dates">'+esc(pi.dates)+(pi.nights?' · '+pi.nights+' nights':'')+'</div>'+
+        '<div class="reason">'+esc(r.reason)+'</div>'+
+        (narr?'<div class="narr">'+esc(narr)+'</div>':'')+
+        '<div class="conf"><div class="lab"><span>confidence</span><span>'+conf+'%</span></div><div class="bar"><i data-w="'+conf+'"></i></div></div>'+
+        '<div class="tags">'+tags.map(t=>'<span class="tag'+(t[1]?' b':'')+'">'+esc(t[0])+'</span>').join('')+'</div></div>'+
+      '<canvas class="spark" id="spark'+i+'"></canvas>'+
+      '<div class="pricebox"><div class="price">'+fmt(r.price)+'</div><div class="pricelbl">low '+fmt(r.trailing_min)+' · '+r.points+' pts</div>'+
+        '<div style="margin-top:8px">'+bookRowLink(r.itinerary,'Book ↗')+'</div></div></div>');});
 }
 
 /* Live scraper status -- useful but secondary, so it renders last (deprioritised
@@ -1546,29 +1643,9 @@ function buildFinder(){
    from the whole rolling grid (D.ai.market). ===== */
 function renderMarket(){
   const M=(D.ai&&D.ai.market)||null; if(!M)return;
-  const P=M.pulse;
+  // The buy-index pulse now lives in the bento command center up top; this
+  // section focuses on the supporting charts and the deals leaderboard.
   add('<div class="section reveal" id="market"><h2>Market analytics</h2><span class="hint">whole-grid intelligence</span></div>');
-
-  if(P){
-    const col=P.score>=70?'#12b07c':P.score>=56?'#3b6ef5':P.score>=44?'#6b7ba0':P.score>=30?'#e8902a':'#e0567d';
-    const tot=Math.max(1,P.buy+P.wait+P.watch);
-    const seg=(n,c)=>n?'<i style="width:'+(n/tot*100)+'%;background:'+c+'"></i>':'';
-    const mom=P.momentum_pct,momCls=mom==null?'':(mom<0?'down':mom>0?'up':''),
-          momTxt=mom==null?'—':(mom>0?'+':'')+mom+'%';
-    add('<div class="mkt-hero">'+
-      '<div class="panel reveal gauge-panel">'+
-        '<div class="gauge" id="pulseGauge" style="--gcol:'+col+'"><div class="gv">'+
-          '<div class="gn"><span id="pulseNum">0</span><small>/100</small></div><div class="gt">buy index</div></div></div>'+
-        '<div class="gauge-lbl" style="color:'+col+'">'+esc(P.label)+'</div>'+
-        '<div class="gauge-note">'+esc(P.note)+'</div></div>'+
-      '<div class="panel reveal"><h3>What the market is doing</h3><div class="ph">a live read across every tracked departure</div>'+
-        '<div class="pulse-bits">'+
-          '<div class="pbit"><div class="k">Fare value</div><div class="v">'+P.value+'<small>/100</small></div><div class="s">how cheap fares sit in their own recent range</div></div>'+
-          '<div class="pbit"><div class="k">Since last scan</div><div class="v '+momCls+'">'+momTxt+'</div><div class="s">typical fare, matched trips</div></div>'+
-          '<div class="pbit"><div class="k">Engine calls</div><div class="v">'+P.buy+'<small>buy now</small></div><div class="s">'+P.wait+' wait · '+P.watch+' watch</div>'+
-            '<div class="sigmix">'+seg(P.buy,'#12b07c')+seg(P.wait,'#e8902a')+seg(P.watch,'#6b7ba0')+'</div></div>'+
-        '</div></div></div>');
-  }
 
   const AC=M.advance_curve,LC=M.length_curve;
   add('<div class="grid2">'+
@@ -1591,10 +1668,6 @@ function renderMarket(){
           '<div class="ld-s">'+s.pct+'% off<br>−'+fmt(s.save)+'</div></div>';}).join('')+'</div>'
         :'<div class="finder-empty">No trips are sitting below their typical fare right now.</div>')+
       '</div></div>');
-
-  if(P)requestAnimationFrame(()=>{const g=document.getElementById('pulseGauge');if(g)g.style.setProperty('--gp',P.score);
-    const n=document.getElementById('pulseNum');if(!n)return;let st=null;
-    (function step(ts){st=st||ts;const k=Math.min(1,(ts-st)/1200);n.textContent=Math.round(P.score*(1-Math.pow(1-k,3)));if(k<1)requestAnimationFrame(step);})(performance.now());});
 }
 
 /* ---- charts ---- */
