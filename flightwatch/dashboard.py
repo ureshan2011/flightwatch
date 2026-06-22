@@ -1272,24 +1272,6 @@ if(!D.recs.length){
       s=esc(pi.title)+' fell to '+fmt(drops[0].price)+' — '+Math.abs(drops[0].pct)+'% below its recent norm.';}
     else{const pi=parseItin(nl[0].itin);t=nl.length+' new low'+(nl.length>1?'s':'');s=esc(pi.title)+' just hit a fresh low of '+fmt(nl[0].price)+'.';}
     add('<div class="alertbar reveal"><span class="ab-ic">📉</span><div><div class="ab-t">'+t+'</div><div class="ab-s">'+s+'</div></div></div>');})();
-  add('<div class="section reveal" id="deals"><h2>Today’s signals</h2><span class="hint">act-now first</span></div>');
-  D.recs.forEach((r,i)=>{const pi=parseItin(r.itinerary),conf=r.confidence||0,tags=[];
-    const deal=(D.ai&&D.ai.deals&&D.ai.deals[r.itinerary])||null;
-    const narr=(D.ai&&D.ai.narratives&&D.ai.narratives[r.itinerary])||'';
-    if(r.predicted_low)tags.push(['forecast low '+fmt(r.predicted_low),1]);
-    if(r.signal==='WAIT'&&r.expected_savings)tags.push(['save ~'+fmt(r.expected_savings)+' by waiting',1]);
-    if(r.prob_drop!=null)tags.push([r.prob_drop+'% chance of a drop',0]);
-    if(r.days_to_departure!=null)tags.push([r.days_to_departure+' days to go',0]);
-    const db=deal?'<span class="dealbadge '+esc(deal.label.toLowerCase())+'">'+deal.score+' · '+esc(deal.label)+' deal</span>':'';
-    add('<div class="rec reveal"><span class="sig '+r.signal+'">'+r.signal+'</span>'+
-      '<div><div class="route">'+esc(pi.title)+' '+db+'</div><div class="dates">'+esc(pi.dates)+(pi.nights?' · '+pi.nights+' nights':'')+'</div>'+
-        '<div class="reason">'+esc(r.reason)+'</div>'+
-        (narr?'<div class="narr">'+esc(narr)+'</div>':'')+
-        '<div class="conf"><div class="lab"><span>confidence</span><span>'+conf+'%</span></div><div class="bar"><i data-w="'+conf+'"></i></div></div>'+
-        '<div class="tags">'+tags.map(t=>'<span class="tag'+(t[1]?' b':'')+'">'+esc(t[0])+'</span>').join('')+'</div></div>'+
-      '<canvas class="spark" id="spark'+i+'"></canvas>'+
-      '<div class="pricebox"><div class="price">'+fmt(r.price)+'</div><div class="pricelbl">low '+fmt(r.trailing_min)+' · '+r.points+' pts</div>'+
-        '<div style="margin-top:8px">'+bookRowLink(r.itinerary,'Book ↗')+'</div></div></div>');});
 
   buildFinder();
 
@@ -1379,6 +1361,26 @@ if(!D.recs.length){
           '<td class="mono ft">'+dur(o.duration)+'</td><td class="num">'+fmt(o.price)+'</td>'+
           '<td class="num">'+bookRowLink(itin,'Book ↗')+'</td></tr>';});
       add(t+'</tbody></table></div></details>');});}
+
+  /* Today's BUY/WAIT/WATCH signals -- moved to the bottom of the page. */
+  add('<div class="section reveal" id="deals"><h2>Today’s signals</h2><span class="hint">act-now first</span></div>');
+  D.recs.forEach((r,i)=>{const pi=parseItin(r.itinerary),conf=r.confidence||0,tags=[];
+    const deal=(D.ai&&D.ai.deals&&D.ai.deals[r.itinerary])||null;
+    const narr=(D.ai&&D.ai.narratives&&D.ai.narratives[r.itinerary])||'';
+    if(r.predicted_low)tags.push(['forecast low '+fmt(r.predicted_low),1]);
+    if(r.signal==='WAIT'&&r.expected_savings)tags.push(['save ~'+fmt(r.expected_savings)+' by waiting',1]);
+    if(r.prob_drop!=null)tags.push([r.prob_drop+'% chance of a drop',0]);
+    if(r.days_to_departure!=null)tags.push([r.days_to_departure+' days to go',0]);
+    const db=deal?'<span class="dealbadge '+esc(deal.label.toLowerCase())+'">'+deal.score+' · '+esc(deal.label)+' deal</span>':'';
+    add('<div class="rec reveal"><span class="sig '+r.signal+'">'+r.signal+'</span>'+
+      '<div><div class="route">'+esc(pi.title)+' '+db+'</div><div class="dates">'+esc(pi.dates)+(pi.nights?' · '+pi.nights+' nights':'')+'</div>'+
+        '<div class="reason">'+esc(r.reason)+'</div>'+
+        (narr?'<div class="narr">'+esc(narr)+'</div>':'')+
+        '<div class="conf"><div class="lab"><span>confidence</span><span>'+conf+'%</span></div><div class="bar"><i data-w="'+conf+'"></i></div></div>'+
+        '<div class="tags">'+tags.map(t=>'<span class="tag'+(t[1]?' b':'')+'">'+esc(t[0])+'</span>').join('')+'</div></div>'+
+      '<canvas class="spark" id="spark'+i+'"></canvas>'+
+      '<div class="pricebox"><div class="price">'+fmt(r.price)+'</div><div class="pricelbl">low '+fmt(r.trailing_min)+' · '+r.points+' pts</div>'+
+        '<div style="margin-top:8px">'+bookRowLink(r.itinerary,'Book ↗')+'</div></div></div>');});
 }
 
 /* Live scraper status -- useful but secondary, so it renders last (deprioritised
