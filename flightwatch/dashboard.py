@@ -228,6 +228,52 @@ def _latest_offers(ok, per_itin=10):
     return out
 
 
+def _carrier_fares(day):
+    """Each INDIVIDUAL operating carrier's OWN cheapest fare for a day's offers.
+
+    Every offer's (possibly combined) airline label is split into its operating
+    carriers and each one is credited with that offer's price/stops/duration, so
+    when a visitor filters for, say, Singapore Airlines the finder can show
+    Singapore Airlines' *own* cheapest fare for the trip -- not the itinerary's
+    overall cheapest, which is frequently a different airline (e.g. Jetstar) and
+    was previously shown regardless of the filter. Keyed by carrier; each value
+    carries the cheapest price, the representative (combined) label of that
+    cheapest offer, the carrier's logo code, stops/duration and a flag for
+    whether the carrier flies the route nonstop at all.
+    """
+    fares = {}
+    # Ascending price so the first offer seen for a carrier is already its
+    # cheapest; later offers only refine the nonstop flag / fastest duration.
+    for r in day.sort_values("price").itertuples():
+        combined = clean_airline(getattr(r, "airline", ""))
+        if not combined:
+            continue
+        price = float(r.price)
+        st = int(r.stops) if pd.notna(r.stops) else None
+        du = (int(r.duration_minutes)
+              if pd.notna(r.duration_minutes) and r.duration_minutes > 0 else 0)
+        for carrier in combined.split(" + "):
+            carrier = carrier.strip()
+            if not carrier:
+                continue
+            b = fares.get(carrier)
+            if b is None:
+                fares[carrier] = {"min": price, "stops": st, "ns": (st == 0),
+                                  "fast": du, "n": 1, "label": combined,
+                                  "iata": airline_iata(carrier)}
+            else:
+                b["n"] += 1
+                if price < b["min"]:
+                    b["min"], b["stops"], b["label"] = price, st, combined
+                if st == 0:
+                    b["ns"] = True
+                if du and (not b["fast"] or du < b["fast"]):
+                    b["fast"] = du
+    for b in fares.values():
+        b["min"], b["ns"] = round(b["min"]), bool(b["ns"])
+    return fares
+
+
 def _explore(ok, cap=2000):
     """Flat, filterable list of bookable trip options for the trip finder + fare
     calendar.
@@ -237,8 +283,10 @@ def _explore(ok, cap=2000):
     trip length we have ever scraped -- using each itinerary's freshest scan.
     That is what lets the client filter by date range, trip length, price,
     stops and airline, and paint a cheapest-fare-by-day calendar entirely
-    client-side. Kept to small per-row dicts (and capped) so the embedded JSON
-    stays light even as the grid grows.
+    client-side. Each row also embeds a per-carrier price map (`byair`) so the
+    filtered view can show the *selected* airline's own fare. Kept to small
+    per-row dicts (and capped) so the embedded JSON stays light even as the grid
+    grows.
     """
     out = []
     for itin, h in ok.groupby("itin"):
@@ -250,14 +298,24 @@ def _explore(ok, cap=2000):
         durs = day["duration_minutes"].dropna()
         durs = durs[durs > 0]
         stops_s = day["stops"].dropna().astype(int)
+        byair = _carrier_fares(day)
+        # Carriers cheapest-first -- drives the filter membership + ordering.
+        al = sorted(byair, key=lambda c: byair[c]["min"])
         air = clean_airline(getattr(cheap, "airline", cheap["airline"]))
+        iata = airline_iata(air)
+        # The overall-cheapest offer's airline is sometimes unrecognised noise
+        # (CO2e strings, route codes) and cleans to "" -- fall back to the
+        # cheapest *named* carrier so a card never renders a blank airline.
+        if not air and al:
+            air, iata = byair[al[0]]["label"], byair[al[0]]["iata"]
         out.append({
             "o": str(cheap["origin"]), "d": str(cheap["destination"]),
             "dep": str(cheap["depart_date"]), "ret": str(cheap["return_date"]),
             "len": (int(cheap["trip_length"]) if pd.notna(cheap["trip_length"]) else None),
             "min": round(float(prices.min())),
-            "airline": air, "iata": airline_iata(air),
-            "al": _carriers_in(day),
+            "airline": air, "iata": iata,
+            "al": al,
+            "byair": byair,
             "stops": (int(stops_s.min()) if not stops_s.empty else None),
             "nonstop": bool((stops_s == 0).any()) if not stops_s.empty else False,
             "fastest": int(durs.min()) if not durs.empty else 0,
@@ -275,6 +333,15 @@ def _explore_meta(explore):
         return {}
     prices = [e["min"] for e in explore]
     lens = [e["len"] for e in explore if e["len"]]
+    # Each carrier's cheapest fare anywhere in the grid -- shown next to its name
+    # in the airline dropdown so the floor for, say, Singapore Airlines is visible
+    # before you even filter (and makes clear it differs from the overall cheapest).
+    amins = {}
+    for e in explore:
+        for c, b in (e.get("byair") or {}).items():
+            m = b.get("min")
+            if m is not None and (c not in amins or m < amins[c]):
+                amins[c] = m
     return {
         "count": len(explore),
         "price_min": min(prices), "price_max": max(prices),
@@ -285,6 +352,7 @@ def _explore_meta(explore):
         # Filter options are individual carriers (incl. those that only fly a leg
         # of a connection), so e.g. Singapore Airlines is selectable on its own.
         "airlines": sorted({c for e in explore for c in (e.get("al") or [])}),
+        "airline_min": amins,
         "routes": sorted({e["o"] + "-" + e["d"] for e in explore}),
         "nonstop_any": any(e["nonstop"] for e in explore),
     }
@@ -1503,23 +1571,36 @@ function buildFinder(){
   const kprice=n=>n>=1000?(n/1000).toFixed(n>=10000?0:1).replace(/\.0$/,'')+'k':String(Math.round(n));
   const itinOf=e=>e.o+'-'+e.d+' '+e.dep+' -> '+e.ret;
 
+  // When an airline filter is active, every figure a card shows -- price, logo,
+  // stops, duration, fare count -- comes from THAT carrier's own offers, not the
+  // itinerary's overall cheapest (which may be a completely different airline).
+  const ab=e=>(F.airline&&e.byair&&e.byair[F.airline])||null;
+  const priceOf=e=>{const b=ab(e);return b?b.min:e.min;};
+  const airOf=e=>{const b=ab(e);return b?b.label:e.airline;};
+  const iataOf=e=>{const b=ab(e);return b?b.iata:e.iata;};
+  const stopsOf=e=>{const b=ab(e);return b?b.stops:e.stops;};
+  const nsOf=e=>{const b=ab(e);return b?b.ns:e.nonstop;};
+  const fastOf=e=>{const b=ab(e);return b?b.fast:e.fastest;};
+  const offersOf=e=>{const b=ab(e);return b?b.n:e.offers;};
+  const flies=(e,a)=>e.byair?(a in e.byair):((e.al||[]).includes(a));
+
   function match(e,ignoreDay){
     if(F.depFrom&&e.dep<F.depFrom)return false;
     if(F.depTo&&e.dep>F.depTo)return false;
     if(F.lenMin!=null&&(e.len==null||e.len<F.lenMin))return false;
     if(F.lenMax!=null&&(e.len==null||e.len>F.lenMax))return false;
-    if(F.maxPrice!=null&&e.min>F.maxPrice)return false;
-    if(F.stops==='nonstop'&&!e.nonstop)return false;
-    if(F.stops==='1'&&(e.stops==null||e.stops>1))return false;
-    if(F.airline&&!((e.al||[]).includes(F.airline)))return false;
+    if(F.airline&&!flies(e,F.airline))return false;
+    if(F.maxPrice!=null&&priceOf(e)>F.maxPrice)return false;
+    if(F.stops==='nonstop'&&!nsOf(e))return false;
+    if(F.stops==='1'&&(stopsOf(e)==null||stopsOf(e)>1))return false;
     if(F.route&&(e.o+'-'+e.d)!==F.route)return false;
     if(!ignoreDay&&F.day&&e.dep!==F.day)return false;
     return true;
   }
-  const SORT={price:(a,b)=>a.min-b.min,
+  const SORT={price:(a,b)=>priceOf(a)-priceOf(b),
     date:(a,b)=>a.dep<b.dep?-1:a.dep>b.dep?1:(a.len||0)-(b.len||0),
     length:(a,b)=>(a.len||0)-(b.len||0),
-    fast:(a,b)=>(a.fastest||1e9)-(b.fastest||1e9)};
+    fast:(a,b)=>(fastOf(a)||1e9)-(fastOf(b)||1e9)};
   const heat=(p,lo,hi)=>{if(hi<=lo)return 'hsl(150 62% 90%)';
     const t=Math.max(0,Math.min(1,(p-lo)/(hi-lo)));return 'hsl('+(132-(132-6)*t).toFixed(0)+' 72% '+(91-t*16).toFixed(0)+'%)';};
 
@@ -1532,7 +1613,7 @@ function buildFinder(){
   function buildCalendar(){
     const cal=$('cal');if(!cal)return;
     const list=EX.filter(e=>match(e,true)),perDay={};
-    list.forEach(e=>{const c=perDay[e.dep];if(!c){perDay[e.dep]={min:e.min,n:1};}else{c.n++;if(e.min<c.min)c.min=e.min;}});
+    list.forEach(e=>{const p=priceOf(e),c=perDay[e.dep];if(!c){perDay[e.dep]={min:p,n:1};}else{c.n++;if(p<c.min)c.min=p;}});
     const days=Object.keys(perDay);
     if(!days.length){cal.innerHTML='<div class="finder-empty">No departure days match these filters.</div>';return;}
     const ps=days.map(d=>perDay[d].min),lo=Math.min.apply(null,ps),hi=Math.max.apply(null,ps);
@@ -1561,12 +1642,13 @@ function buildFinder(){
   }
 
   function card(e){const L=bookLinks(itinOf(e));
-    const st=e.nonstop?'<span class="ns">Nonstop</span>':(e.stops!=null?'<span>'+stops(e.stops)+'</span>':'');
-    return '<div class="trip"><div class="th">'+avatar(e.airline,e.iata,26)+
-      '<span class="rt">'+esc(cn(e.o))+' → '+esc(cn(e.d))+'</span><span class="pr">'+fmt(e.min)+'</span></div>'+
+    const price=priceOf(e),al=airOf(e),ia=iataOf(e),ns=nsOf(e),stp=stopsOf(e),fast=fastOf(e),off=offersOf(e);
+    const st=ns?'<span class="ns">Nonstop</span>':(stp!=null?'<span>'+stops(stp)+'</span>':'');
+    return '<div class="trip"><div class="th">'+avatar(al,ia,26)+
+      '<span class="rt">'+esc(cn(e.o))+' → '+esc(cn(e.d))+'</span><span class="pr">'+fmt(price)+'</span></div>'+
       '<div class="dt">'+exFmt(e.dep)+' – '+exFmt(e.ret)+(e.len!=null?' · '+e.len+' nights':'')+'</div>'+
-      '<div class="mt">'+st+(e.fastest?'<span>⏱ '+dur(e.fastest)+'</span>':'')+
-        (e.airline?'<span>'+esc(e.airline)+'</span>':'')+(e.offers?'<span>'+e.offers+' fares</span>':'')+'</div>'+
+      '<div class="mt">'+st+(fast?'<span>⏱ '+dur(fast)+'</span>':'')+
+        (al?'<span>'+esc(al)+'</span>':'')+(off?'<span>'+off+' fare'+(off===1?'':'s')+'</span>':'')+'</div>'+
       (L?'<div class="go"><a class="btnbook" href="'+L.google+'" target="_blank" rel="noopener nofollow">'+_EXT+'Book</a>'+
         '<span class="cmp">or <a href="'+L.kayak+'" target="_blank" rel="noopener nofollow">Kayak</a> · '+
         '<a href="'+L.sky+'" target="_blank" rel="noopener nofollow">Skyscanner</a></span></div>':'')+'</div>';}
@@ -1574,8 +1656,11 @@ function buildFinder(){
   function buildTrips(){const wrap=$('trips');if(!wrap)return;
     const list=EX.filter(e=>match(e,false)).sort(SORT[F.sort]||SORT.price),total=list.length;
     const cEl=$('ex-count');
-    if(cEl)cEl.innerHTML=total?'<b>'+total+'</b> trip'+(total===1?'':'s')+(F.day?' on '+exFmt(F.day):'')+' · from '+fmt(Math.min.apply(null,list.map(e=>e.min))):'<b>0</b> trips match';
-    if(!total){wrap.innerHTML='<div class="finder-empty">No trips match these filters. Try widening the dates, price or trip length.</div>';
+    if(cEl)cEl.innerHTML=total?'<b>'+total+'</b> trip'+(total===1?'':'s')+(F.airline?' on '+esc(F.airline):'')+(F.day?' · '+exFmt(F.day):'')+' · from '+fmt(Math.min.apply(null,list.map(priceOf))):'<b>0</b> trips match';
+    if(!total){wrap.innerHTML='<div class="finder-empty">No trips match these filters.'+
+        (F.airline?' We haven’t seen <b>'+esc(F.airline)+'</b> on a matching trip — try <a href="#" id="ex-clearair">any airline</a> or':' Try')+
+        ' widening the dates, price or trip length.</div>';
+      const ca=$('ex-clearair');if(ca)ca.addEventListener('click',ev=>{ev.preventDefault();F.airline='';$('f-air').value='';lim=24;render();});
       const mb=$('ex-more');if(mb)mb.style.display='none';return;}
     wrap.innerHTML=list.slice(0,lim).map(card).join('');
     const mb=$('ex-more');if(mb)mb.style.display=total>lim?'block':'none';}
@@ -1585,7 +1670,9 @@ function buildFinder(){
   async function doSearch(){await ensureLoaded();lim=24;render();}
 
   // ---- controls ----
-  const airOpts='<option value="">Any airline</option>'+(EXM.airlines||[]).map(a=>'<option value="'+esc(a)+'">'+esc(a)+'</option>').join('');
+  const amins=EXM.airline_min||{};
+  const airOpts='<option value="">Any airline</option>'+(EXM.airlines||[]).map(a=>
+    '<option value="'+esc(a)+'">'+esc(a)+(amins[a]!=null?' · from '+fmt(amins[a]):'')+'</option>').join('');
   const nopts=sel=>{let o='';for(let n=lmin;n<=lmax;n++)o+='<option value="'+n+'"'+(n===sel?' selected':'')+'>'+n+' nights</option>';return o;};
   const lenFlds=hasLen?'<div class="fld"><label>Min nights</label><select id="f-lmin">'+nopts(lmin)+'</select></div>'+
       '<div class="fld"><label>Max nights</label><select id="f-lmax">'+nopts(lmax)+'</select></div>':'';
