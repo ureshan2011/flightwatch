@@ -1,7 +1,9 @@
 # FlightWatch ✈
 
-An open, free, self-hosting fare tracker for the **Christchurch ↔ Colombo** corridor
-(and any route you add). It scrapes the **full** fare list **several times a day**,
+An open, free, self-hosting fare tracker for **New Zealand ↔ Sri Lanka & India**
+— the **Christchurch ↔ Colombo** and **Auckland ↔ Colombo / Delhi / Mumbai**
+corridors out of the box (and any route you add). It scrapes the **full** fare
+list **several times a day**,
 builds an **intraday** price history, forecasts where the fare is heading with a
 calibrated model, and shows a **buy / wait** decision with a **confidence rate** —
 plus deal scores, a predicted booking curve, a cheapest-day heatmap and free push
@@ -16,6 +18,23 @@ alerts — all running for **$0** on GitHub's free tier.
 - **Dataset:** every observation is committed as plain CSV in `data/` — open for anyone
 
 > Fares are informational. Always confirm the live price before booking.
+
+> **Experimental — Singapore Airlines' own site.** Besides Google Flights, an
+> opt-in source (`flightwatch/provider_sq.py`) scrapes Singapore Airlines' public
+> **Best Fare Finder** for SQ's *own* end-to-end fares — the genuine "SQ flying
+> the whole trip" price. It is **off by default** (the scheduled scan only uses
+> Google Flights, which stays rock-solid) because singaporeair.com sits behind
+> heavy bot protection and needs selector tuning against a live page. Try it with
+> `python -m flightwatch sq-diag CHC CMB 2026-09-05 2026-09-26`, which prints what
+> it found and saves a screenshot + HTML to `debug/`.
+
+> **Singapore Airlines on the dashboard.** The command-center spotlights a
+> configured carrier (`featured_airline`, default Singapore Airlines). Because SQ
+> often flies these corridors as a connection (from Christchurch it's CHC→SIN→CMB
+> with Air New Zealand), the dashboard distinguishes **SQ operating one leg** from
+> **SQ flying the whole trip on its own metal** (e.g. AKL→SIN→CMB all on SQ) and
+> shows the cheapest whole-trip SQ fare separately. The trip finder lets you
+> filter for any single carrier — even one that only flies a leg of a connection.
 
 > **Why scrape Google Flights?** FlightWatch first used the Amadeus Self-Service API
 > (dropped its free tier), then the Travelpayouts Data API (free, but a *cache* of
@@ -116,6 +135,7 @@ python -m flightwatch all        # both at once
 python -m flightwatch alert      # push fresh signals (dry-prints if no secrets set)
 python -m flightwatch backtest   # how the engine's past calls actually fared
 python -m flightwatch diag       # scrape one route verbosely + save debug screenshot
+python -m flightwatch sq-diag    # EXPERIMENTAL: scrape Singapore Airlines' own site
 open docs/index.html
 ```
 
@@ -140,19 +160,25 @@ itineraries:
 For **breadth**, the `auto_generate:` block sweeps a rolling window of departures
 across the next ~3 months for each route — **every day** a departure, paired with
 **every trip length in a range** (e.g. 20–40 days). It's recomputed from *today*
-every run, so it always covers the next 3 months:
+every run, so it always covers the next 3 months. Each route can **override any
+grid setting** (`depart_step_days`, `horizon_days`, `min_days_out`,
+`trip_length_*`), so a dense core corridor and a lighter new route can share one
+grid without the additions blowing the CI budget:
 
 ```yaml
 auto_generate:
   enabled: true
-  horizon_days: 90          # ~3 months out
+  horizon_days: 90          # ~3 months out (block default)
   min_days_out: 1
-  depart_step_days: 1       # every day is a departure date
+  depart_step_days: 1       # every day is a departure date (block default)
   trip_length_min: 20       # trip duration 20..40 days inclusive
   trip_length_max: 40
   trip_length_step: 1
   routes:
-    - {origin: CHC, destination: CMB}
+    - {origin: CHC, destination: CMB}                      # dense: every day
+    - {origin: AKL, destination: CMB, depart_step_days: 4} # lighter sweep
+    - {origin: AKL, destination: DEL, depart_step_days: 14}
+    - {origin: AKL, destination: BOM, depart_step_days: 14}
   shard_across_slots: true  # see below
   shards: 4
 ```

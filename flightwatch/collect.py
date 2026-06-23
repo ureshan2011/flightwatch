@@ -52,27 +52,20 @@ def generate_grid(cfg, existing_keys=None):
     gen = cfg.get("auto_generate") or {}
     if not gen.get("enabled"):
         return []
-
-    horizon = int(gen.get("horizon_days", 90) or 90)
-    min_out = int(gen.get("min_days_out", 7) or 0)
-    step = max(int(gen.get("depart_step_days", 3) or 1), 1)
     routes = gen.get("routes") or []
-
-    # Trip lengths: either an explicit list, or a min..max range (inclusive) swept
-    # at `trip_length_step`. The range form is what lets us cover "20 to 40 days".
-    if gen.get("trip_lengths"):
-        lengths = [int(x) for x in gen["trip_lengths"] if int(x) > 0]
-    else:
-        lmin = int(gen.get("trip_length_min", 21) or 1)
-        lmax = int(gen.get("trip_length_max", lmin) or lmin)
-        lstep = max(int(gen.get("trip_length_step", 1) or 1), 1)
-        lengths = [n for n in range(lmin, lmax + 1, lstep) if n > 0]
 
     seen = set(existing_keys or set())
     today = date.today()
     out = []
     for route in routes:
         origin, dest = route["origin"], route["destination"]
+        # Every knob can be overridden PER ROUTE so a dense corridor (CHC<->CMB,
+        # every day) and a lighter one (a new India route, every few days) can
+        # share one grid without the lighter route blowing up the CI budget.
+        horizon = int(_route_opt(route, gen, "horizon_days", 90))
+        min_out = int(_route_opt(route, gen, "min_days_out", 0))
+        step = max(int(_route_opt(route, gen, "depart_step_days", 3)), 1)
+        lengths = _trip_lengths(route, gen)
         for offset in range(min_out, horizon + 1, step):
             dep = today + timedelta(days=offset)
             for length in lengths:
@@ -86,6 +79,27 @@ def generate_grid(cfg, existing_keys=None):
                 seen.add(key)
                 out.append(it)
     return out
+
+
+def _route_opt(route, gen, key, default):
+    """A grid setting, with a per-route override falling back to the block default."""
+    v = route.get(key)
+    if v is None:
+        v = gen.get(key, default)
+    return default if v is None else v
+
+
+def _trip_lengths(route, gen):
+    """Trip lengths for a route: an explicit list, or a min..max range (inclusive)
+    swept at `trip_length_step`. The range form is what covers e.g. 20 to 40 days.
+    Both forms accept a per-route override."""
+    explicit = route.get("trip_lengths") or gen.get("trip_lengths")
+    if explicit:
+        return [int(x) for x in explicit if int(x) > 0]
+    lmin = int(_route_opt(route, gen, "trip_length_min", 21))
+    lmax = int(_route_opt(route, gen, "trip_length_max", lmin) or lmin)
+    lstep = max(int(_route_opt(route, gen, "trip_length_step", 1)), 1)
+    return [n for n in range(lmin, lmax + 1, lstep) if n > 0]
 
 
 def expand_itineraries(cfg):

@@ -40,15 +40,26 @@ _ROUTE_CODE = re.compile(r"^[A-Z]{3}\s*[-–—]\s*[A-Z]{3}$")
 # Rejecting these keeps the airline mix honest (and out of the filter list).
 _AIRLINE_NOISE = re.compile(r"co2e?|co₂|emission|\bkg\b", re.I)
 
-# Carriers that fly (or connect on) this corridor. Used to split fares whose
-# scraped label glues two operating carriers together -- "JetstarQantas" or
+# A scraped fragment that is really a PRICE the extractor mistook for a carrier:
+# "NZ$4,005", "USD 1,234", "NZ$ 4005", "1,234". The currency symbol/code is
+# optional, then a number. These leaked into the airline filter as "005", "006"
+# etc. (the price tail after clean-up), so reject them outright.
+_PRICE_LIKE = re.compile(r"^[A-Za-z]{0,3}\s*[$€£₹]?\s*\d[\d,. ]*$")
+
+# Carriers that fly (or connect on) the corridors FlightWatch tracks
+# (NZ <-> Sri Lanka and NZ <-> India). Used to split fares whose scraped label
+# glues two operating carriers together -- "JetstarQantas" or
 # "Singapore AirlinesAir New Zealand" -- without breaking single names that
-# legitimately contain an internal capital (e.g. "SriLankan").
+# legitimately contain an internal capital (e.g. "SriLankan"). Order longest-first
+# (done below) so "Air India Express" is peeled before "Air India".
 _KNOWN_AIRLINES = sorted([
     "Air New Zealand", "Singapore Airlines", "Malaysia Airlines", "Cathay Pacific",
     "China Southern", "China Eastern", "Thai Airways", "Qatar Airways", "Sri Lankan",
     "SriLankan", "Qantas", "Jetstar", "Emirates", "Scoot", "Batik Air", "AirAsia",
     "Fiji Airways", "Etihad", "Korean Air", "Vietnam Airlines", "Garuda Indonesia",
+    # India-corridor carriers (AKL/CHC <-> DEL/BOM/MAA/BLR...).
+    "Air India Express", "Air India", "IndiGo", "Vistara", "SpiceJet",
+    "Sri Lankan Airlines", "Turkish Airlines", "British Airways", "Air China",
 ], key=len, reverse=True)
 
 # Carrier -> IATA code, used to pull the real airline logo on the dashboard
@@ -57,9 +68,12 @@ _AIRLINE_IATA = {
     "Air New Zealand": "NZ", "Singapore Airlines": "SQ", "Malaysia Airlines": "MH",
     "Cathay Pacific": "CX", "China Southern": "CZ", "China Eastern": "MU",
     "Thai Airways": "TG", "Qatar Airways": "QR", "Sri Lankan": "UL", "SriLankan": "UL",
+    "Sri Lankan Airlines": "UL",
     "Qantas": "QF", "Jetstar": "JQ", "Emirates": "EK", "Scoot": "TR", "Batik Air": "OD",
     "AirAsia": "AK", "Fiji Airways": "FJ", "Etihad": "EY", "Korean Air": "KE",
     "Vietnam Airlines": "VN", "Garuda Indonesia": "GA",
+    "Air India": "AI", "Air India Express": "IX", "IndiGo": "6E", "Vistara": "UK",
+    "SpiceJet": "SG", "Turkish Airlines": "TK", "British Airways": "BA", "Air China": "CA",
 }
 
 
@@ -97,9 +111,10 @@ def clean_airline(name):
     name = re.sub(r"\s{2,}", " ", str(name).strip())
     if not name or _ROUTE_CODE.match(name):
         return ""
-    # Drop emissions/unit noise and anything with no actual letters (stray
-    # numbers, prices) -- these are never real carrier names.
-    if _AIRLINE_NOISE.search(name) or not re.search(r"[A-Za-z]", name):
+    # Drop emissions/unit noise, currency/price strings ("NZ$4,005"), and anything
+    # with no actual letters (stray numbers) -- these are never real carrier names.
+    if (_AIRLINE_NOISE.search(name) or not re.search(r"[A-Za-z]", name)
+            or "$" in name or _PRICE_LIKE.match(name)):
         return ""
     toks = _tokenize_airlines(name)
     if toks:
@@ -109,7 +124,13 @@ def clean_airline(name):
             if t not in seen:
                 seen.append(t)
         return " + ".join(seen)
-    # Fallback: treat commas/slashes as separators; never split on camelCase.
+    # Fallback: an UNRECOGNISED carrier. Real carrier names on these corridors
+    # carry no digits, so a leftover multi-digit run means scraper noise (a price
+    # tail like "NZ$4,005" or a flight number) -- reject it rather than surface a
+    # number as an airline (the bug that filled the filter with "005", "006"...).
+    if re.search(r"\d{2,}", name):
+        return ""
+    # Treat commas/slashes as separators; never split on camelCase.
     return re.sub(r"\s*[,/]\s*", " + ", name).strip()
 
 
@@ -152,6 +173,13 @@ CITY = {
     "MEL": {"name": "Melbourne", "lat": -37.669, "lon": 144.841, "tz": "Australia/Melbourne"},
     "SYD": {"name": "Sydney", "lat": -33.939, "lon": 151.175, "tz": "Australia/Sydney"},
     "KUL": {"name": "Kuala Lumpur", "lat": 2.745, "lon": 101.710, "tz": "Asia/Kuala_Lumpur"},
+    # India -- popular NZ <-> India routes.
+    "DEL": {"name": "Delhi", "lat": 28.556, "lon": 77.100, "tz": "Asia/Kolkata"},
+    "BOM": {"name": "Mumbai", "lat": 19.090, "lon": 72.868, "tz": "Asia/Kolkata"},
+    "MAA": {"name": "Chennai", "lat": 12.994, "lon": 80.171, "tz": "Asia/Kolkata"},
+    "BLR": {"name": "Bengaluru", "lat": 13.199, "lon": 77.710, "tz": "Asia/Kolkata"},
+    "HYD": {"name": "Hyderabad", "lat": 17.240, "lon": 78.429, "tz": "Asia/Kolkata"},
+    "COK": {"name": "Kochi", "lat": 10.152, "lon": 76.401, "tz": "Asia/Kolkata"},
 }
 
 
@@ -240,6 +268,12 @@ def _carrier_fares(day):
     carries the cheapest price, the representative (combined) label of that
     cheapest offer, the carrier's logo code, stops/duration and a flag for
     whether the carrier flies the route nonstop at all.
+
+    It also tracks WHOLE-TRIP operation: `solo` is True when the carrier operates
+    the entire itinerary on its own metal (the offer's label is just that
+    carrier, no "+ other"), and `solo_min` is its cheapest such fare. This is what
+    lets the dashboard answer "track Singapore Airlines flying the WHOLE trip" --
+    distinct from SQ merely operating one leg of a connection.
     """
     fares = {}
     # Ascending price so the first offer seen for a carrier is already its
@@ -252,15 +286,16 @@ def _carrier_fares(day):
         st = int(r.stops) if pd.notna(r.stops) else None
         du = (int(r.duration_minutes)
               if pd.notna(r.duration_minutes) and r.duration_minutes > 0 else 0)
-        for carrier in combined.split(" + "):
-            carrier = carrier.strip()
-            if not carrier:
-                continue
+        carriers = [c.strip() for c in combined.split(" + ") if c.strip()]
+        solo = len(carriers) == 1            # this carrier flies the whole trip
+        for carrier in carriers:
             b = fares.get(carrier)
             if b is None:
                 fares[carrier] = {"min": price, "stops": st, "ns": (st == 0),
                                   "fast": du, "n": 1, "label": combined,
-                                  "iata": airline_iata(carrier)}
+                                  "iata": airline_iata(carrier),
+                                  "solo": solo,
+                                  "solo_min": (price if solo else None)}
             else:
                 b["n"] += 1
                 if price < b["min"]:
@@ -269,12 +304,18 @@ def _carrier_fares(day):
                     b["ns"] = True
                 if du and (not b["fast"] or du < b["fast"]):
                     b["fast"] = du
+                if solo:
+                    b["solo"] = True
+                    if b["solo_min"] is None or price < b["solo_min"]:
+                        b["solo_min"] = price
     for b in fares.values():
         b["min"], b["ns"] = round(b["min"]), bool(b["ns"])
+        if b["solo_min"] is not None:
+            b["solo_min"] = round(b["solo_min"])
     return fares
 
 
-def _explore(ok, cap=2000):
+def _explore(ok, cap=4000):
     """Flat, filterable list of bookable trip options for the trip finder + fare
     calendar.
 
@@ -378,8 +419,10 @@ def _carrier_focus(df, explore, carrier):
     low-confidence heuristic, exactly like the main recommendations.
 
     On a thin corridor a premium carrier often only flies a leg of a connection
-    (Singapore Airlines is CHC->SIN->CMB with Air New Zealand), so "its fare" is
-    the cheapest offer it operates any part of -- there is no solo-metal option.
+    (from Christchurch, Singapore Airlines is CHC->SIN->CMB with Air New Zealand),
+    so "its fare" is the cheapest offer it operates any part of. Where the carrier
+    DOES fly the whole trip on its own metal (e.g. SQ out of Auckland, AKL->SIN->
+    CMB all on SQ), that is surfaced separately as the whole-trip fare.
     """
     items = [(f'{e["o"]}-{e["d"]} {e["dep"]} -> {e["ret"]}', e, e["byair"][carrier])
              for e in explore if carrier in (e.get("byair") or {})]
@@ -406,7 +449,18 @@ def _carrier_focus(df, explore, carrier):
                 "ret": e["ret"], "len": e["len"], "price": b["min"],
                 "label": b["label"], "iata": b["iata"], "stops": b["stops"],
                 "nonstop": b["ns"], "fastest": b["fast"], "dtd": e.get("dtd"),
-                **_rec_bits(key)}
+                "solo": bool(b.get("solo")), **_rec_bits(key)}
+
+    # Whole-trip metal: the cheapest itinerary this carrier flies end-to-end on
+    # its OWN aircraft (no codeshare/connection partner). Distinct from `cheapest`
+    # above, which may be a connection where the carrier flies just one leg.
+    solo_items = [(k, ee, bb) for k, ee, bb in items if bb.get("solo_min") is not None]
+    whole_trip = None
+    if solo_items:
+        sk, se, sb = min(solo_items, key=lambda t: t[2]["solo_min"])
+        whole_trip = {"itinerary": sk, "o": se["o"], "d": se["d"], "dep": se["dep"],
+                      "ret": se["ret"], "len": se["len"], "price": sb["solo_min"],
+                      "trips": len(solo_items)}
 
     # Cheapest fare for each of the next departure months (a quick 3-month read).
     bym = {}
@@ -419,7 +473,7 @@ def _carrier_focus(df, explore, carrier):
     upcoming = [bym[m] for m in sorted(bym)][:3]
 
     return {"name": carrier, "iata": airline_iata(carrier), "trips": len(items),
-            "cheapest": cheapest, "upcoming": upcoming}
+            "cheapest": cheapest, "whole_trip": whole_trip, "upcoming": upcoming}
 
 
 def _airline_market(ok):
@@ -1046,6 +1100,8 @@ tr.best td{background:var(--buy-bg)}
 .trip .mt{display:flex;gap:6px;flex-wrap:wrap}
 .trip .mt span{font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--muted);background:#eef3fd;border-radius:7px;padding:2px 7px}
 .trip .mt span.ns{background:var(--buy-bg);color:var(--buy)}
+.trip .mt span.whole{background:rgba(18,176,124,.13);color:#0f7a52;font-weight:600}
+.trip .mt span.leg{background:rgba(232,144,42,.12);color:#9a6418}
 .trip .go{display:flex;align-items:center;gap:10px;margin-top:2px}
 .trip .go .btnbook{padding:8px 13px;font-size:12px}
 .trip .go .cmp{font-size:11px;color:var(--dim)}
@@ -1102,6 +1158,11 @@ tr.best td{background:var(--buy-bg)}
 .b-focus .bf-via{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px}
 .b-focus .bf-via span{font-size:11px;color:var(--muted);background:rgba(255,255,255,.7);
   border:1px solid var(--line);border-radius:8px;padding:3px 8px}
+.b-focus .bf-metal{color:#127a52!important;background:rgba(18,176,124,.12)!important;border-color:rgba(18,176,124,.3)!important;font-weight:600}
+.b-focus .bf-conn{color:#7a5b2e!important;background:rgba(232,144,42,.1)!important;border-color:rgba(232,144,42,.28)!important}
+.b-focus .bf-solo{font-size:11.5px;color:var(--muted);margin-top:9px;padding:7px 10px;
+  background:rgba(122,92,240,.07);border:1px dashed rgba(122,92,240,.32);border-radius:9px;line-height:1.4}
+.b-focus .bf-solo b{color:#5b43c9}
 .b-focus .bf-call{font-size:12.5px;color:var(--muted);margin-top:13px;line-height:1.45}
 .b-focus .bf-call b{color:var(--ink)}.b-focus .bf-call i{color:var(--dim);font-style:normal}
 .b-focus .bf-months{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:13px}
@@ -1365,8 +1426,10 @@ const ICON={
   gem:'<path d="M6 3h12l3 6-9 12L3 9z"/><path d="M3 9h18M9 3 7 9l5 12 5-12-2-6"/>'};
 const S=D.stats;
 document.getElementById('eyebrow').textContent=D.primary?(D.primary.origin.name+' → '+D.primary.dest.name+' · SMART FARE TIMING'):'SMART FARE TIMING';
-if(D.primary)document.getElementById('lead').innerHTML='Faro watches fares for <b>'+esc(D.primary.origin.name)+' → '+esc(D.primary.dest.name)+
-  '</b> every day and tells you whether to book now or wait — with the airline, stops and flight time for every option.';
+if(D.primary){const nR=((D.explore_meta&&D.explore_meta.routes)||[]).length;
+  const more=nR>1?' — one of <b>'+nR+' routes</b> it tracks across New Zealand ↔ Sri Lanka &amp; India':'';
+  document.getElementById('lead').innerHTML='Faro watches fares for <b>'+esc(D.primary.origin.name)+' → '+esc(D.primary.dest.name)+
+  '</b> every day'+more+', and tells you whether to book now or wait — with the airline, stops and flight time for every option.';}
 renderBento();
 
 /* Spotlight-carrier tile (replaces the old "lowest ever" stat): the featured
@@ -1382,8 +1445,17 @@ function focusTile(){
   if(c.confidence!=null)bits.push(c.confidence+'% confidence');
   const extra=bits.length?' <i>('+bits.join(' · ')+')</i>':'';
   const stp=c.nonstop?'Nonstop':(c.stops!=null?stops(c.stops):'');
+  // Does the headline fare put the carrier on the WHOLE trip or just one leg?
+  const tripTag=c.solo?'<span class="bf-metal">whole trip on '+esc(F.name)+'</span>'
+    :'<span class="bf-conn">'+esc(F.name)+' flies one leg</span>';
   const months=(F.upcoming||[]).map(u=>{const m=String(u.dep||'').match(/-(\d{2})-/);
     return '<span class="mchip"><i>'+(m?MM[+m[1]-1]:'')+'</i><b>'+fmt(u.price)+'</b></span>';}).join('');
+  // Whole-trip-on-own-metal fare, when it differs from the (possibly connection)
+  // headline — directly answers "track <carrier> flying the entire trip".
+  const wt=F.whole_trip;
+  const wtLine=(wt&&!c.solo)?'<div class="bf-solo">🛫 Cheapest <b>'+esc(F.name)+
+    '</b>-operated whole trip: <b>'+fmt(wt.price)+'</b> · '+fdshort(wt.dep)+
+    (wt.len!=null?' · '+wt.len+' nights':'')+'</div>':'';
   return '<div class="btile b-focus reveal">'+
     '<div class="bf-head">'+avatar(F.name,F.iata,24)+'<span class="bf-name">'+esc(F.name)+'</span>'+
       '<span class="sig '+sig+'">'+sig+'</span></div>'+
@@ -1391,7 +1463,8 @@ function focusTile(){
       '<small>lowest fare now</small></div>'+
     '<div class="bf-trip">'+esc(pi.title)+' · '+esc(pi.dates)+(c.len!=null?' · '+c.len+' nights':'')+'</div>'+
     '<div class="bf-via">'+(stp?'<span>'+stp+'</span>':'')+(c.fastest?'<span>⏱ '+dur(c.fastest)+'</span>':'')+
-      '<span>'+esc(c.label||F.name)+'</span></div>'+
+      tripTag+'</div>'+
+    wtLine+
     '<div class="bf-call"><b>'+verdict+'</b> — '+esc(c.reason||'Tracking this fare.')+extra+'</div>'+
     (months?'<div class="bf-months"><span class="bf-lbl">Lowest by month</span>'+months+'</div>':'')+
     '<div class="bf-go">'+bookBtn(c.itinerary,'Book this '+F.name+' fare')+'</div></div>';
@@ -1777,11 +1850,17 @@ function buildFinder(){
   function card(e){const L=bookLinks(itinOf(e));
     const price=priceOf(e),al=airOf(e),ia=iataOf(e),ns=nsOf(e),stp=stopsOf(e),fast=fastOf(e),off=offersOf(e);
     const st=ns?'<span class="ns">Nonstop</span>':(stp!=null?'<span>'+stops(stp)+'</span>':'');
+    // When an airline filter is active, flag whether that carrier flies the WHOLE
+    // trip on its own metal here, or only one leg of the connection.
+    const b=ab(e);
+    const metal=(F.airline&&b)?(b.solo
+      ?'<span class="whole">whole trip on '+esc(F.airline)+'</span>'
+      :'<span class="leg">'+esc(F.airline)+' flies one leg</span>'):'';
     return '<div class="trip"><div class="th">'+avatar(al,ia,26)+
       '<span class="rt">'+esc(cn(e.o))+' → '+esc(cn(e.d))+'</span><span class="pr">'+fmt(price)+'</span></div>'+
       '<div class="dt">'+exFmt(e.dep)+' – '+exFmt(e.ret)+(e.len!=null?' · '+e.len+' nights':'')+'</div>'+
       '<div class="mt">'+st+(fast?'<span>⏱ '+dur(fast)+'</span>':'')+
-        (al?'<span>'+esc(al)+'</span>':'')+(off?'<span>'+off+' fare'+(off===1?'':'s')+'</span>':'')+'</div>'+
+        (al?'<span>'+esc(al)+'</span>':'')+metal+(off?'<span>'+off+' fare'+(off===1?'':'s')+'</span>':'')+'</div>'+
       (L?'<div class="go"><a class="btnbook" href="'+L.google+'" target="_blank" rel="noopener nofollow">'+_EXT+'Book</a>'+
         '<span class="cmp">or <a href="'+L.kayak+'" target="_blank" rel="noopener nofollow">Kayak</a> · '+
         '<a href="'+L.sky+'" target="_blank" rel="noopener nofollow">Skyscanner</a></span></div>':'')+'</div>';}

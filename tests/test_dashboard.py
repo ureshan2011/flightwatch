@@ -63,6 +63,28 @@ def test_clean_airline_rejects_noise():
         "Air New Zealand + Singapore Airlines"
 
 
+def test_clean_airline_rejects_price_strings():
+    # The scraper sometimes captures a PRICE where a carrier name should be
+    # ("NZ$4,005"). Cleaned, its tail ("005") used to leak into the airline filter
+    # as a fake carrier -- the dropdown-full-of-numbers bug. Reject these outright.
+    for junk in ["NZ$4,005", "NZ$2,565", "USD 1,234", "NZ$ 4005", "$3,961",
+                 "005", "4,005", "9,130"]:
+        assert DB.clean_airline(junk) == "", junk
+    # A bare flight-number-like fragment is not a carrier either.
+    assert DB.clean_airline("305") == ""
+
+
+def test_clean_airline_recognises_india_carriers():
+    # New India-corridor carriers must be recognised (with correct logos) and
+    # "Air India Express" must not be mis-peeled as "Air India".
+    assert DB.clean_airline("Air India") == "Air India"
+    assert DB.airline_iata("Air India") == "AI"
+    assert DB.clean_airline("Air India Express") == "Air India Express"
+    assert DB.airline_iata("Air India Express") == "IX"
+    assert DB.clean_airline("IndiGo") == "IndiGo"
+    assert DB.airline_iata("IndiGo") == "6E"
+
+
 def test_carriers_split_into_individuals():
     import pandas as pd
     day = pd.DataFrame({"price": [100, 200],
@@ -161,6 +183,42 @@ def test_carrier_focus_spotlights_the_selected_airline():
     # One low per upcoming departure month, cheapest-SQ per month.
     assert [u["month"] for u in focus["upcoming"]] == ["2026-07", "2026-08"]
     assert focus["upcoming"][0]["price"] == 2400
+
+
+def test_byair_tracks_whole_trip_solo_operation():
+    # SQ flies a connection (with Air NZ) @ 2400 AND the whole trip solo @ 2700.
+    # byair must record SQ's solo fare separately from its overall (connection) low.
+    ok = _one_day([(1200, "Jetstar", 0),
+                   (2400, "Air New Zealand, Singapore Airlines", 1),
+                   (2700, "Singapore Airlines", 1)])
+    e = DB._explore(ok)[0]
+    sq = e["byair"]["Singapore Airlines"]
+    assert sq["min"] == 2400            # cheapest SQ-operated (a connection)
+    assert sq["solo"] is True           # SQ also flies the whole trip on its metal
+    assert sq["solo_min"] == 2700       # ...at this fare
+    # Air NZ here only ever flies a leg -> no solo whole-trip fare.
+    assert e["byair"]["Air New Zealand"]["solo"] is False
+    assert e["byair"]["Air New Zealand"]["solo_min"] is None
+
+
+def test_carrier_focus_surfaces_whole_trip_fare():
+    import pandas as pd
+    data = [("2026-09-05", "2026-09-26", 2400, "Air New Zealand, Singapore Airlines"),
+            ("2026-09-05", "2026-09-26", 2900, "Singapore Airlines"),
+            ("2026-10-03", "2026-10-24", 2600, "Singapore Airlines")]
+    rows = [dict(scan_datetime="2026-06-20T09:00:00Z", scan_date=pd.Timestamp("2026-06-20"),
+                 scan_slot="2026-06-20T09:00Z", origin="AKL", destination="CMB",
+                 depart_date=dep, return_date=ret, trip_length=21, days_to_departure=80,
+                 offer_index=0, price=p, currency="NZD", airline=a, stops=1,
+                 duration_minutes=900, status="ok", source="x")
+            for dep, ret, p, a in data]
+    df = pd.DataFrame(rows)
+    explore = DB._explore(DB._with_itin(df[df["status"] == "ok"]))
+    focus = DB._carrier_focus(df, explore, "Singapore Airlines")
+    assert focus["whole_trip"] is not None
+    # Cheapest SQ-only whole-trip fare across the grid is 2600 (the Oct departure).
+    assert focus["whole_trip"]["price"] == 2600
+    assert focus["whole_trip"]["dep"] == "2026-10-03"
 
 
 def test_carrier_focus_none_when_carrier_has_no_fares():

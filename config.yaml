@@ -38,11 +38,22 @@ auto_generate:
   min_days_out: 1           # start from tomorrow
   depart_step_days: 1       # EVERY day in the window is a departure date
   # Trip duration swept as a range: every length from 20 to 40 days inclusive.
+  # These are the BLOCK DEFAULTS; any route below can override any of them
+  # (depart_step_days / horizon_days / min_days_out / trip_length_*) so a dense
+  # corridor and a lighter one can share one grid without blowing the CI budget.
   trip_length_min: 20
   trip_length_max: 40
   trip_length_step: 1
   routes:
+    # Christchurch <-> Colombo: the core corridor -- EVERY day, full 20-40 sweep.
     - {origin: CHC, destination: CMB}
+    # Auckland <-> Colombo: NZ's main hub to Colombo. Lighter cadence (every 4
+    # days) keeps the added grid affordable while still painting the curve.
+    - {origin: AKL, destination: CMB, depart_step_days: 4}
+    # NZ <-> India popular routes (Auckland to Delhi & Mumbai). Sparse sweep
+    # (every 2 weeks) -- enough to map the booking landscape, cheap on CI.
+    - {origin: AKL, destination: DEL, depart_step_days: 14}
+    - {origin: AKL, destination: BOM, depart_step_days: 14}
   # Every-day x (20..40)-day sweep is ~1,900 itineraries -- far too many for one
   # run. So the GENERATED grid is sharded across the day's scan slots: each
   # 6-hourly run scrapes one shard (~1/4), and across the day every date/length
@@ -66,5 +77,13 @@ itineraries:
   - {origin: CHC, destination: CMB, depart_date: 2026-09-10, return_date: 2026-10-01}
   - {origin: CHC, destination: CMB, depart_date: 2026-09-15, return_date: 2026-10-24}
   - {origin: CHC, destination: CMB, depart_date: 2026-09-22, return_date: 2026-10-13}
-  # Add more routes here to grow the public dataset, e.g.:
-  # - {origin: AKL, destination: CMB, depart_date: 2026-09-01, return_date: 2026-09-22}
+  # Auckland <-> Colombo, dense around the same cheap Sep/Oct windows.
+  - {origin: AKL, destination: CMB, depart_date: 2026-09-01, return_date: 2026-09-22}
+  - {origin: AKL, destination: CMB, depart_date: 2026-09-08, return_date: 2026-09-29}
+  - {origin: AKL, destination: CMB, depart_date: 2026-09-15, return_date: 2026-10-06}
+  # New Zealand <-> India popular routes (Auckland to Delhi & Mumbai), a couple of
+  # dense date-pairs each to build tight intraday curves alongside the sweep.
+  - {origin: AKL, destination: DEL, depart_date: 2026-09-05, return_date: 2026-09-26}
+  - {origin: AKL, destination: DEL, depart_date: 2026-10-03, return_date: 2026-10-24}
+  - {origin: AKL, destination: BOM, depart_date: 2026-09-05, return_date: 2026-09-26}
+  - {origin: AKL, destination: BOM, depart_date: 2026-10-03, return_date: 2026-10-24}
