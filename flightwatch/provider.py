@@ -261,6 +261,8 @@ _EXTRACT_JS = r"""
     const isJunk = (s) => !s
       || /^[A-Z]{3}\s*[–—-]\s*[A-Z]{3}$/.test(s)   // "CHC-CMB" route label
       || /co2e?|co₂|emission|\bkg\b/i.test(s)       // "706 kg CO2e" emissions line
+      || /[$€£₹]/.test(s)                            // any price string ("NZ$4,005")
+      || /\d{2,}/.test(s)                            // price/flight-no tail ("4,005")
       || /^\$|\d{1,2}:\d{2}|\bhr\b|\bmin\b|stop|nonstop|round trip|select|operated/i.test(s);
     let airline = '';
     const alts = [...li.querySelectorAll('img[alt]')]

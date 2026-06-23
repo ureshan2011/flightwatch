@@ -7,6 +7,7 @@ Command-line entry point so the project runs as a package:
     python -m flightwatch alert        # push fresh signals (Telegram/email)
     python -m flightwatch backtest     # print how the engine's calls have fared
     python -m flightwatch diag         # show what the scraper returns (debugging)
+    python -m flightwatch sq-diag      # EXPERIMENTAL: scrape Singapore Airlines' site
 
 With no argument it runs a collect followed by a dashboard build, which is handy
 locally and keeps the GitHub Actions workflow simple.
@@ -18,7 +19,8 @@ from . import collect as collect_mod
 from . import dashboard as dashboard_mod
 from . import alerts as alerts_mod
 
-USAGE = "usage: python -m flightwatch [collect|build|all|alert|backtest|diag]"
+USAGE = ("usage: python -m flightwatch "
+         "[collect|build|all|alert|backtest|diag|sq-diag]")
 
 
 def _print_backtest():
@@ -51,6 +53,9 @@ def main(argv=None):
         _print_backtest()
     elif cmd in ("diag", "diagnose"):
         collect_mod.diagnose()
+    elif cmd in ("sq-diag", "sqdiag"):
+        from . import provider_sq
+        provider_sq.diagnose(*argv[1:5])
     else:
         print(USAGE)
         return 1
