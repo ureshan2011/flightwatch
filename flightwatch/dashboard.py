@@ -2075,8 +2075,8 @@ function renderOps(){const ST=D.status; if(!ST)return;
   let next='';
   const nc=ST.next_count||ST.grid_total||0;
   const nrange=ST.next_from?(' · departures '+fdshort(ST.next_from)+' – '+fdshort(ST.next_to)):'';
-  next=’<div class="ops-next"><span class="nxt-ic">⤓</span><div>Up next: the <b id="ops-next2">next check</b> will cover ‘+
-    ‘<b>~’+fmtv(nc)+’</b> date combinations’+nrange+’. All dates are checked across ‘+ST.shards+’ daily updates.</div></div>’;
+  next='<div class="ops-next"><span class="nxt-ic">⤵</span><div>Up next: the <b id="ops-next2">next check</b> will cover '+
+    '<b>~'+fmtv(nc)+'</b> date combinations'+nrange+'. All dates are checked across '+ST.shards+' daily updates.</div></div>';
 
   let routes='';
   if(ST.routes&&ST.routes.length)routes='<div class="ops-routes">Routes: '+
@@ -2245,7 +2245,7 @@ if(!D.recs.length){
       '<canvas class="spark" id="spark'+i+'"></canvas>'+
       '<div class="pricebox"><div class="price">'+fmt(r.price)+'</div><div class="pricelbl">low '+fmt(r.trailing_min)+' · '+r.points+' pts</div>'+
         '<div style="margin-top:8px">'+bookRowLink(r.itinerary,'Book ↗')+'</div></div></div>';});
-  add(‘<section class="rsec"><div class="section reveal" id="deals"><h2>Today\’s signals</h2><span class="hint">should you book now or wait?</span></div>’+dh+’</section>’);
+  add('<section class="rsec"><div class="section reveal" id="deals"><h2>Today\'s signals</h2><span class="hint">should you book now or wait?</span></div>'+dh+'</section>');
 }
 
 /* Live scraper status -- useful but secondary, so it renders last (deprioritised
@@ -2366,7 +2366,7 @@ function buildFinder(){
     const cEl=$('ex-count');
     if(cEl)cEl.innerHTML=total?'<b>'+total+'</b> trip'+(total===1?'':'s')+(F.airline?' on '+esc(F.airline):'')+(F.day?' · '+exFmt(F.day):'')+' · from '+fmt(Math.min.apply(null,list.map(priceOf))):'<b>0</b> trips match';
     if(!total){wrap.innerHTML='<div class="finder-empty">No trips match these filters.'+
-        (F.airline?' We haven’t seen <b>'+esc(F.airline)+'</b> on a matching trip — try <a href="#" id="ex-clearair">any airline</a> or':' Try')+
+        (F.airline?' No <b>'+esc(F.airline)+'</b> fares match these filters — try <a href="#" id="ex-clearair">any airline</a> or':' Try')+
         ' widening the dates, price or trip length.</div>';
       const ca=$('ex-clearair');if(ca)ca.addEventListener('click',ev=>{ev.preventDefault();F.airline='';$('f-air').value='';lim=24;render();});
       const mb=$('ex-more');if(mb)mb.style.display='none';return;}
