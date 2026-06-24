@@ -1006,6 +1006,28 @@ img,canvas{max-width:100%}
 .rpill.collecting .rp-sub{color:var(--wait)}
 @media(max-width:720px){.routebar{top:50px}.rb-lbl{display:none}}
 
+/* per-route collecting panel (shown when a still-warming corridor is focused) */
+.collectpanel{display:flex;gap:30px;align-items:center;margin-top:34px;padding:34px 34px;
+  background:linear-gradient(135deg,#fff,#f3f6ff);border:1px solid var(--line2);border-radius:24px;
+  box-shadow:var(--shadow-lg);position:relative;overflow:hidden}
+.collectpanel:before{content:"";position:absolute;inset:0;pointer-events:none;
+  background:radial-gradient(420px 220px at 12% -10%,rgba(67,97,238,.10),transparent 60%)}
+.cp-orbit{flex:none;width:96px;height:96px;border-radius:50%;display:grid;place-items:center;position:relative;
+  background:radial-gradient(circle at 50% 50%,rgba(67,97,238,.12),transparent 70%)}
+.cp-orbit:before,.cp-orbit:after{content:"";position:absolute;border-radius:50%;border:1.5px dashed var(--line2)}
+.cp-orbit:before{inset:6px}.cp-orbit:after{inset:22px;border-color:rgba(67,97,238,.35)}
+.cp-plane{font-size:30px;animation:cpfloat 3.4s ease-in-out infinite;filter:drop-shadow(0 6px 10px rgba(67,97,238,.3))}
+@keyframes cpfloat{0%,100%{transform:translateY(-3px) rotate(-6deg)}50%{transform:translateY(3px) rotate(6deg)}}
+.cp-body{flex:1;min-width:0}
+.cp-eyebrow{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.2em;color:var(--brand);font-weight:600}
+.cp-body h2{font-size:25px;font-weight:800;letter-spacing:-.7px;margin:6px 0 8px}
+.cp-body p{color:var(--muted);font-size:14.5px;max-width:560px;line-height:1.6}
+.cp-actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:18px}
+.cp-all{background:#fff;border:1.5px solid var(--line2);color:var(--muted);border-radius:12px;padding:10px 16px;
+  font:inherit;font-size:13px;font-weight:600;cursor:pointer;transition:.18s ease}
+.cp-all:hover{border-color:var(--brand);color:var(--brand);transform:translateY(-1px)}
+@media(max-width:680px){.collectpanel{flex-direction:column;text-align:center;gap:18px;padding:26px 20px}.cp-actions{justify-content:center}}
+
 /* hero */
 .hero{padding:54px 0 6px;display:grid;grid-template-columns:1.02fr .98fr;gap:36px;align-items:center}
 @media(max-width:920px){.hero{grid-template-columns:1fr;padding-top:40px}}
@@ -1591,6 +1613,7 @@ tr.best td{background:var(--buy-bg)}
   </header>
 
   <div class="bento" id="bento"></div>
+  <div id="scopeEmpty" style="display:none"></div>
   <div id="body"></div>
 
   <div class="foot reveal">
@@ -1658,11 +1681,19 @@ function signalPill(itin){const r=(D.recs||[]).find(x=>x.itinerary===itin);
   if(!r)return '';return '<span class="sigmini '+r.signal+'">'+r.signal+(r.confidence!=null?' '+r.confidence+'%':'')+'</span>';}
 
 /* ===== route scope: the sticky corridor switcher that focuses the page =====
-   The site tracks several corridors (CHC↔CMB plus the newer AKL routes). To keep
-   them from blurring together, a sticky switcher lets you focus ONE corridor: the
-   per-trip sections (signals, insights, fares, finder) filter to it, while the
-   cross-route overview/analytics stay. 'All routes' shows everything. The
-   flagship corridor (the one with the deepest history) is marked with a ★. */
+   The site tracks several corridors (CHC↔CMB plus the newer AKL routes). Picking
+   a corridor focuses the WHOLE page on it — and critically, route-specific
+   sections from OTHER corridors disappear, so you never see CHC↔CMB charts under
+   the Auckland→Delhi tab. Every section declares who it belongs to via
+   `.sscope[data-for]`:
+     global   — always shown (route picker, scraper status, global stats)
+     all      — only on the "All routes" overview (cross-route summaries)
+     flagship — the deepest-history corridor's deep-dive (also shown on All)
+     data     — any corridor that actually has fares (also shown on All)
+     <route>  — exactly that corridor (also shown on All)
+   Per-trip card grids (signals/insights/fares) filter card-by-card via .rsec.
+   A corridor that's still collecting shows a dedicated empty panel — never
+   another route's data. */
 const routeKey=itin=>{const p=parseItin(itin);return (p.o&&p.d)?p.o+'-'+p.d:'';};
 const FLAGSHIP=(D.primary&&D.primary.origin&&D.primary.dest)?
   D.primary.origin.code+'-'+D.primary.dest.code:'';
@@ -1670,6 +1701,17 @@ let SCOPE='all';
 function routeList(){
   return (D.routes_overview||[]).map(c=>({route:c.o+'-'+c.d,from:c.from,to:c.to,
     has:c.has_data,min:c.min,flag:(c.o+'-'+c.d)===FLAGSHIP}));
+}
+function routeInfo(key){return routeList().find(c=>c.route===key)||null;}
+function routeHasData(key){const r=routeInfo(key);return !!(r&&r.has);}
+/* Does a section tagged `forV` show under the current SCOPE? */
+function scopeShows(forV){
+  if(forV==='global')return true;
+  if(SCOPE==='all')return forV!=='hidden';           // overview shows everything
+  if(forV==='all')return false;                       // cross-route-only
+  if(forV==='flagship')return SCOPE===FLAGSHIP;
+  if(forV==='data')return routeHasData(SCOPE);
+  return forV===SCOPE;                                // an explicit route key
 }
 function renderRouteSwitcher(){
   const bar=document.getElementById('routebar');if(!bar)return;
@@ -1691,9 +1733,10 @@ function setScope(route){
   const bar=document.getElementById('routebar');
   if(bar)bar.querySelectorAll('.rpill').forEach(b=>b.classList.toggle('on',b.dataset.route===SCOPE));
   document.body.setAttribute('data-scope',SCOPE);
-  // Cross-route-only sections (the "every route" highlights) hide when focusing one.
-  document.querySelectorAll('.xroute').forEach(el=>{el.style.display=(SCOPE==='all')?'':'none';});
-  // Per-trip sections: hide non-matching cards, then hide any section left empty.
+  // Section-level scoping: every .sscope shows/hides by who it belongs to.
+  document.querySelectorAll('.sscope').forEach(el=>{
+    el.style.display=scopeShows(el.getAttribute('data-for')||'global')?'':'none';});
+  // Per-trip card grids: hide non-matching cards, then hide the section if empty.
   document.querySelectorAll('.rsec').forEach(sec=>{
     let vis=0;
     sec.querySelectorAll('[data-route]').forEach(c=>{
@@ -1701,7 +1744,28 @@ function setScope(route){
       c.style.display=show?'':'none';if(show)vis++;});
     sec.style.display=vis?'':'none';
   });
+  updateScopeEmpty();
   if(SCOPE!=='all'&&window.__finderPickRoute)window.__finderPickRoute(SCOPE);
+  if(SCOPE!=='all'){const t=document.getElementById('routebar');if(t&&t.scrollIntoView)t.scrollIntoView({block:'nearest'});}
+}
+/* When a still-collecting corridor is focused, show a friendly panel instead of
+   any other route's data (the whole point of scoping). */
+function updateScopeEmpty(){
+  const el=document.getElementById('scopeEmpty');if(!el)return;
+  const r=routeInfo(SCOPE);
+  if(SCOPE==='all'||!r||r.has){el.style.display='none';el.innerHTML='';return;}
+  const flag=routeInfo(FLAGSHIP);
+  el.style.display='';
+  el.innerHTML='<div class="collectpanel reveal in"><div class="cp-orbit"><span class="cp-plane">✈</span></div>'+
+    '<div class="cp-body"><div class="cp-eyebrow">NEW ROUTE</div>'+
+    '<h2>'+esc(r.from)+' → '+esc(r.to)+' is warming up</h2>'+
+    '<p>Faro just started watching this corridor. Daily scans are building its price '+
+    'history now — signals, forecasts and the cheapest-day map switch on here within a week, '+
+    'and we never show another route’s numbers in their place.</p>'+
+    '<div class="cp-actions">'+(flag?'<button class="btnbook" id="cp-toflag">'+_EXT+'Explore '+esc(flag.from)+' → '+esc(flag.to)+'</button>':'')+
+    '<button class="cp-all" id="cp-all">View all routes</button></div></div></div>';
+  const f=document.getElementById('cp-toflag');if(f)f.addEventListener('click',()=>setScope(FLAGSHIP));
+  const a=document.getElementById('cp-all');if(a)a.addEventListener('click',()=>setScope('all'));
 }
 
 /* ===== combined cross-route highlights (the hero hook) ===== */
@@ -1712,9 +1776,9 @@ function renderHighlights(){const H=D.highlights||[];if(!H.length)return;
     return '<div class="hlcard reveal"><div class="hl-ic">'+(HLI[h.icon]||'✦')+'</div>'+
       '<div class="hl-body"><div class="hl-t">'+esc(h.title)+sc+'</div>'+
       '<div class="hl-s">'+esc(h.sub)+'</div>'+(go?'<div class="hl-go">'+go+'</div>':'')+'</div></div>';};
-  add('<div class="section reveal xroute" id="highlights"><h2>Today across every route</h2>'+
+  add('<section class="sscope" data-for="all"><div class="section reveal" id="highlights"><h2>Today across every route</h2>'+
     '<span class="hint">live highlights from all '+NTRACKED()+' tracked corridors</span></div>'+
-    '<div class="hlgrid reveal xroute">'+H.map(card).join('')+'</div>');}
+    '<div class="hlgrid reveal">'+H.map(card).join('')+'</div></section>');}
 
 /* ===== every supported corridor at a glance (incl. ones still collecting) ===== */
 function renderRoutes(){const R=D.routes_overview||[];if(R.length<1)return;
@@ -1733,9 +1797,9 @@ function renderRoutes(){const R=D.routes_overview||[];if(R.length<1)return;
         (c.dtd!=null?'<span class="mini">'+c.dtd+'d out</span>':'')+'</div>'+
       '<div class="rc-trip">'+(c.airline?avatar(c.airline,c.iata,18)+esc(c.airline)+' · ':'')+fdshort(c.dep)+' – '+fdshort(c.ret)+(c.len!=null?' · '+c.len+'n':'')+'</div>'+
       '<div class="rc-go">'+bookBtn(itin,'Book')+'<a class="rc-explore" href="#finder" data-route="'+esc(c.o+'-'+c.d)+'">Explore dates →</a></div></div>';};
-  add('<div class="section reveal" id="routes"><h2>Routes we track</h2>'+
-    '<span class="hint">New Zealand ↔ Sri Lanka &amp; India · tap to explore</span></div>'+
-    '<div class="routegrid reveal">'+R.map(card).join('')+'</div>');
+  add('<section class="sscope" data-for="all"><div class="section reveal" id="routes"><h2>Routes we track</h2>'+
+    '<span class="hint">New Zealand ↔ Sri Lanka &amp; India · tap to focus one</span></div>'+
+    '<div class="routegrid reveal">'+R.map(card).join('')+'</div></section>');
   // "Explore dates" focuses the whole page on this corridor (and the finder).
   document.querySelectorAll('.rc-explore').forEach(a=>a.addEventListener('click',()=>{
     setScope(a.dataset.route);
@@ -2071,19 +2135,19 @@ if(!D.recs.length){
 
   renderMarket();
 
-  add('<div class="section reveal" id="trend"><h2>Price trends &amp; airlines</h2></div>'+
+  add('<section class="sscope" data-for="flagship"><div class="section reveal" id="trend"><h2>Price trends &amp; airlines</h2></div>'+
     '<div class="grid2"><div class="panel reveal"><h3>Cheapest fare over time</h3><div class="ph">each line is one departure date — cheapest-per-day</div>'+
       '<div class="canvas-wrap"><canvas id="trendChart"></canvas></div></div>'+
     '<div class="panel reveal"><h3>Best fare by airline</h3><div class="ph">lowest fare each carrier offered in the latest scan</div>'+
-      '<div class="canvas-wrap"><canvas id="airChart"></canvas></div></div></div>');
+      '<div class="canvas-wrap"><canvas id="airChart"></canvas></div></div></div></section>');
 
   /* ---- AI layer: when to book, cheapest day, what changed, accuracy ---- */
   const AI=D.ai;
   if(AI){
     const btb=AI.best_time_to_book||[],modelRec=D.recs.find(r=>r.curve&&r.curve.length);
     if(btb.length||modelRec){
-      add('<div class="section reveal" id="plan"><h2>When to book</h2><span class="hint">model forecast</span></div>');
-      add('<div class="grid2"><div class="panel reveal"><h3>Predicted booking curve</h3><div class="ph">expected cheapest fare vs days before departure, with a '+(D.model?D.model.coverage:80)+'% band</div>'+
+      add('<section class="sscope" data-for="flagship"><div class="section reveal" id="plan"><h2>When to book</h2><span class="hint">model forecast</span></div>'+
+        '<div class="grid2"><div class="panel reveal"><h3>Predicted booking curve</h3><div class="ph">expected cheapest fare vs days before departure, with a '+(D.model?D.model.coverage:80)+'% band</div>'+
         '<div class="canvas-wrap"><canvas id="fanChart"></canvas></div></div>'+
         '<div class="panel reveal"><h3>Best moment to lock it in</h3><div class="ph">when the model expects the low</div><div class="cols3" style="grid-template-columns:1fr">'+
         (btb.length?btb.map(b=>{const pi=parseItin(b.itin);return '<div class="bookcard reveal"><div class="rt">'+esc(pi.dates)+(pi.nights?' · '+pi.nights+'n':'')+'</div><div class="when">'+routeChip(pi.o,pi.d)+'</div>'+
@@ -2091,31 +2155,30 @@ if(!D.recs.length){
           '<div class="sub">'+(b.book_now?'Already near the expected low of '+fmt(b.predicted_low)+'.':'Model expects a low near '+fmt(b.predicted_low)+(b.save>0?' — about '+fmt(b.save)+' under today.':'.'))+'</div>'+
           (b.book_now?'<div style="margin-top:12px">'+bookBtn(b.itin,'Book now')+'</div>':'')+'</div>';}).join('')
           :'<div class="sub" style="color:var(--dim)">Forecasts appear once the model has trained on ~4 months of history.</div>')+
-        '</div></div></div>');
+        '</div></div></div></section>');
     }
     const cd=AI.cheapest_day||{};
     if(cd.dep_dow&&cd.dep_dow.length){
-      add('<div class="section reveal"><h2>Cheapest day to fly</h2><span class="hint">latest scan</span></div>');
       const cells=(arr,best)=>arr.map(c=>'<div class="cell'+(best&&c.dow===best.dow?' best':'')+'"><div class="d">'+c.label+'</div><div class="p">'+fmt(c.min)+'</div></div>').join('');
-      add('<div class="grid2"><div class="panel reveal"><h3>By departure weekday</h3><div class="ph">cheapest return fare seen for each outbound day</div><div class="heat">'+cells(cd.dep_dow,cd.best_dep)+'</div></div>'+
-        '<div class="panel reveal"><h3>By return weekday</h3><div class="ph">cheapest fare for each inbound day</div><div class="heat">'+cells(cd.ret_dow,cd.best_ret)+'</div></div></div>');
+      add('<section class="sscope" data-for="flagship"><div class="section reveal"><h2>Cheapest day to fly</h2><span class="hint">latest scan</span></div>'+
+        '<div class="grid2"><div class="panel reveal"><h3>By departure weekday</h3><div class="ph">cheapest return fare seen for each outbound day</div><div class="heat">'+cells(cd.dep_dow,cd.best_dep)+'</div></div>'+
+        '<div class="panel reveal"><h3>By return weekday</h3><div class="ph">cheapest fare for each inbound day</div><div class="heat">'+cells(cd.ret_dow,cd.best_ret)+'</div></div></div></section>');
     }
     const wc=AI.what_changed||{},mv=(wc.movers||[]);
     if(mv.length){
-      add('<div class="section reveal"><h2>What changed</h2><span class="hint">since the previous scan</span></div>');
       let h='<div class="panel reveal"><div class="digest">';
       mv.slice(0,6).forEach(m=>{const pi=parseItin(m.itin),dn=m.delta<0;
         h+='<div class="row"><span class="wc-trip">'+esc(pi.dates)+(pi.nights?' · '+pi.nights+'n':'')+' '+routeChip(pi.o,pi.d)+'</span>'+
            '<span class="mv '+(dn?'down':'up')+'">'+(dn?'▼ ':'▲ ')+fmt(Math.abs(m.delta))+' ('+(dn?'':'+')+m.pct+'%)</span></div>';});
-      add(h+'</div></div>');
+      add('<section class="sscope" data-for="flagship"><div class="section reveal"><h2>What changed</h2><span class="hint">since the previous scan</span></div>'+h+'</div></div></section>');
     }
     const bt=AI.backtest;
     if(bt&&bt.n>=10){
-      add('<div class="section reveal"><h2>Model accuracy</h2><span class="hint">backtested on our own history</span></div>');
       const bs=bt.by_signal||{},part=k=>bs[k]?'<span><b>'+bs[k].hit_rate+'%</b> of '+k+' calls ('+bs[k].n+')</span>':'';
-      add('<div class="panel reveal"><div class="bigstat"><span class="v">'+bt.hit_rate+'%</span><span class="u">of past calls were right ('+bt.n+' graded)</span></div>'+
+      add('<section class="sscope" data-for="flagship"><div class="section reveal"><h2>Model accuracy</h2><span class="hint">backtested on our own history</span></div>'+
+        '<div class="panel reveal"><div class="bigstat"><span class="v">'+bt.hit_rate+'%</span><span class="u">of past calls were right ('+bt.n+' graded)</span></div>'+
         '<div class="sigrow">'+part('BUY')+part('WAIT')+part('WATCH')+(bt.avg_buy_regret?'<span>avg missed saving on a BUY: <b>'+fmt(bt.avg_buy_regret)+'</b></span>':'')+'</div>'+
-        '<div class="canvas-wrap" style="height:160px;margin-top:14px"><canvas id="accChart"></canvas></div></div>');
+        '<div class="canvas-wrap" style="height:160px;margin-top:14px"><canvas id="accChart"></canvas></div></div></section>');
     }
   }
 
@@ -2326,7 +2389,7 @@ function buildFinder(){
       EXM.routes.map(r=>'<option value="'+esc(r)+'">'+esc(r.replace('-','→'))+'</option>').join('')+'</select></div>':'';
   const stopsBtns='<button data-v="any" class="on">Any</button><button data-v="1">≤1 stop</button>'+(EXM.nonstop_any?'<button data-v="nonstop">Nonstop</button>':'');
 
-  add('<div class="section reveal" id="finder"><h2>Find a trip</h2><span class="hint">'+(EXM.count||0)+' date combos · set filters &amp; search</span></div>'+
+  add('<section class="sscope" data-for="data"><div class="section reveal" id="finder"><h2>Find a trip</h2><span class="hint">'+(EXM.count||0)+' date combos · set filters &amp; search</span></div>'+
    '<div class="finder reveal"><div class="filters">'+
      '<div class="fld"><label>Depart from</label><input type="date" id="f-df" min="'+EXM.dep_min+'" max="'+EXM.dep_max+'" value="'+EXM.dep_min+'"></div>'+
      '<div class="fld"><label>Depart to</label><input type="date" id="f-dt" min="'+EXM.dep_min+'" max="'+EXM.dep_max+'" value="'+EXM.dep_max+'"></div>'+
@@ -2345,7 +2408,7 @@ function buildFinder(){
      '<button class="reset" id="f-reset">Reset</button></div>'+
    '<div class="cal-wrap" id="calbox" style="display:none"><div id="cal"></div></div>'+
    '<div class="trips" id="trips"></div>'+
-   '<button class="morebtn" id="ex-more" style="display:none">Show more trips</button></div>');
+   '<button class="morebtn" id="ex-more" style="display:none">Show more trips</button></div></section>');
 
   // ---- wiring ----
   $('f-search').addEventListener('click',()=>doSearch());
@@ -2382,19 +2445,19 @@ function renderMarket(){
   const M=(D.ai&&D.ai.market)||null; if(!M)return;
   // The buy-index pulse now lives in the bento command center up top; this
   // section focuses on the supporting charts and the deals leaderboard.
-  add('<div class="section reveal" id="market"><h2>Market analytics</h2><span class="hint">whole-grid intelligence</span></div>');
-
   const AC=M.advance_curve,LC=M.length_curve;
-  add('<div class="grid2">'+
+  let mkt='<section class="sscope" data-for="all"><div class="section reveal" id="market"><h2>Market analytics</h2><span class="hint">whole-grid intelligence · across all routes</span></div>';
+
+  mkt+='<div class="grid2">'+
     '<div class="panel reveal"><h3>How far ahead to book</h3><div class="ph">median cheapest fare by days before departure, across the grid</div>'+
       (AC?'<div class="callout">📅 Cheapest around <b>'+AC.best_dtd+' days</b> out (~'+fmt(AC.best_price)+') · last-minute can cost <b>'+fmt(AC.save_vs_worst)+'</b> more</div>':'')+
       '<div class="canvas-wrap"><canvas id="advChart"></canvas></div></div>'+
     '<div class="panel reveal"><h3>Best value by trip length</h3><div class="ph">cheapest return fare for each trip duration</div>'+
       (LC?'<div class="callout">🎯 Sweet spot: <b>'+LC.best_len+' nights</b> from <b>'+fmt(LC.best_price)+'</b></div>':'')+
-      '<div class="canvas-wrap"><canvas id="lenChart"></canvas></div></div></div>');
+      '<div class="canvas-wrap"><canvas id="lenChart"></canvas></div></div></div>';
 
   const PD=M.price_distribution,SV=M.savings||[];
-  add('<div class="grid2">'+
+  mkt+='<div class="grid2">'+
     '<div class="panel reveal"><h3>Where fares sit today</h3><div class="ph">'+(PD?PD.n+' trips · median '+fmt(PD.median)+' · '+fmt(PD.min)+'–'+fmt(PD.max):'spread of current fares')+'</div>'+
       '<div class="canvas-wrap"><canvas id="distChart"></canvas></div></div>'+
     '<div class="panel reveal"><h3>Standout deals right now</h3><div class="ph">furthest below the typical fare for their length — with airline, stops &amp; the call</div>'+
@@ -2409,7 +2472,8 @@ function renderMarket(){
           '<div class="ld-p"><div class="now">'+fmt(s.price)+'</div><div class="was">'+fmt(s.typical)+'</div>'+
             '<div class="ld-s">'+s.pct+'% off · −'+fmt(s.save)+'</div></div></div>';}).join('')+'</div>'
         :'<div class="finder-empty">No trips are sitting below their typical fare right now.</div>')+
-      '</div></div>');
+      '</div></div>';
+  add(mkt+'</section>');
 }
 
 /* ---- charts ---- */
@@ -2522,4 +2586,6 @@ setTimeout(()=>document.querySelectorAll('.reveal:not(.in)').forEach(el=>{if(el.
 renderDeal();renderHeroChips();initTilt();scrollTilt();
 requestAnimationFrame(drawCharts);
 loadWeather();loadRates();
+/* set the initial "All routes" scope (activates the pill, tags the body) */
+if(document.getElementById('routebar'))setScope('all');
 </script></body></html>'''
