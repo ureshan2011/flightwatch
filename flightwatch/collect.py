@@ -168,7 +168,7 @@ def _base_row(it, cfg, now, scan_date, slot):
 
 def _empty(base, status):
     return [{**base, "offer_index": "", "price": "", "airline": "",
-             "stops": "", "duration_minutes": "", "status": status}]
+             "stops": "", "duration_minutes": "", "layover": "", "status": status}]
 
 
 async def _scan_one_async(browsers, sem, it, cfg, now, scan_date, slot, market):

@@ -48,6 +48,11 @@ def _iata(name):
     return airline_iata(name)
 
 
+def _layover(val):
+    from .dashboard import _clean_layover
+    return _clean_layover(val)
+
+
 # --------------------------------------------------------------------------- #
 def deal_scores(df):
     """0-100 deal score for each itinerary's latest cheapest fare."""
@@ -373,6 +378,8 @@ def savings_leaderboard(df, top=8):
             "typical": int(round(base)), "save": int(round(save)),
             "pct": int(round(save / max(base, 1.0) * 100)),
             "airline": air, "iata": _iata(air),
+            "stops": (int(r.stops) if pd.notna(getattr(r, "stops", None)) else None),
+            "via": _layover(getattr(r, "layover", "")),
             "dtd": (int(r.days_to_departure) if pd.notna(r.days_to_departure) else None),
         })
     out.sort(key=lambda x: -x["save"])

@@ -221,6 +221,50 @@ def test_carrier_focus_surfaces_whole_trip_fare():
     assert focus["whole_trip"]["dep"] == "2026-10-03"
 
 
+def test_clean_layover_keeps_only_airport_codes():
+    assert DB._clean_layover("SIN") == "SIN"
+    assert DB._clean_layover("sin, kul") == "SIN, KUL"
+    assert DB._clean_layover("SIN, SIN") == "SIN"          # de-duped
+    assert DB._clean_layover("706 kg") == ""               # noise rejected
+    assert DB._clean_layover("") == ""
+    import numpy as np
+    assert DB._clean_layover(np.nan) == ""                 # legacy rows (NaN)
+
+
+def test_explore_row_carries_layover_via():
+    import pandas as pd
+    rows = [dict(scan_datetime="2026-06-20T09:00:00Z", scan_date=pd.Timestamp("2026-06-20"),
+                 scan_slot="2026-06-20T09:00Z", origin="CHC", destination="CMB",
+                 depart_date="2026-09-10", return_date="2026-10-01", trip_length=21,
+                 days_to_departure=80, offer_index=0, price=2310, currency="NZD",
+                 airline="Air New Zealand, Singapore Airlines", stops=1,
+                 duration_minutes=1155, layover="SIN", status="ok", source="x")]
+    ok = DB._with_itin(pd.DataFrame(rows))
+    e = DB._explore(ok)[0]
+    assert e["via"] == "SIN"
+    assert e["byair"]["Singapore Airlines"]["via"] == "SIN"
+
+
+def test_routes_overview_shows_configured_routes_even_without_data(monkeypatch):
+    import pandas as pd
+    # Pretend config tracks two corridors; only one has scraped data.
+    monkeypatch.setattr(DB, "_configured_routes",
+                        lambda: [("CHC", "CMB"), ("AKL", "DEL")])
+    rows = [dict(scan_datetime="2026-06-20T09:00:00Z", scan_date=pd.Timestamp("2026-06-20"),
+                 scan_slot="2026-06-20T09:00Z", origin="CHC", destination="CMB",
+                 depart_date="2026-09-10", return_date="2026-10-01", trip_length=21,
+                 days_to_departure=80, offer_index=0, price=1400, currency="NZD",
+                 airline="Jetstar", stops=0, duration_minutes=900, layover="",
+                 status="ok", source="x")]
+    ok = DB._with_itin(pd.DataFrame(rows))
+    ro = DB._routes_overview(ok)
+    by = {c["route"]: c for c in ro}
+    assert by["CHC-CMB"]["has_data"] is True and by["CHC-CMB"]["min"] == 1400
+    # The route we track but haven't scraped still appears -- as 'collecting'.
+    assert by["AKL-DEL"]["has_data"] is False
+    assert by["AKL-DEL"]["from"] == "Auckland" and by["AKL-DEL"]["to"] == "Delhi"
+
+
 def test_carrier_focus_none_when_carrier_has_no_fares():
     import pandas as pd
     explore = DB._explore(_one_day([(1000, "Jetstar", 0)]))

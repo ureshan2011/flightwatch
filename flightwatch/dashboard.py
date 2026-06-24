@@ -134,6 +134,22 @@ def clean_airline(name):
     return re.sub(r"\s*[,/]\s*", " + ", name).strip()
 
 
+def _clean_layover(val):
+    """Normalise a scraped layover field to a clean 'SIN' / 'SIN, KUL' string.
+
+    Tolerates NaN (legacy rows predate the column) and keeps only plausible
+    3-letter airport codes so noise never reaches the dashboard."""
+    if val is None or (isinstance(val, float) and pd.isna(val)):
+        return ""
+    codes = [c.strip().upper() for c in re.split(r"[,/+]", str(val)) if c.strip()]
+    codes = [c for c in codes if re.fullmatch(r"[A-Z]{3}", c)]
+    seen = []
+    for c in codes:
+        if c not in seen:
+            seen.append(c)
+    return ", ".join(seen[:3])
+
+
 def _airlines_in(day):
     """Distinct, cleaned airline names present in a day's offers (order: cheapest first)."""
     seen, out = set(), []
@@ -251,6 +267,7 @@ def _latest_offers(ok, per_itin=10):
                       "airline": clean_airline(getattr(r, "airline", "")),
                       "iata": airline_iata(clean_airline(getattr(r, "airline", ""))),
                       "stops": int(r.stops) if pd.notna(r.stops) else 0,
+                      "via": _clean_layover(getattr(r, "layover", "")),
                       "duration": int(r.duration_minutes) if pd.notna(r.duration_minutes) else 0}
                      for r in day.itertuples()]
     return out
@@ -286,6 +303,7 @@ def _carrier_fares(day):
         st = int(r.stops) if pd.notna(r.stops) else None
         du = (int(r.duration_minutes)
               if pd.notna(r.duration_minutes) and r.duration_minutes > 0 else 0)
+        lay = _clean_layover(getattr(r, "layover", ""))
         carriers = [c.strip() for c in combined.split(" + ") if c.strip()]
         solo = len(carriers) == 1            # this carrier flies the whole trip
         for carrier in carriers:
@@ -293,13 +311,13 @@ def _carrier_fares(day):
             if b is None:
                 fares[carrier] = {"min": price, "stops": st, "ns": (st == 0),
                                   "fast": du, "n": 1, "label": combined,
-                                  "iata": airline_iata(carrier),
+                                  "iata": airline_iata(carrier), "via": lay,
                                   "solo": solo,
                                   "solo_min": (price if solo else None)}
             else:
                 b["n"] += 1
                 if price < b["min"]:
-                    b["min"], b["stops"], b["label"] = price, st, combined
+                    b["min"], b["stops"], b["label"], b["via"] = price, st, combined, lay
                 if st == 0:
                     b["ns"] = True
                 if du and (not b["fast"] or du < b["fast"]):
@@ -355,6 +373,7 @@ def _explore(ok, cap=4000):
             "len": (int(cheap["trip_length"]) if pd.notna(cheap["trip_length"]) else None),
             "min": round(float(prices.min())),
             "airline": air, "iata": iata,
+            "via": _clean_layover(getattr(cheap, "layover", "")),
             "al": al,
             "byair": byair,
             "stops": (int(stops_s.min()) if not stops_s.empty else None),
@@ -474,6 +493,130 @@ def _carrier_focus(df, explore, carrier):
 
     return {"name": carrier, "iata": airline_iata(carrier), "trips": len(items),
             "cheapest": cheapest, "whole_trip": whole_trip, "upcoming": upcoming}
+
+
+def _configured_routes():
+    """Every corridor FlightWatch is set to track (from config), as o-d pairs --
+    so the dashboard can show ALL supported routes, even ones still collecting
+    their first fares (which is why a freshly-added route looks 'missing')."""
+    from . import collect as collect_mod
+    try:
+        cfg = collect_mod.load_config() or {}
+    except Exception:
+        return []
+    pairs, seen = [], set()
+    fixed = list(cfg.get("itineraries") or [])
+    gen = (cfg.get("auto_generate") or {}).get("routes") or []
+    for it in fixed + gen:
+        o, d = str(it.get("origin", "")).upper(), str(it.get("destination", "")).upper()
+        if o and d and (o, d) not in seen:
+            seen.add((o, d))
+            pairs.append((o, d))
+    return pairs
+
+
+def _routes_overview(ok):
+    """One card per SUPPORTED corridor: its cheapest live fare, carrier count,
+    nonstop availability and a deep-linkable cheapest itinerary -- or a
+    'collecting' placeholder for a route we track but haven't scraped yet.
+
+    This is the cross-route explorer that lets a visitor see every corridor at a
+    glance (NZ <-> Sri Lanka & India), not just the one with the most history."""
+    # Aggregate whatever data we DO have, per corridor, from its freshest scan.
+    have = {}
+    if ok is not None and not ok.empty:
+        ok = ok.copy()
+        ok["route"] = ok["origin"].astype(str) + "-" + ok["destination"].astype(str)
+        for route, g in ok.groupby("route"):
+            day = g[g["scan_date"] == g["scan_date"].max()].copy()
+            prices = day["price"].astype(float)
+            if prices.empty:
+                continue
+            cheap = day.loc[prices.idxmin()]
+            stops_s = day["stops"].dropna().astype(int)
+            air = clean_airline(getattr(cheap, "airline", cheap["airline"]))
+            carriers = {c for a in day["airline"].map(clean_airline)
+                        for c in (a.split(" + ") if a else []) if c}
+            have[route] = {
+                "min": round(float(prices.min())),
+                "airline": air, "iata": airline_iata(air),
+                "via": _clean_layover(getattr(cheap, "layover", "")),
+                "dep": str(cheap["depart_date"]), "ret": str(cheap["return_date"]),
+                "len": (int(cheap["trip_length"]) if pd.notna(cheap["trip_length"]) else None),
+                "nonstop": bool((stops_s == 0).any()) if not stops_s.empty else False,
+                "stops": (int(stops_s.min()) if not stops_s.empty else None),
+                "carriers": len(carriers),
+                "dtd": (int(cheap["days_to_departure"]) if pd.notna(cheap["days_to_departure"]) else None),
+            }
+
+    out = []
+    for o, d in _configured_routes():
+        route = f"{o}-{d}"
+        card = {"o": o, "d": d, "from": city_name(o), "to": city_name(d),
+                "route": route, "has_data": route in have}
+        if route in have:
+            card.update(have[route])
+        out.append(card)
+    # Routes with data first (cheapest first), then the still-collecting ones.
+    out.sort(key=lambda c: (not c["has_data"], c.get("min", 1e9)))
+    return out
+
+
+def _highlights(df, ok, recs, ai, focus, routes):
+    """A compact set of cross-route, plain-English headline insights for the hero
+    -- the "why explore this site" hook. Pure templating over data we already
+    computed; no LLM. Each item is {icon, kind, title, sub, itin?}."""
+    H = []
+    cur = (ok["currency"].iloc[0] if not ok.empty and "currency" in ok else "NZD")
+    money = lambda v: f"{cur} {round(v):,}"
+
+    # 1) Cheapest trip anywhere across all supported routes right now.
+    routed = [c for c in routes if c.get("has_data")]
+    if routed:
+        cheapest = min(routed, key=lambda c: c["min"])
+        H.append({"icon": "gem", "kind": "cheapest",
+                  "title": f"{money(cheapest['min'])} · {cheapest['from']} → {cheapest['to']}",
+                  "sub": f"cheapest return across all {len(routes)} tracked routes"
+                         + (f", via {cheapest['via']}" if cheapest.get("via") else ""),
+                  "itin": f"{cheapest['o']}-{cheapest['d']} {cheapest['dep']} -> {cheapest['ret']}"})
+
+    # 2) Market pulse -- is it a good time to buy right now, market-wide.
+    pulse = (ai or {}).get("market", {}).get("pulse") if ai else None
+    if pulse:
+        H.append({"icon": "pulse", "kind": "pulse", "title": pulse["label"],
+                  "sub": pulse["note"], "score": pulse["score"]})
+
+    # 3) Best moment to book, empirically, from the whole grid.
+    adv = (ai or {}).get("market", {}).get("advance_curve") if ai else None
+    if adv and adv.get("save_vs_worst", 0) > 0:
+        H.append({"icon": "clock", "kind": "advance",
+                  "title": f"Book ~{adv['best_dtd']} days out",
+                  "sub": f"that lead time has been ~{money(adv['save_vs_worst'])} cheaper "
+                         f"than the worst window"})
+
+    # 4) Featured carrier whole-trip headline (Singapore Airlines).
+    if focus and focus.get("whole_trip"):
+        wt = focus["whole_trip"]
+        H.append({"icon": "plane", "kind": "carrier",
+                  "title": f"{focus['name']} whole-trip from {money(wt['price'])}",
+                  "sub": f"end-to-end on {focus['name']} metal · {wt['trips']} dates tracked",
+                  "itin": wt["itinerary"]})
+    elif focus and focus.get("cheapest"):
+        c = focus["cheapest"]
+        H.append({"icon": "plane", "kind": "carrier",
+                  "title": f"{focus['name']} from {money(c['price'])}",
+                  "sub": f"lowest {focus['name']}-operated fare we track"
+                         + (f" · via {c.get('label','')}" if not c.get("solo") else ""),
+                  "itin": c["itinerary"]})
+
+    # 5) Sweet-spot trip length across the grid.
+    lc = (ai or {}).get("market", {}).get("length_curve") if ai else None
+    if lc:
+        H.append({"icon": "cal", "kind": "length",
+                  "title": f"{lc['best_len']} nights is the value sweet spot",
+                  "sub": f"cheapest trip length right now, from {money(lc['best_price'])}"})
+
+    return H[:5]
 
 
 def _airline_market(ok):
@@ -604,9 +747,12 @@ def build():
 
     history, insights, latest_offers, airline_market = {}, [], {}, []
     explore, explore_meta, focus = [], {}, None
-    stats = {"scans": 0, "total_offers": 0, "routes": 0, "airlines": 0,
-             "avg_price": None, "fastest": None, "cheapest_ever": None}
+    stats = {"scans": 0, "total_offers": 0, "routes": 0, "date_combos": 0,
+             "airlines": 0, "avg_price": None, "fastest": None, "cheapest_ever": None}
     cities, primary = {}, None
+    # All supported corridors show up even before any are scraped, so a newly
+    # added route never looks "missing" -- it just reads as still collecting.
+    routes_overview, highlights = _routes_overview(None), []
 
     fixed_keys = _fixed_itin_keys()
 
@@ -659,6 +805,11 @@ def build():
         focus = (_carrier_focus(df, explore, focus_airline)
                  if focus_airline else None)
 
+        # Cross-route explorer + combined hero highlights (the "see every route at
+        # a glance" answer, incl. routes still collecting their first fares).
+        routes_overview = _routes_overview(ok)
+        highlights = _highlights(df, ok, recs, ai, focus, routes_overview)
+
         cheap_idx = ok["price"].astype(float).idxmin()
         cheap = ok.loc[cheap_idx]
         durs_all = ok["duration_minutes"].dropna()
@@ -667,7 +818,13 @@ def build():
         stats = {
             "scans": int(df["scan_date"].nunique()),
             "total_offers": int(len(ok)),
-            "routes": int(ok["itin"].nunique()),
+            # True corridors (CHC-CMB, AKL-CMB, ...) vs date-combos (every dep x
+            # length). The old "routes" conflated the two and read as ~1,800.
+            # `routes` = corridors with LIVE data (drives whether rows need a route
+            # chip to disambiguate); `routes_tracked` = every configured corridor.
+            "routes": len({(o, d) for o, d in zip(ok["origin"], ok["destination"])}),
+            "routes_tracked": len(routes_overview),
+            "date_combos": int(ok["itin"].nunique()),
             "airlines": int(clean_air[clean_air != ""].nunique()),
             "avg_price": float(ok["price"].astype(float).mean()),
             "fastest": int(durs_all.min()) if not durs_all.empty else None,
@@ -699,6 +856,8 @@ def build():
         "explore": explore,
         "explore_meta": explore_meta,
         "focus": focus,
+        "routes_overview": routes_overview,
+        "highlights": highlights,
         "stats": stats,
         "cities": cities,
         "primary": primary,
@@ -1231,17 +1390,79 @@ tr.best td{background:var(--buy-bg)}
   border:1px solid var(--line2);border-radius:12px;padding:8px 13px;margin-top:14px;font-size:12.5px;color:var(--muted)}
 .callout b{color:var(--ink);font-family:'IBM Plex Mono',monospace}
 .lead-list{display:flex;flex-direction:column;gap:10px;margin-top:6px}
-.lead-row{display:grid;grid-template-columns:26px 1fr auto auto;gap:12px;align-items:center;padding:11px 13px;
+.lead-row{display:grid;grid-template-columns:26px 1fr auto;gap:12px;align-items:center;padding:12px 14px;
   background:#f7faff;border:1px solid var(--line);border-radius:14px;transition:transform .18s,box-shadow .18s}
 .lead-row:hover{transform:translateX(3px);box-shadow:var(--shadow)}
 .lead-row .rk{font-family:'IBM Plex Mono',monospace;font-weight:600;color:var(--dim);font-size:13px;text-align:center}
-.lead-row .ld-r{font-weight:700;font-size:13.5px;letter-spacing:-.2px}
-.lead-row .ld-d{font-size:11.5px;color:var(--muted);font-family:'IBM Plex Mono',monospace;margin-top:1px}
-.lead-row .ld-p{text-align:right}
-.lead-row .ld-p .now{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:15px}
+.lead-row .ld-main{min-width:0}
+.lead-row .ld-r{font-weight:700;font-size:13.5px;letter-spacing:-.2px;font-family:'IBM Plex Mono',monospace}
+.lead-row .ld-out{color:var(--dim);font-weight:500;font-size:11px}
+.lead-row .ld-meta{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:5px}
+.lead-row .ld-air{display:flex;align-items:center;gap:7px;margin-top:6px;font-size:12px;color:var(--muted);min-width:0}
+.lead-row .ld-air .anm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:130px}
+.lead-row .ld-book{margin-top:8px}
+.lead-row .ld-p{text-align:right;white-space:nowrap}
+.lead-row .ld-p .now{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:16px}
 .lead-row .ld-p .was{font-size:11px;color:var(--dim);text-decoration:line-through}
-.lead-row .ld-s{font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;color:var(--buy);background:var(--buy-bg);border-radius:8px;padding:4px 9px;white-space:nowrap}
-@media(max-width:560px){.lead-row{grid-template-columns:22px 1fr auto}.lead-row .ld-p{grid-column:2/4;text-align:left;display:flex;gap:10px;align-items:baseline}}
+.lead-row .ld-s{font-family:'IBM Plex Mono',monospace;font-size:10.5px;font-weight:600;color:var(--buy);background:var(--buy-bg);border-radius:8px;padding:3px 8px;margin-top:5px;display:inline-block}
+
+/* shared compact chips: route + stops/layover + mini signal -------------------- */
+.rchip{display:inline-flex;align-items:center;gap:4px;font-family:'IBM Plex Mono',monospace;font-size:10.5px;font-weight:600;
+  color:var(--muted);background:#eef3fd;border:1px solid var(--line);border-radius:7px;padding:2px 7px}
+.rchip i{font-style:normal;color:var(--dim)}
+.mini{font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--muted);background:#f0f3f9;border-radius:7px;padding:2px 7px}
+.mini.ns{background:var(--buy-bg);color:var(--buy);font-weight:600}
+.mini.via{background:rgba(122,92,240,.1);color:#5b43c9;font-weight:600}
+.sigmini{font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:700;border-radius:7px;padding:2px 7px;letter-spacing:.02em}
+.sigmini.BUY{background:var(--buy-bg);color:var(--buy)}.sigmini.WAIT{background:var(--wait-bg,#fdf0e1);color:var(--wait)}.sigmini.WATCH{background:#eef1f6;color:#6b7ba0}
+.viachip{font-family:'IBM Plex Mono',monospace;font-size:10px;color:#5b43c9;background:rgba(122,92,240,.1);border-radius:6px;padding:2px 6px;margin-left:6px}
+
+/* combined cross-route highlights --------------------------------------------- */
+.hlgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,260px),1fr));gap:14px;margin-top:16px}
+.hlcard{display:flex;gap:13px;background:#fff;border:1px solid var(--line);border-radius:16px;padding:16px 17px;box-shadow:var(--shadow);
+  transition:transform .22s,box-shadow .22s}
+.hlcard:hover{transform:translateY(-3px);box-shadow:var(--shadow-lg)}
+.hlcard .hl-ic{font-size:22px;line-height:1;flex:none;width:42px;height:42px;display:grid;place-items:center;border-radius:12px;
+  background:linear-gradient(135deg,#eef3ff,#f3f0ff);border:1px solid var(--line2)}
+.hlcard .hl-body{min-width:0}
+.hlcard .hl-t{font-weight:700;font-size:14px;letter-spacing:-.2px;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.hlcard .hl-score{font-family:'IBM Plex Mono',monospace;color:var(--brand);font-weight:700}
+.hlcard .hl-score small{color:var(--dim);font-weight:500;font-size:10px}
+.hlcard .hl-s{font-size:12px;color:var(--muted);margin-top:4px;line-height:1.45}
+.hlcard .hl-go{margin-top:9px}
+
+/* "Routes we track" overview --------------------------------------------------- */
+.routegrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,250px),1fr));gap:14px;margin-top:16px}
+.routecard{background:#fff;border:1px solid var(--line);border-radius:16px;padding:16px 17px;box-shadow:var(--shadow);
+  display:flex;flex-direction:column;transition:transform .22s,box-shadow .22s}
+.routecard:hover{transform:translateY(-3px);box-shadow:var(--shadow-lg)}
+.routecard.collecting{background:#f9fbfe;border-style:dashed}
+.rc-head{display:flex;align-items:center;gap:10px}
+.rc-pin{font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:700;color:#5b43c9;background:rgba(122,92,240,.1);
+  border-radius:9px;padding:6px 8px;letter-spacing:.04em}
+.rc-cities{display:flex;flex-direction:column;line-height:1.15;min-width:0}
+.rc-cities b{font-size:14px;letter-spacing:-.2px}.rc-cities span{font-size:11.5px;color:var(--muted)}
+.rc-head .sigmini{margin-left:auto}
+.rc-price{margin-top:13px;font-family:'IBM Plex Mono',monospace;display:flex;align-items:baseline;gap:5px}
+.rc-price .cur{font-size:11px;color:var(--dim);font-weight:500}.rc-price b{font-size:25px;font-weight:600;letter-spacing:-.5px;color:var(--buy)}
+.rc-price small{font-size:10px;color:var(--dim);letter-spacing:.06em;margin-left:2px}
+.rc-meta{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.rc-trip{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);margin-top:10px;flex-wrap:wrap}
+.rc-go{display:flex;align-items:center;gap:12px;margin-top:auto;padding-top:14px}
+.rc-go .btnbook{flex:none}
+.rc-explore{font-size:12px;color:var(--brand);font-weight:600;text-decoration:none}.rc-explore:hover{text-decoration:underline}
+.rc-collect{display:flex;align-items:center;gap:9px;margin-top:14px;font-weight:600;font-size:13.5px;color:var(--muted)}
+.rc-note{font-size:11.5px;color:var(--dim);margin-top:6px;line-height:1.4}
+.spin{width:13px;height:13px;border:2px solid var(--line2);border-top-color:var(--brand);border-radius:50%;display:inline-block;animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* signal + insight cards now lead with dates; route is a secondary chip --------- */
+.rec .rec-sub{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:3px}
+.rec .rec-trip{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-top:8px;font-size:12.5px;color:var(--muted)}
+.rec .rec-trip .anm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:150px}
+.rec .dates.lead{font-weight:700;font-size:16px;letter-spacing:-.3px;color:var(--ink);font-family:'IBM Plex Mono',monospace}
+.wc-trip{display:flex;align-items:center;gap:7px;font-size:12.5px;font-family:'IBM Plex Mono',monospace}
+@media(max-width:560px){.lead-row .ld-air .anm{max-width:40vw}}
 
 /* ---- global mobile polish: reclaim width, tighten dense components ---- */
 @media(max-width:560px){
@@ -1250,7 +1471,11 @@ tr.best td{background:var(--buy-bg)}
   .panel{padding:16px}
   .finder{padding:16px 14px}
   .ops{padding:16px 15px}
-  .icard,.rec,.bookcard{padding:16px}
+  .icard,.rec,.bookcard,.hlcard,.routecard{padding:15px}
+  .hlgrid,.routegrid{gap:11px}
+  .hlcard .hl-ic{width:38px;height:38px;font-size:20px}
+  .rc-price b{font-size:23px}
+  .lead-row{grid-template-columns:22px 1fr auto;gap:10px;padding:11px 12px}
   .section{margin:48px 0 4px}
   .section h2{font-size:19px}
   .gauge{width:160px;height:160px}
@@ -1275,7 +1500,7 @@ tr.best td{background:var(--buy-bg)}
 <nav class="nav"><div class="row">
   <div class="brand"><span class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2"
     stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v3M9 8h6l1.5 11h-9L9 8zM7.5 19h9M10 8l.5-3h3l.5 3"/></svg></span>Faro</div>
-  <div class="links"><a href="#status">Status</a><a href="#deals">Deals</a><a href="#market">Market</a><a href="#finder">Find a trip</a><a href="#trend">Trends</a><a href="#insights">Insights</a><a href="#fares">Fares</a></div>
+  <div class="links"><a href="#highlights">Highlights</a><a href="#routes">Routes</a><a href="#finder">Find a trip</a><a href="#market">Market</a><a href="#deals">Signals</a><a href="#insights">Insights</a><a href="#fares">Fares</a></div>
   <div class="ctx"><span class="pulse"></span><span id="clock">live</span><span id="navwx"></span></div>
 </div></nav>
 
@@ -1335,8 +1560,66 @@ function parseItin(s){
   const cn=c=>(D.cities&&D.cities[c])||c;
   const d1=new Date(+m[3],+m[4]-1,+m[5]), d2=new Date(+m[6],+m[7]-1,+m[8]);
   const f=d=>d.getDate()+' '+MM[d.getMonth()];
-  return {title:cn(m[1])+' → '+cn(m[2]), dates:f(d1)+' – '+f(d2)+' '+d2.getFullYear(), nights:Math.round((d2-d1)/86400000)};
+  return {title:cn(m[1])+' → '+cn(m[2]), dates:f(d1)+' – '+f(d2)+' '+d2.getFullYear(), nights:Math.round((d2-d1)/86400000),
+    o:m[1], d:m[2]};
 }
+
+/* ---- shared itinerary identity (kills the repeated route name) ----
+   On a single corridor the route label is pure repetition. So everywhere we lead
+   with what actually distinguishes a trip -- its DATES + nights -- and render the
+   route as a small, secondary chip (only really needed once >1 corridor). */
+const CNm=c=>(D.cities&&D.cities[c])||c;
+const NROUTES=()=>((D.stats&&D.stats.routes)||1);                 // corridors with live data
+const NTRACKED=()=>((D.stats&&D.stats.routes_tracked)||NROUTES());// corridors we track
+// The route chip only earns its place once >1 corridor has data; on a single
+// corridor it's pure repetition, so we suppress it and let the dates lead.
+function routeChip(o,d){if(!o||NROUTES()<=1)return '';return '<span class="rchip">'+esc(CNm(o))+'<i>→</i>'+esc(CNm(d))+'</span>';}
+/* compact stops + layover ("where the stop is") badge set */
+function stopsVia(stops,via,ns){
+  if(ns||stops===0)return '<span class="mini ns">Nonstop</span>';
+  let s=(stops!=null)?'<span class="mini">'+stops+' stop'+(stops===1?'':'s')+'</span>':'';
+  if(via)s+='<span class="mini via">via '+esc(via)+'</span>';
+  return s||'';
+}
+function signalPill(itin){const r=(D.recs||[]).find(x=>x.itinerary===itin);
+  if(!r)return '';return '<span class="sigmini '+r.signal+'">'+r.signal+(r.confidence!=null?' '+r.confidence+'%':'')+'</span>';}
+
+/* ===== combined cross-route highlights (the hero hook) ===== */
+const HLI={gem:'💎',pulse:'📈',clock:'⏳',plane:'✈️',cal:'🗓️',length:'🗓️'};
+function renderHighlights(){const H=D.highlights||[];if(!H.length)return;
+  const card=h=>{const go=h.itin?bookRowLink(h.itin,'See fare ↗'):'';
+    const sc=(h.score!=null)?'<span class="hl-score">'+h.score+'<small>/100</small></span>':'';
+    return '<div class="hlcard reveal"><div class="hl-ic">'+(HLI[h.icon]||'✦')+'</div>'+
+      '<div class="hl-body"><div class="hl-t">'+esc(h.title)+sc+'</div>'+
+      '<div class="hl-s">'+esc(h.sub)+'</div>'+(go?'<div class="hl-go">'+go+'</div>':'')+'</div></div>';};
+  add('<div class="section reveal" id="highlights"><h2>Today across every route</h2>'+
+    '<span class="hint">live highlights from all '+NTRACKED()+' tracked corridors</span></div>'+
+    '<div class="hlgrid reveal">'+H.map(card).join('')+'</div>');}
+
+/* ===== every supported corridor at a glance (incl. ones still collecting) ===== */
+function renderRoutes(){const R=D.routes_overview||[];if(R.length<1)return;
+  const card=c=>{
+    const head='<div class="rc-head">'+avatarPin(c.o)+'<div class="rc-cities"><b>'+esc(c.from)+'</b><span>→ '+esc(c.to)+'</span></div>'+
+      (c.has_data?signalPill(c.o+'-'+c.d+' '+(c.dep||'')+' -> '+(c.ret||'')):'')+'</div>';
+    if(!c.has_data){
+      return '<div class="routecard collecting reveal">'+head+
+        '<div class="rc-collect"><span class="spin"></span>Gathering first fares</div>'+
+        '<div class="rc-note">New route — usually live within a week of scans.</div></div>';}
+    const itin=c.o+'-'+c.d+' '+c.dep+' -> '+c.ret;
+    return '<div class="routecard reveal">'+head+
+      '<div class="rc-price"><span class="cur">'+CUR+'</span><b>'+fmtv(c.min)+'</b><small>cheapest return</small></div>'+
+      '<div class="rc-meta">'+stopsVia(c.stops,c.via,c.nonstop)+
+        (c.carriers?'<span class="mini">'+c.carriers+' airline'+(c.carriers===1?'':'s')+'</span>':'')+
+        (c.dtd!=null?'<span class="mini">'+c.dtd+'d out</span>':'')+'</div>'+
+      '<div class="rc-trip">'+(c.airline?avatar(c.airline,c.iata,18)+esc(c.airline)+' · ':'')+fdshort(c.dep)+' – '+fdshort(c.ret)+(c.len!=null?' · '+c.len+'n':'')+'</div>'+
+      '<div class="rc-go">'+bookBtn(itin,'Book')+'<a class="rc-explore" href="#finder" data-route="'+esc(c.o+'-'+c.d)+'">Explore dates →</a></div></div>';};
+  add('<div class="section reveal" id="routes"><h2>Routes we track</h2>'+
+    '<span class="hint">New Zealand ↔ Sri Lanka &amp; India · tap to explore</span></div>'+
+    '<div class="routegrid reveal">'+R.map(card).join('')+'</div>');
+  // "Explore dates" jumps to the finder with this corridor preselected.
+  document.querySelectorAll('.rc-explore').forEach(a=>a.addEventListener('click',()=>{
+    if(window.__finderPickRoute)window.__finderPickRoute(a.dataset.route);}));}
+function avatarPin(code){return '<span class="rc-pin">'+esc((code||'').slice(0,3))+'</span>';}
 
 /* ---- direct booking deep-links, built from the route + dates ---- */
 function bookLinks(itin){
@@ -1391,7 +1674,7 @@ function fxLine(a){if(!rates)return '';return ['USD','AUD','GBP','EUR','LKR','IN
 function renderHeroChips(){const el=document.getElementById('hchips');if(!el)return;const S=D.stats,ch=[];
   if(weather)ch.push(['<span class="ico">'+weather.ico+'</span>','<b>'+weather.t+'°C</b><small>'+esc(weather.desc)+' in '+esc(dest.name)+'</small>']);
   if(dest&&dest.tz)ch.push(['<span class="ico">🕐</span>','<b id="lt"></b><small>local time, '+esc(dest.name)+'</small>']);
-  if(S&&S.airlines)ch.push(['<span class="ico">✈️</span>','<b>'+S.airlines+' airlines</b><small>'+(S.routes||0)+' routes tracked</small>']);
+  if(S&&S.airlines){const rt=S.routes_tracked||S.routes||0;ch.push(['<span class="ico">✈️</span>','<b>'+S.airlines+' airlines</b><small>'+rt+' route'+(rt===1?'':'s')+' tracked</small>']);}
   el.innerHTML=ch.map(c=>'<div class="lchip">'+c[0]+'<div>'+c[1]+'</div></div>').join('');if(dest&&dest.tz)ltick();}
 function ltick(){const el=document.getElementById('lt');if(!el)return;
   try{el.textContent=new Intl.DateTimeFormat('en-GB',{hour:'2-digit',minute:'2-digit',timeZone:dest.tz}).format(new Date());}catch(e){}setTimeout(ltick,20000);}
@@ -1426,7 +1709,7 @@ const ICON={
   gem:'<path d="M6 3h12l3 6-9 12L3 9z"/><path d="M3 9h18M9 3 7 9l5 12 5-12-2-6"/>'};
 const S=D.stats;
 document.getElementById('eyebrow').textContent=D.primary?(D.primary.origin.name+' → '+D.primary.dest.name+' · SMART FARE TIMING'):'SMART FARE TIMING';
-if(D.primary){const nR=((D.explore_meta&&D.explore_meta.routes)||[]).length;
+if(D.primary){const nR=(D.stats&&D.stats.routes_tracked)||((D.routes_overview||[]).length);
   const more=nR>1?' — one of <b>'+nR+' routes</b> it tracks across New Zealand ↔ Sri Lanka &amp; India':'';
   document.getElementById('lead').innerHTML='Faro watches fares for <b>'+esc(D.primary.origin.name)+' → '+esc(D.primary.dest.name)+
   '</b> every day'+more+', and tells you whether to book now or wait — with the airline, stops and flight time for every option.';}
@@ -1507,7 +1790,7 @@ function renderBento(){
       (ce.airline?avatar(ce.airline,ce.iata,18)+esc(ce.airline):''),'b-lowest');}
   if(S.avg_price)h+=tile('avg','Average fare',Math.round(S.avg_price),'cur');
   h+=tile('records','Fare records',S.total_offers||0,'num');
-  h+=tile('routes','Routes tracked',S.routes||0,'num');
+  h+=tile('routes','Routes tracked',S.routes_tracked||S.routes||0,'num');
   h+=tile('airlines','Airlines seen',S.airlines||0,'num');
   h+=tile('scans','Daily scans',S.scans||0,'num');
   if(S.fastest)h+=tile('fast','Fastest trip',S.fastest,'dur');
@@ -1642,12 +1925,15 @@ if(!D.recs.length){
     else{const pi=parseItin(nl[0].itin);t=nl.length+' new low'+(nl.length>1?'s':'');s=esc(pi.title)+' just hit a fresh low of '+fmt(nl[0].price)+'.';}
     add('<div class="alertbar reveal"><span class="ab-ic">📉</span><div><div class="ab-t">'+t+'</div><div class="ab-s">'+s+'</div></div></div>');})();
 
+  renderHighlights();
+  renderRoutes();
+
   buildFinder();
 
   renderMarket();
 
   add('<div class="section reveal" id="trend"><h2>Price trends &amp; airlines</h2></div>'+
-    '<div class="grid2"><div class="panel reveal"><h3>Cheapest fare over time</h3><div class="ph">one cheapest-per-day point per route</div>'+
+    '<div class="grid2"><div class="panel reveal"><h3>Cheapest fare over time</h3><div class="ph">each line is one departure date — cheapest-per-day</div>'+
       '<div class="canvas-wrap"><canvas id="trendChart"></canvas></div></div>'+
     '<div class="panel reveal"><h3>Best fare by airline</h3><div class="ph">lowest fare each carrier offered in the latest scan</div>'+
       '<div class="canvas-wrap"><canvas id="airChart"></canvas></div></div></div>');
@@ -1661,7 +1947,7 @@ if(!D.recs.length){
       add('<div class="grid2"><div class="panel reveal"><h3>Predicted booking curve</h3><div class="ph">expected cheapest fare vs days before departure, with a '+(D.model?D.model.coverage:80)+'% band</div>'+
         '<div class="canvas-wrap"><canvas id="fanChart"></canvas></div></div>'+
         '<div class="panel reveal"><h3>Best moment to lock it in</h3><div class="ph">when the model expects the low</div><div class="cols3" style="grid-template-columns:1fr">'+
-        (btb.length?btb.map(b=>{const pi=parseItin(b.itin);return '<div class="bookcard reveal"><div class="rt">'+esc(pi.title)+'</div><div class="when">'+esc(pi.dates)+'</div>'+
+        (btb.length?btb.map(b=>{const pi=parseItin(b.itin);return '<div class="bookcard reveal"><div class="rt">'+esc(pi.dates)+(pi.nights?' · '+pi.nights+'n':'')+'</div><div class="when">'+routeChip(pi.o,pi.d)+'</div>'+
           '<div class="verdict '+(b.book_now?'now':'wait')+'">'+(b.book_now?'Book now':'Wait ~'+b.days_from_now+' days')+'</div>'+
           '<div class="sub">'+(b.book_now?'Already near the expected low of '+fmt(b.predicted_low)+'.':'Model expects a low near '+fmt(b.predicted_low)+(b.save>0?' — about '+fmt(b.save)+' under today.':'.'))+'</div>'+
           (b.book_now?'<div style="margin-top:12px">'+bookBtn(b.itin,'Book now')+'</div>':'')+'</div>';}).join('')
@@ -1680,7 +1966,8 @@ if(!D.recs.length){
       add('<div class="section reveal"><h2>What changed</h2><span class="hint">since the previous scan</span></div>');
       let h='<div class="panel reveal"><div class="digest">';
       mv.slice(0,6).forEach(m=>{const pi=parseItin(m.itin),dn=m.delta<0;
-        h+='<div class="row"><span>'+esc(pi.title)+'</span><span class="mv '+(dn?'down':'up')+'">'+(dn?'▼ ':'▲ ')+fmt(Math.abs(m.delta))+' ('+(dn?'':'+')+m.pct+'%)</span></div>';});
+        h+='<div class="row"><span class="wc-trip">'+esc(pi.dates)+(pi.nights?' · '+pi.nights+'n':'')+' '+routeChip(pi.o,pi.d)+'</span>'+
+           '<span class="mv '+(dn?'down':'up')+'">'+(dn?'▼ ':'▲ ')+fmt(Math.abs(m.delta))+' ('+(dn?'':'+')+m.pct+'%)</span></div>';});
       add(h+'</div></div>');
     }
     const bt=AI.backtest;
@@ -1702,7 +1989,7 @@ if(!D.recs.length){
       const db=deal?' <span class="dealbadge '+esc(deal.label.toLowerCase())+'">'+deal.score+'</span>':'';
       const alist=(r.airline_prices||[]).map(a=>'<div class="aline">'+avatar(a.name,a.iata,28)+'<span class="nm">'+esc(a.name)+'</span><span class="pr">'+fmt(a.price)+'</span></div>').join('')
         ||'<div class="aline" style="color:var(--dim)">airline not reported</div>';
-      h+='<div class="icard reveal"><div class="top"><div><div class="rt">'+esc(pi.title)+db+'</div><div class="when">'+esc(pi.dates)+' · '+r.offers+' offers</div></div>'+
+      h+='<div class="icard reveal"><div class="top"><div><div class="rt">'+esc(pi.dates)+(pi.nights?' · '+pi.nights+' nights':'')+db+'</div><div class="when">'+routeChip(pi.o,pi.d)+' · '+r.offers+' offers</div></div>'+
         '<div style="text-align:right"><div class="big">'+fmt(r.min)+'</div><small>cheapest</small></div></div>'+
         '<div class="facts"><div class="fact"><div class="k">Typical</div><div class="v">'+fmt(r.median)+'</div></div>'+
           '<div class="fact"><div class="k">Highest</div><div class="v">'+fmt(r.max)+'</div></div>'+
@@ -1720,29 +2007,36 @@ if(!D.recs.length){
     add('<div class="section reveal" id="fares"><h2>Latest fares</h2><span class="hint">cheapest per route</span></div>');
     Object.keys(D.latest_offers).forEach(itin=>{const rows=D.latest_offers[itin];if(!rows.length)return;
       const pi=parseItin(itin),best=Math.min.apply(null,rows.map(o=>o.price));
-      let t='<details class="reveal"><summary><span>'+esc(pi.title)+' · '+esc(pi.dates)+'</span><span class="pill">'+rows.length+' offers · from '+fmt(best)+'</span></summary>'+
+      let t='<details class="reveal"><summary><span>'+esc(pi.dates)+(pi.nights?' · '+pi.nights+'n':'')+' '+routeChip(pi.o,pi.d)+'</span><span class="pill">'+rows.length+' offers · from '+fmt(best)+'</span></summary>'+
         bookBar(itin)+
         '<div class="tscroll"><table><thead><tr><th>Airline</th><th>Stops</th><th class="ft">Flight time</th><th class="num">Price</th><th></th></tr></thead><tbody>';
       rows.forEach(o=>{const isb=o.price===best;
         t+='<tr class="'+(isb?'best':'')+'"><td><span class="airline">'+avatar(o.airline,o.iata,24)+
           '<span class="anm">'+(esc(o.airline)||'<span style="color:var(--dim)">—</span>')+'</span>'+(isb?'<span class="cheapest">CHEAPEST</span>':'')+'</span></td>'+
-          '<td><span class="chip'+(o.stops===0?' ns':'')+'">'+stops(o.stops)+'</span></td>'+
+          '<td><span class="chip'+(o.stops===0?' ns':'')+'">'+stops(o.stops)+'</span>'+(o.via?'<span class="viachip">via '+esc(o.via)+'</span>':'')+'</td>'+
           '<td class="mono ft">'+dur(o.duration)+'</td><td class="num">'+fmt(o.price)+'</td>'+
           '<td class="num">'+bookRowLink(itin,'Book ↗')+'</td></tr>';});
       add(t+'</tbody></table></div></details>');});}
 
   /* Today's BUY/WAIT/WATCH signals -- moved to the bottom of the page. */
-  add('<div class="section reveal" id="deals"><h2>Today’s signals</h2><span class="hint">act-now first</span></div>');
+  add('<div class="section reveal" id="deals"><h2>Today’s signals</h2><span class="hint">should you book now? · act-now first</span></div>');
   D.recs.forEach((r,i)=>{const pi=parseItin(r.itinerary),conf=r.confidence||0,tags=[];
     const deal=(D.ai&&D.ai.deals&&D.ai.deals[r.itinerary])||null;
     const narr=(D.ai&&D.ai.narratives&&D.ai.narratives[r.itinerary])||'';
+    // The actual cheapest bookable option for this trip -- airline / stops / where
+    // the stop is -- so a signal isn't just an abstract number.
+    const offs=(D.latest_offers&&D.latest_offers[r.itinerary])||[],o0=offs[0]||null;
     if(r.predicted_low)tags.push(['forecast low '+fmt(r.predicted_low),1]);
     if(r.signal==='WAIT'&&r.expected_savings)tags.push(['save ~'+fmt(r.expected_savings)+' by waiting',1]);
     if(r.prob_drop!=null)tags.push([r.prob_drop+'% chance of a drop',0]);
     if(r.days_to_departure!=null)tags.push([r.days_to_departure+' days to go',0]);
     const db=deal?'<span class="dealbadge '+esc(deal.label.toLowerCase())+'">'+deal.score+' · '+esc(deal.label)+' deal</span>':'';
+    const detail=o0?'<div class="rec-trip">'+(o0.airline?avatar(o0.airline,o0.iata,20)+'<span class="anm">'+esc(o0.airline)+'</span>':'')+
+      stopsVia(o0.stops,o0.via,o0.stops===0)+(o0.duration?'<span class="mini">⏱ '+dur(o0.duration)+'</span>':'')+'</div>':'';
     add('<div class="rec reveal"><span class="sig '+r.signal+'">'+r.signal+'</span>'+
-      '<div><div class="route">'+esc(pi.title)+' '+db+'</div><div class="dates">'+esc(pi.dates)+(pi.nights?' · '+pi.nights+' nights':'')+'</div>'+
+      '<div class="rec-main"><div class="dates lead">'+esc(pi.dates)+(pi.nights?' · '+pi.nights+' nights':'')+'</div>'+
+        '<div class="rec-sub">'+routeChip(pi.o,pi.d)+db+'</div>'+
+        detail+
         '<div class="reason">'+esc(r.reason)+'</div>'+
         (narr?'<div class="narr">'+esc(narr)+'</div>':'')+
         '<div class="conf"><div class="lab"><span>confidence</span><span>'+conf+'%</span></div><div class="bar"><i data-w="'+conf+'"></i></div></div>'+
@@ -1935,6 +2229,10 @@ function buildFinder(){
     if($('f-lmin'))$('f-lmin').value=lmin;if($('f-lmax'))$('f-lmax').value=lmax;
     $('f-air').value='';if($('f-route'))$('f-route').value='';$('f-sort').value='price';
     $('f-stops').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x.dataset.v==='any'));if(loaded){render();}});
+  // Let the "Routes we track" cards jump here with a corridor preselected.
+  window.__finderPickRoute=function(rt){F.route=rt;if($('f-route'))$('f-route').value=rt;
+    F.view='cal';$('f-view').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x.dataset.v==='cal'));
+    doSearch();};
 }
 
 /* ===== market analytics: pulse gauge, booking-window curve, trip-length value,
@@ -1959,12 +2257,17 @@ function renderMarket(){
   add('<div class="grid2">'+
     '<div class="panel reveal"><h3>Where fares sit today</h3><div class="ph">'+(PD?PD.n+' trips · median '+fmt(PD.median)+' · '+fmt(PD.min)+'–'+fmt(PD.max):'spread of current fares')+'</div>'+
       '<div class="canvas-wrap"><canvas id="distChart"></canvas></div></div>'+
-    '<div class="panel reveal"><h3>Standout deals right now</h3><div class="ph">priced furthest below the typical fare for their length</div>'+
-      (SV.length?'<div class="lead-list">'+SV.map((s,i)=>{const pi=parseItin(s.itin);
+    '<div class="panel reveal"><h3>Standout deals right now</h3><div class="ph">furthest below the typical fare for their length — with airline, stops &amp; the call</div>'+
+      (SV.length?'<div class="lead-list">'+SV.map((s,i)=>{
+        const air=s.airline?avatar(s.airline,s.iata,20)+'<span class="anm">'+esc(s.airline)+'</span>':'';
         return '<div class="lead-row"><div class="rk">'+(i+1)+'</div>'+
-          '<div><div class="ld-r">'+esc(pi.title)+'</div><div class="ld-d">'+fdshort(s.dep)+' – '+fdshort(s.ret)+' · '+s.len+' nights'+(s.dtd!=null?' · '+s.dtd+'d out':'')+'</div></div>'+
-          '<div class="ld-p"><div class="now">'+fmt(s.price)+'</div><div class="was">'+fmt(s.typical)+'</div></div>'+
-          '<div class="ld-s">'+s.pct+'% off<br>−'+fmt(s.save)+'</div></div>';}).join('')+'</div>'
+          '<div class="ld-main"><div class="ld-r">'+fdshort(s.dep)+' – '+fdshort(s.ret)+' · '+s.len+' nights'+
+            (s.dtd!=null?' <span class="ld-out">'+s.dtd+'d out</span>':'')+'</div>'+
+          '<div class="ld-meta">'+routeChip(s.o,s.d)+stopsVia(s.stops,s.via,false)+'</div>'+
+          (air?'<div class="ld-air">'+air+signalPill(s.itin)+'</div>':'')+
+          '<div class="ld-book">'+bookRowLink(s.itin,'Book ↗')+'</div></div>'+
+          '<div class="ld-p"><div class="now">'+fmt(s.price)+'</div><div class="was">'+fmt(s.typical)+'</div>'+
+            '<div class="ld-s">'+s.pct+'% off · −'+fmt(s.save)+'</div></div></div>';}).join('')+'</div>'
         :'<div class="finder-empty">No trips are sitting below their typical fare right now.</div>')+
       '</div></div>');
 }
@@ -1986,10 +2289,17 @@ function drawCharts(){if(charted)return;charted=true;
       options:{responsive:false,plugins:{legend:{display:false},tooltip:{enabled:false}},scales:{x:{display:false},y:{display:false}}}});});
   const tc=document.getElementById('trendChart'),enough=Object.values(D.history).some(h=>h.length>=2);
   if(tc&&!enough)placeholder('trendChart','Booking curves appear once each route has 2+ days of history. Check back tomorrow.');
-  else if(tc){const itins=Object.keys(D.history),labels=[...new Set([].concat(...itins.map(k=>D.history[k].map(x=>x.d))))].sort();
+  else if(tc){let itins=Object.keys(D.history).filter(k=>(D.history[k]||[]).length>=2);
+    // Label each line by what makes it DISTINCT -- its departure + nights (and the
+    // route only when more than one corridor is charted) -- never 9x the same route.
+    itins.sort((a,b)=>{const A=parseItin(a),B=parseItin(b);return (A.o+A.d).localeCompare(B.o+B.d)|| (a<b?-1:1);});
+    const labels=[...new Set([].concat(...itins.map(k=>D.history[k].map(x=>x.d))))].sort();
+    const multi=NROUTES()>1;
     const ds=itins.map((k,i)=>{const m=Object.fromEntries(D.history[k].map(x=>[x.d,x.p])),pi=parseItin(k);
-      return{label:pi.title,data:labels.map(d=>m[d]??null),borderColor:palette[i%palette.length],backgroundColor:palette[i%palette.length],borderWidth:2,pointRadius:2,tension:.3,spanGaps:true};});
-    new Chart(tc,{type:'line',data:{labels,datasets:ds},options:gridOpts()});}
+      const dep=(pi.dates||'').split(' – ')[0];
+      const lab=(multi?pi.o+'→'+pi.d+' · ':'')+dep+(pi.nights?' · '+pi.nights+'n':'');
+      return{label:lab,data:labels.map(d=>m[d]??null),borderColor:palette[i%palette.length],backgroundColor:palette[i%palette.length],borderWidth:2,pointRadius:1.5,tension:.3,spanGaps:true};});
+    new Chart(tc,{type:'line',data:{labels,datasets:ds},options:Object.assign(gridOpts(),{plugins:{legend:{position:'bottom',labels:{font:{family:'Sora',size:10},color:'#56678a',boxWidth:10,padding:9,usePointStyle:true}}}})});}
   const ac=document.getElementById('airChart');
   if(ac&&D.airline_market&&D.airline_market.length){const m=D.airline_market;
     new Chart(ac,{type:'bar',data:{labels:m.map(a=>a.name),datasets:[{label:'Lowest fare ('+CUR+')',data:m.map(a=>a.min),backgroundColor:m.map(a=>acolor(a.name)),borderRadius:8,maxBarThickness:30}]},

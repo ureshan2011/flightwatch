@@ -27,7 +27,7 @@ COLUMNS = [
     "scan_datetime", "scan_date", "scan_slot", "origin", "destination",
     "depart_date", "return_date", "trip_length", "days_to_departure",
     "offer_index", "price", "currency", "airline", "stops", "duration_minutes",
-    "status", "source",
+    "layover", "status", "source",
 ]
 
 
