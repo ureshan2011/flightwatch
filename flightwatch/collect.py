@@ -177,7 +177,7 @@ async def _scan_one_async(browsers, sem, it, cfg, now, scan_date, slot, market):
     origin, dest = base["origin"], base["destination"]
     dep, ret = base["depart_date"], base["return_date"]
 
-    if dtd < 0:                       # departure already passed -- skip
+    if dtd < 1:                        # departure today or passed -- skip
         return []
 
     async with sem:
