@@ -8,6 +8,52 @@ market: nz                  # Google Flights region (gl=) -- match the route's c
 adults: 1
 max_offers_per_search: 50   # store up to this many fares per itinerary per scan (0 = all)
 
+# --------------------------------------------------------------------------- #
+# Monetization (affiliate links)
+# --------------------------------------------------------------------------- #
+# Every "Book" button on the dashboard is a deep link into a flight search for
+# that exact route+dates. Wire in your affiliate IDs here and those CTAs start
+# earning. It's all config-driven: paste your Travelpayouts marker once approved
+# and rebuild -- no code changes. With NO marker set the links still work, just
+# untracked, so the site is fully functional out of the box.
+#
+# Travelpayouts (https://www.travelpayouts.com) is the backbone: ONE marker
+# powers Aviasales, WayAway and Kiwi.com. Sign up (free), grab your numeric
+# `marker`, paste it below. Skyscanner uses its own partner `associateid`.
+monetization:
+  enabled: true
+  travelpayouts_marker: ""     # <-- paste your Travelpayouts marker here (e.g. "123456")
+  skyscanner_associateid: ""   # <-- optional separate Skyscanner partner id
+  sub_id: faro                 # free-form sub-id passed through for your own reporting
+  google_flights: true         # also offer a neutral "view on Google Flights" link (the data source)
+  disclosure: >-
+    Some booking links are affiliate links. If you book through them Faro may earn a
+    small commission — at no extra cost to you. Always confirm the live price before booking.
+  # The primary CTA + the "compare on" row, in order. The FIRST provider with
+  # primary:true is the big Book button; the rest become the compact compare row.
+  # URL placeholders (substituted client-side, no PII):
+  #   {o}/{d} airport codes UPPER, {ol}/{dl} lower-case,
+  #   {dep}/{ret} ISO yyyy-mm-dd, {depDDMM}/{retDDMM} ddmm, {depYMD}/{retYMD} yymmdd,
+  #   {adults} pax, {m} marker (or skyscanner id), {sub} sub_id, {cur} currency lower-case.
+  providers:
+    - id: aviasales
+      name: Aviasales
+      primary: true
+      marker: travelpayouts
+      url: "https://www.aviasales.com/search/{o}{depDDMM}{d}{retDDMM}{adults}?marker={m}&sub_id={sub}&currency={cur}"
+    - id: wayaway
+      name: WayAway
+      marker: travelpayouts
+      url: "https://wayaway.io/search/{o}{depDDMM}{d}{retDDMM}{adults}?marker={m}&sub_id={sub}&currency={cur}"
+    - id: kiwi
+      name: Kiwi.com
+      marker: travelpayouts
+      url: "https://www.kiwi.com/deep?from={o}&to={d}&departure={dep}&return={ret}&affilid={m}"
+    - id: skyscanner
+      name: Skyscanner
+      marker: skyscanner
+      url: "https://www.skyscanner.net/transport/flights/{ol}/{dl}/{depYMD}/{retYMD}/?associateid={m}"
+
 # Spotlight one carrier in the dashboard's command center: its lowest current
 # fare, a buy/wait call + forecast for that fare, and its cheapest fares over the
 # next ~3 months. On CHC<->CMB, Singapore Airlines always flies the trip in a
