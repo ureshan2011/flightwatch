@@ -739,6 +739,45 @@ def _fixed_itin_keys():
             for it in fixed}
 
 
+def _monetization():
+    """Resolve the config `monetization:` block into a compact, client-ready object.
+
+    Every booking CTA on the dashboard is a deep link into a flight search for the
+    card's route+dates, built client-side from these provider URL templates. We
+    resolve each provider's affiliate credential here (Travelpayouts marker vs
+    Skyscanner associate id) so the page just substitutes `{m}`. With no marker
+    set the links still work -- just untracked -- so the dashboard is always
+    functional. Returns {enabled:false} when monetization is off / unconfigured.
+    """
+    from . import collect as collect_mod
+    try:
+        cfg = collect_mod.load_config() or {}
+    except Exception:
+        cfg = {}
+    m = dict(cfg.get("monetization") or {})
+    if not m or not m.get("enabled", False):
+        return {"enabled": False, "providers": [], "google_flights": True}
+    creds = {"travelpayouts": str(m.get("travelpayouts_marker") or "").strip(),
+             "skyscanner": str(m.get("skyscanner_associateid") or "").strip()}
+    provs = []
+    for p in (m.get("providers") or []):
+        if not p.get("url"):
+            continue
+        provs.append({"id": p.get("id"), "name": p.get("name", p.get("id")),
+                      "primary": bool(p.get("primary")),
+                      "m": creds.get(p.get("marker", "travelpayouts"), ""),
+                      "url": p["url"]})
+    # Guarantee exactly one primary so the client always has a headline CTA.
+    if provs and not any(p["primary"] for p in provs):
+        provs[0]["primary"] = True
+    return {"enabled": True, "providers": provs,
+            "sub": str(m.get("sub_id") or "").strip(),
+            "cur": str(cfg.get("currency", "NZD")).lower(),
+            "adults": int(cfg.get("adults", 1) or 1),
+            "google_flights": bool(m.get("google_flights", True)),
+            "disclosure": str(m.get("disclosure") or "").strip()}
+
+
 def build():
     df = storage.load_all()
     bundle = predict.train_model(df) if not df.empty else None
@@ -858,6 +897,7 @@ def build():
         "focus": focus,
         "routes_overview": routes_overview,
         "highlights": highlights,
+        "monetization": _monetization(),
         "stats": stats,
         "cities": cities,
         "primary": primary,
@@ -900,12 +940,12 @@ def _html(p):
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
 :root{
-  --bg:#eef3fc;--card:#ffffff;--ink:#0d1830;--muted:#56678a;--dim:#8a99b8;
-  --line:#e8eef8;--line2:#dbe4f3;
-  --brand:#3b6ef5;--brand2:#7a5cf0;--teal:#0fb6a8;--pink:#e0567d;
-  --buy:#12b07c;--buy-bg:#e6f7f0;--wait:#e8902a;--wait-bg:#fdf1e2;--watch:#6b7ba0;--watch-bg:#eef1f8;
-  --shadow:0 12px 34px -16px rgba(24,46,92,.20);--shadow-lg:0 30px 66px -24px rgba(24,46,92,.30);
-  --radius:20px;
+  --bg:#f5f7fc;--card:#ffffff;--ink:#0e1426;--muted:#586079;--dim:#97a0b6;
+  --line:#eef1f8;--line2:#e1e6f1;
+  --brand:#4361ee;--brand2:#7c3aed;--teal:#06b6a4;--pink:#ef4d6d;
+  --buy:#10b981;--buy-bg:#e7f8f1;--wait:#f59e0b;--wait-bg:#fdf3e1;--watch:#64748b;--watch-bg:#eef1f8;
+  --shadow:0 14px 38px -18px rgba(20,34,74,.20);--shadow-lg:0 34px 72px -26px rgba(20,34,74,.30);
+  --radius:18px;
 }
 *{margin:0;box-sizing:border-box}
 html{scroll-behavior:smooth}
@@ -918,17 +958,17 @@ img,canvas{max-width:100%}
 
 /* aurora bg */
 .aurora{position:fixed;inset:0;z-index:-2;overflow:hidden;background:
-  radial-gradient(1100px 620px at 80% -8%,#dfe8ff 0,transparent 58%),
-  radial-gradient(820px 520px at -8% 6%,#dafaf4 0,transparent 52%),var(--bg)}
-.blob{position:absolute;border-radius:50%;filter:blur(80px);opacity:.5;will-change:transform}
-.b1{width:520px;height:520px;left:-120px;top:-90px;background:#9fb8ff;animation:float1 20s ease-in-out infinite}
-.b2{width:460px;height:460px;right:-120px;top:60px;background:#a9efe2;animation:float2 24s ease-in-out infinite}
+  radial-gradient(1100px 620px at 82% -10%,#e4e7ff 0,transparent 58%),
+  radial-gradient(820px 520px at -8% 4%,#d9f6f0 0,transparent 52%),var(--bg)}
+.blob{position:absolute;border-radius:50%;filter:blur(84px);opacity:.46;will-change:transform}
+.b1{width:520px;height:520px;left:-120px;top:-90px;background:#aeb9ff;animation:float1 20s ease-in-out infinite}
+.b2{width:460px;height:460px;right:-120px;top:60px;background:#a3eede;animation:float2 24s ease-in-out infinite}
 @keyframes float1{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(40px,30px) scale(1.08)}}
 @keyframes float2{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(-50px,40px) scale(1.12)}}
 
 /* nav */
 .nav{position:sticky;top:0;z-index:60;backdrop-filter:saturate(170%) blur(14px);
-  background:rgba(238,243,252,.72);border-bottom:1px solid var(--line)}
+  background:rgba(245,247,252,.74);border-bottom:1px solid var(--line)}
 .nav .row{max-width:1140px;margin:0 auto;padding:11px 22px;display:flex;align-items:center;gap:14px}
 .brand{font-weight:800;letter-spacing:-.4px;display:flex;align-items:center;gap:10px;font-size:19px}
 .mark{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;flex:none;
@@ -941,6 +981,30 @@ img,canvas{max-width:100%}
 .ctx .pulse{width:8px;height:8px;border-radius:50%;background:var(--buy);animation:pulse 2s infinite}
 @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(18,176,124,.5)}70%{box-shadow:0 0 0 8px rgba(18,176,124,0)}100%{box-shadow:0 0 0 0 rgba(18,176,124,0)}}
 @media(max-width:720px){.nav .links{display:none}}
+
+/* route switcher (sticky corridor focus) */
+.routebar{position:sticky;top:52px;z-index:55;backdrop-filter:saturate(170%) blur(14px);
+  background:rgba(245,247,252,.84);border-bottom:1px solid var(--line)}
+.rb-inner{max-width:1140px;margin:0 auto;padding:9px 22px;display:flex;align-items:center;gap:14px}
+.rb-lbl{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--dim);flex:none}
+.rb-pills{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;padding:2px 0;-webkit-overflow-scrolling:touch}
+.rb-pills::-webkit-scrollbar{display:none}
+.rpill{flex:none;display:flex;flex-direction:column;align-items:flex-start;gap:1px;cursor:pointer;
+  background:#fff;border:1.5px solid var(--line2);border-radius:13px;padding:7px 14px;
+  font-family:inherit;color:var(--muted);transition:.18s ease;line-height:1.2}
+.rpill:hover{border-color:var(--brand);color:var(--ink);transform:translateY(-1px);box-shadow:var(--shadow)}
+.rpill .rp-main{font-size:13px;font-weight:700;letter-spacing:-.2px;display:flex;align-items:center;gap:5px}
+.rpill .rp-main i{font-style:normal;color:var(--dim);font-weight:500}
+.rpill .rp-sub{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--dim);font-weight:500}
+.rpill .rp-flag{font-size:10px;color:var(--wait)}
+.rpill.on{background:linear-gradient(135deg,var(--brand),var(--brand2));border-color:transparent;color:#fff;
+  box-shadow:0 10px 22px -10px rgba(59,110,245,.7)}
+.rpill.on .rp-main i,.rpill.on .rp-sub{color:rgba(255,255,255,.82)}
+.rpill.on .rp-flag{color:#ffe08a}
+.rpill.collecting{opacity:.72}
+.rpill.collecting .rp-sub{color:var(--wait)}
+@media(max-width:720px){.routebar{top:50px}.rb-lbl{display:none}}
 
 /* hero */
 .hero{padding:54px 0 6px;display:grid;grid-template-columns:1.02fr .98fr;gap:36px;align-items:center}
@@ -965,8 +1029,9 @@ h1 .grad{background:linear-gradient(110deg,var(--brand),var(--brand2) 46%,var(--
 .btnbook:hover{transform:translateY(-1px);box-shadow:var(--shadow-lg);color:#fff}
 .btnbook svg{width:15px;height:15px;stroke:#fff;fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
 .altbook{font-size:12px;color:var(--dim)}
-.altbook a{color:var(--muted);text-decoration:underline;text-underline-offset:2px}
-.altbook a:hover{color:var(--brand)}
+.altbook a{display:inline-block;color:var(--muted);background:#fff;border:1px solid var(--line2);
+  border-radius:8px;padding:3px 9px;margin:2px 1px;text-decoration:none;transition:.15s ease}
+.altbook a:hover{color:var(--brand);border-color:var(--brand);transform:translateY(-1px)}
 
 /* deal card */
 .dealwrap{perspective:1200px}
@@ -1022,9 +1087,12 @@ h1 .grad{background:linear-gradient(110deg,var(--brand),var(--brand2) 46%,var(--
 .stat .x{color:var(--muted);font-size:12px;margin-top:4px;display:flex;align-items:center;gap:6px;transform:translateZ(16px)}
 
 /* sections */
-.section{margin:64px 0 4px;display:flex;align-items:baseline;gap:14px}
-.section h2{font-size:21px;font-weight:800;letter-spacing:-.5px}
+.section{margin:62px 0 6px;display:flex;align-items:baseline;gap:14px}
+.section h2{font-size:22px;font-weight:800;letter-spacing:-.6px;position:relative;padding-left:15px}
+.section h2:before{content:"";position:absolute;left:0;top:50%;transform:translateY(-50%);
+  width:5px;height:.82em;border-radius:3px;background:linear-gradient(160deg,var(--brand),var(--brand2))}
 .section .hint{font-size:12px;color:var(--dim);font-family:'IBM Plex Mono',monospace;margin-left:auto}
+.rsec{display:block}
 
 /* rec cards */
 .rec{background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:20px 22px;margin-top:16px;
@@ -1108,6 +1176,9 @@ tr.best td{background:var(--buy-bg)}
 .empty h2{font-size:22px;margin-bottom:10px}.empty p{color:var(--muted);max-width:520px;margin:0 auto}
 
 .foot{margin-top:70px;border-top:1px solid var(--line);padding-top:26px;color:var(--dim);font-size:12.5px;line-height:1.8}
+.affdisc{margin-top:16px;padding:11px 14px;background:#fff;border:1px solid var(--line2);border-radius:12px;
+  font-size:11.5px;line-height:1.65;color:var(--muted)}
+.affdisc:empty{display:none}
 .author{display:flex;align-items:center;gap:13px;margin-top:22px}
 .author .ring{width:46px;height:46px;border-radius:14px;flex:none;display:grid;place-items:center;color:#fff;font-weight:800;
   font-family:'IBM Plex Mono',monospace;font-size:16px;background:linear-gradient(135deg,var(--brand),var(--brand2));box-shadow:0 10px 22px -8px rgba(122,92,240,.7)}
@@ -1503,6 +1574,7 @@ tr.best td{background:var(--buy-bg)}
   <div class="links"><a href="#highlights">Highlights</a><a href="#routes">Routes</a><a href="#finder">Find a trip</a><a href="#market">Market</a><a href="#deals">Signals</a><a href="#insights">Insights</a><a href="#fares">Fares</a></div>
   <div class="ctx"><span class="pulse"></span><span id="clock">live</span><span id="navwx"></span></div>
 </div></nav>
+<div class="routebar" id="routebar"></div>
 
 <div class="wrap">
   <header class="hero">
@@ -1527,6 +1599,7 @@ tr.best td{background:var(--buy-bg)}
     <a href="https://open-meteo.com">Open-Meteo</a> and <a href="https://www.exchangerate-api.com">ExchangeRate-API</a>.
     The buy / wait call is from a quantile gradient-boosting model trained on each route's own price history (heuristic
     fallback while history is thin). Informational only — confirm the live fare before booking. Open data is in <code>data/</code>.
+    <div class="affdisc" id="affdisc"></div>
     <div class="author"><div class="ring">YS</div>
       <div><div class="who">Built &amp; maintained by</div><div class="nm">Yasas Sri Wickramasinghe</div></div></div>
   </div>
@@ -1584,6 +1657,53 @@ function stopsVia(stops,via,ns){
 function signalPill(itin){const r=(D.recs||[]).find(x=>x.itinerary===itin);
   if(!r)return '';return '<span class="sigmini '+r.signal+'">'+r.signal+(r.confidence!=null?' '+r.confidence+'%':'')+'</span>';}
 
+/* ===== route scope: the sticky corridor switcher that focuses the page =====
+   The site tracks several corridors (CHC↔CMB plus the newer AKL routes). To keep
+   them from blurring together, a sticky switcher lets you focus ONE corridor: the
+   per-trip sections (signals, insights, fares, finder) filter to it, while the
+   cross-route overview/analytics stay. 'All routes' shows everything. The
+   flagship corridor (the one with the deepest history) is marked with a ★. */
+const routeKey=itin=>{const p=parseItin(itin);return (p.o&&p.d)?p.o+'-'+p.d:'';};
+const FLAGSHIP=(D.primary&&D.primary.origin&&D.primary.dest)?
+  D.primary.origin.code+'-'+D.primary.dest.code:'';
+let SCOPE='all';
+function routeList(){
+  return (D.routes_overview||[]).map(c=>({route:c.o+'-'+c.d,from:c.from,to:c.to,
+    has:c.has_data,min:c.min,flag:(c.o+'-'+c.d)===FLAGSHIP}));
+}
+function renderRouteSwitcher(){
+  const bar=document.getElementById('routebar');if(!bar)return;
+  const R=routeList();
+  if(R.length<=1){bar.style.display='none';return;}   // pointless with one corridor
+  const pill=(key,inner,sub,cls)=>'<button class="rpill'+(cls||'')+'" data-route="'+esc(key)+'">'+
+    '<span class="rp-main">'+inner+'</span><span class="rp-sub">'+sub+'</span></button>';
+  let html=pill('all','All routes',R.length+' corridors','');
+  R.forEach(c=>{
+    const label=esc(c.from)+' <i>→</i> '+esc(c.to)+(c.flag?'<span class="rp-flag">★</span>':'');
+    html+=pill(c.route,label,(c.has?'from '+CUR+' '+fmtv(c.min):'collecting…'),(c.has?'':' collecting'));
+  });
+  bar.innerHTML='<div class="rb-inner"><span class="rb-lbl">Focus a route</span>'+
+    '<div class="rb-pills">'+html+'</div></div>';
+  bar.querySelectorAll('.rpill').forEach(b=>b.addEventListener('click',()=>setScope(b.dataset.route)));
+}
+function setScope(route){
+  SCOPE=route||'all';
+  const bar=document.getElementById('routebar');
+  if(bar)bar.querySelectorAll('.rpill').forEach(b=>b.classList.toggle('on',b.dataset.route===SCOPE));
+  document.body.setAttribute('data-scope',SCOPE);
+  // Cross-route-only sections (the "every route" highlights) hide when focusing one.
+  document.querySelectorAll('.xroute').forEach(el=>{el.style.display=(SCOPE==='all')?'':'none';});
+  // Per-trip sections: hide non-matching cards, then hide any section left empty.
+  document.querySelectorAll('.rsec').forEach(sec=>{
+    let vis=0;
+    sec.querySelectorAll('[data-route]').forEach(c=>{
+      const show=(SCOPE==='all'||c.getAttribute('data-route')===SCOPE);
+      c.style.display=show?'':'none';if(show)vis++;});
+    sec.style.display=vis?'':'none';
+  });
+  if(SCOPE!=='all'&&window.__finderPickRoute)window.__finderPickRoute(SCOPE);
+}
+
 /* ===== combined cross-route highlights (the hero hook) ===== */
 const HLI={gem:'💎',pulse:'📈',clock:'⏳',plane:'✈️',cal:'🗓️',length:'🗓️'};
 function renderHighlights(){const H=D.highlights||[];if(!H.length)return;
@@ -1592,9 +1712,9 @@ function renderHighlights(){const H=D.highlights||[];if(!H.length)return;
     return '<div class="hlcard reveal"><div class="hl-ic">'+(HLI[h.icon]||'✦')+'</div>'+
       '<div class="hl-body"><div class="hl-t">'+esc(h.title)+sc+'</div>'+
       '<div class="hl-s">'+esc(h.sub)+'</div>'+(go?'<div class="hl-go">'+go+'</div>':'')+'</div></div>';};
-  add('<div class="section reveal" id="highlights"><h2>Today across every route</h2>'+
+  add('<div class="section reveal xroute" id="highlights"><h2>Today across every route</h2>'+
     '<span class="hint">live highlights from all '+NTRACKED()+' tracked corridors</span></div>'+
-    '<div class="hlgrid reveal">'+H.map(card).join('')+'</div>');}
+    '<div class="hlgrid reveal xroute">'+H.map(card).join('')+'</div>');}
 
 /* ===== every supported corridor at a glance (incl. ones still collecting) ===== */
 function renderRoutes(){const R=D.routes_overview||[];if(R.length<1)return;
@@ -1616,33 +1736,51 @@ function renderRoutes(){const R=D.routes_overview||[];if(R.length<1)return;
   add('<div class="section reveal" id="routes"><h2>Routes we track</h2>'+
     '<span class="hint">New Zealand ↔ Sri Lanka &amp; India · tap to explore</span></div>'+
     '<div class="routegrid reveal">'+R.map(card).join('')+'</div>');
-  // "Explore dates" jumps to the finder with this corridor preselected.
+  // "Explore dates" focuses the whole page on this corridor (and the finder).
   document.querySelectorAll('.rc-explore').forEach(a=>a.addEventListener('click',()=>{
+    setScope(a.dataset.route);
     if(window.__finderPickRoute)window.__finderPickRoute(a.dataset.route);}));}
 function avatarPin(code){return '<span class="rc-pin">'+esc((code||'').slice(0,3))+'</span>';}
 
-/* ---- direct booking deep-links, built from the route + dates ---- */
+/* ---- affiliate booking deep-links, built from the route + dates ----
+   Every CTA on the page is a deep link into a flight search for that exact
+   route+dates. Providers + affiliate markers come from config (monetization:),
+   embedded as D.monetization, so adding your Travelpayouts marker turns every
+   "Book" button into an earning link with zero code changes. With no marker the
+   links still work (untracked), so the dashboard is functional out of the box. */
+const MON = D.monetization || {enabled:false, providers:[], google_flights:true};
+function _googleUrl(o,d,dep,ret){
+  return 'https://www.google.com/travel/flights?q='+encodeURIComponent('Flights from '+o+' to '+d+' on '+dep+' through '+ret);}
 function bookLinks(itin){
   const m=(itin||'').match(/^([A-Z]{3})-([A-Z]{3}) (\d{4})-(\d{2})-(\d{2}) -> (\d{4})-(\d{2})-(\d{2})$/);
   if(!m) return null;
-  const o=m[1],d=m[2],dep=m[3]+'-'+m[4]+'-'+m[5],ret=m[6]+'-'+m[7]+'-'+m[8],yy=s=>s.slice(2).replace(/-/g,'');
-  return {
-    google:'https://www.google.com/travel/flights?q='+encodeURIComponent('Flights from '+o+' to '+d+' on '+dep+' through '+ret),
-    kayak:'https://www.kayak.com/flights/'+o+'-'+d+'/'+dep+'/'+ret+'?sort=price_a',
-    sky:'https://www.skyscanner.net/transport/flights/'+o.toLowerCase()+'/'+d.toLowerCase()+'/'+yy(dep)+'/'+yy(ret)+'/'
-  };
+  const o=m[1],d=m[2],dep=m[3]+'-'+m[4]+'-'+m[5],ret=m[6]+'-'+m[7]+'-'+m[8];
+  // Placeholder bag for the provider URL templates.
+  const ctx={o:o,d:d,ol:o.toLowerCase(),dl:d.toLowerCase(),dep:dep,ret:ret,
+    depDDMM:m[5]+m[4],retDDMM:m[8]+m[7],depYMD:m[3].slice(2)+m[4]+m[5],retYMD:m[6].slice(2)+m[7]+m[8],
+    adults:MON.adults||1,sub:MON.sub||'',cur:MON.cur||'nzd'};
+  const fill=(tpl,mk)=>tpl.replace(/\{(\w+)\}/g,(_,k)=> k==='m' ? encodeURIComponent(mk||'') :
+    (ctx[k]!=null?encodeURIComponent(ctx[k]):''));
+  const provs=(MON.providers||[]).map(p=>({id:p.id,name:p.name,primary:!!p.primary,href:fill(p.url,p.m)}));
+  const google=_googleUrl(o,d,dep,ret);
+  let primary=provs.find(p=>p.primary)||provs[0]||null;
+  if(!primary){primary={id:'google',name:'Google Flights',href:google};}
+  // The compare row = every provider except the primary, plus a neutral Google link.
+  const compare=provs.filter(p=>p!==primary);
+  if(MON.google_flights!==false) compare.push({id:'google',name:'Google Flights',href:google});
+  return {o:o,d:d,dep:dep,ret:ret,primary:primary,compare:compare,google:google};
 }
 const _EXT='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 7h9v9M17 7 7 17"/></svg>';
 function bookBtn(itin,label){const L=bookLinks(itin);if(!L)return '';
-  return '<a class="btnbook" href="'+L.google+'" target="_blank" rel="noopener nofollow">'+_EXT+esc(label||'Book on Google Flights')+'</a>';}
+  return '<a class="btnbook" href="'+L.primary.href+'" target="_blank" rel="noopener sponsored nofollow">'+_EXT+esc(label||('Book on '+L.primary.name))+'</a>';}
 function bookBar(itin){const L=bookLinks(itin);if(!L)return '';
-  return '<div class="booklinks">'+bookBtn(itin,'Book on Google Flights')+
-    '<span class="altbook">or compare on <a href="'+L.kayak+'" target="_blank" rel="noopener nofollow">Kayak</a> · '+
-    '<a href="'+L.sky+'" target="_blank" rel="noopener nofollow">Skyscanner</a></span></div>';}
+  const alts=L.compare.map(p=>'<a href="'+p.href+'" target="_blank" rel="noopener sponsored nofollow">'+esc(p.name)+'</a>').join(' · ');
+  return '<div class="booklinks">'+bookBtn(itin,'Book on '+L.primary.name)+
+    (alts?'<span class="altbook">or compare on '+alts+'</span>':'')+'</div>';}
 /* compact inline "Book ↗" link for table rows / cards -- every fare we show
-   gets a direct, deep-linked way to open it on Google Flights. */
+   gets a direct, deep-linked way to open it (primary affiliate provider). */
 function bookRowLink(itin,label){const L=bookLinks(itin);if(!L)return '';
-  return '<a class="bookrow" href="'+L.google+'" target="_blank" rel="noopener nofollow">'+_EXT+esc(label||'Book')+'</a>';}
+  return '<a class="bookrow" href="'+L.primary.href+'" target="_blank" rel="noopener sponsored nofollow">'+_EXT+esc(label||'Book')+'</a>';}
 
 /* ---- clocks ---- */
 const dest=(D.primary&&D.primary.dest)||null, orig=(D.primary&&D.primary.origin)||null;
@@ -1925,6 +2063,7 @@ if(!D.recs.length){
     else{const pi=parseItin(nl[0].itin);t=nl.length+' new low'+(nl.length>1?'s':'');s=esc(pi.title)+' just hit a fresh low of '+fmt(nl[0].price)+'.';}
     add('<div class="alertbar reveal"><span class="ab-ic">📉</span><div><div class="ab-t">'+t+'</div><div class="ab-s">'+s+'</div></div></div>');})();
 
+  renderRouteSwitcher();
   renderHighlights();
   renderRoutes();
 
@@ -1981,7 +2120,6 @@ if(!D.recs.length){
   }
 
   if(D.insights&&D.insights.length){
-    add('<div class="section reveal" id="insights"><h2>Market insights</h2><span class="hint">latest scan</span></div>');
     let h='<div class="icards">';
     D.insights.forEach(r=>{const pi=parseItin(r.itinerary),sb=r.stops,tot=Math.max(1,sb.nonstop+sb.one+sb.two_plus);
       const seg=(n,c)=>n?'<i style="width:'+(n/tot*100)+'%;background:'+c+'"></i>':'';
@@ -1989,7 +2127,7 @@ if(!D.recs.length){
       const db=deal?' <span class="dealbadge '+esc(deal.label.toLowerCase())+'">'+deal.score+'</span>':'';
       const alist=(r.airline_prices||[]).map(a=>'<div class="aline">'+avatar(a.name,a.iata,28)+'<span class="nm">'+esc(a.name)+'</span><span class="pr">'+fmt(a.price)+'</span></div>').join('')
         ||'<div class="aline" style="color:var(--dim)">airline not reported</div>';
-      h+='<div class="icard reveal"><div class="top"><div><div class="rt">'+esc(pi.dates)+(pi.nights?' · '+pi.nights+' nights':'')+db+'</div><div class="when">'+routeChip(pi.o,pi.d)+' · '+r.offers+' offers</div></div>'+
+      h+='<div class="icard reveal" data-route="'+esc(routeKey(r.itinerary))+'"><div class="top"><div><div class="rt">'+esc(pi.dates)+(pi.nights?' · '+pi.nights+' nights':'')+db+'</div><div class="when">'+routeChip(pi.o,pi.d)+' · '+r.offers+' offers</div></div>'+
         '<div style="text-align:right"><div class="big">'+fmt(r.min)+'</div><small>cheapest</small></div></div>'+
         '<div class="facts"><div class="fact"><div class="k">Typical</div><div class="v">'+fmt(r.median)+'</div></div>'+
           '<div class="fact"><div class="k">Highest</div><div class="v">'+fmt(r.max)+'</div></div>'+
@@ -2001,13 +2139,13 @@ if(!D.recs.length){
           '<span><i class="swatch" style="background:#e8902a"></i>'+sb.two_plus+' · 2+ stops</span></div>'+
         '<div class="alist">'+alist+'</div>'+
         '<div style="margin-top:14px">'+bookRowLink(r.itinerary,'Book this trip ↗')+'</div></div>';});
-    add(h+'</div>');}
+    add('<section class="rsec"><div class="section reveal" id="insights"><h2>Market insights</h2><span class="hint">latest scan</span></div>'+h+'</div></section>');}
 
   if(D.latest_offers&&Object.keys(D.latest_offers).length){
-    add('<div class="section reveal" id="fares"><h2>Latest fares</h2><span class="hint">cheapest per route</span></div>');
+    let fh='';
     Object.keys(D.latest_offers).forEach(itin=>{const rows=D.latest_offers[itin];if(!rows.length)return;
       const pi=parseItin(itin),best=Math.min.apply(null,rows.map(o=>o.price));
-      let t='<details class="reveal"><summary><span>'+esc(pi.dates)+(pi.nights?' · '+pi.nights+'n':'')+' '+routeChip(pi.o,pi.d)+'</span><span class="pill">'+rows.length+' offers · from '+fmt(best)+'</span></summary>'+
+      let t='<details class="reveal" data-route="'+esc(routeKey(itin))+'"><summary><span>'+esc(pi.dates)+(pi.nights?' · '+pi.nights+'n':'')+' '+routeChip(pi.o,pi.d)+'</span><span class="pill">'+rows.length+' offers · from '+fmt(best)+'</span></summary>'+
         bookBar(itin)+
         '<div class="tscroll"><table><thead><tr><th>Airline</th><th>Stops</th><th class="ft">Flight time</th><th class="num">Price</th><th></th></tr></thead><tbody>';
       rows.forEach(o=>{const isb=o.price===best;
@@ -2016,10 +2154,11 @@ if(!D.recs.length){
           '<td><span class="chip'+(o.stops===0?' ns':'')+'">'+stops(o.stops)+'</span>'+(o.via?'<span class="viachip">via '+esc(o.via)+'</span>':'')+'</td>'+
           '<td class="mono ft">'+dur(o.duration)+'</td><td class="num">'+fmt(o.price)+'</td>'+
           '<td class="num">'+bookRowLink(itin,'Book ↗')+'</td></tr>';});
-      add(t+'</tbody></table></div></details>');});}
+      fh+=t+'</tbody></table></div></details>';});
+    add('<section class="rsec"><div class="section reveal" id="fares"><h2>Latest fares</h2><span class="hint">cheapest per route</span></div>'+fh+'</section>');}
 
   /* Today's BUY/WAIT/WATCH signals -- moved to the bottom of the page. */
-  add('<div class="section reveal" id="deals"><h2>Today’s signals</h2><span class="hint">should you book now? · act-now first</span></div>');
+  let dh='';
   D.recs.forEach((r,i)=>{const pi=parseItin(r.itinerary),conf=r.confidence||0,tags=[];
     const deal=(D.ai&&D.ai.deals&&D.ai.deals[r.itinerary])||null;
     const narr=(D.ai&&D.ai.narratives&&D.ai.narratives[r.itinerary])||'';
@@ -2033,7 +2172,7 @@ if(!D.recs.length){
     const db=deal?'<span class="dealbadge '+esc(deal.label.toLowerCase())+'">'+deal.score+' · '+esc(deal.label)+' deal</span>':'';
     const detail=o0?'<div class="rec-trip">'+(o0.airline?avatar(o0.airline,o0.iata,20)+'<span class="anm">'+esc(o0.airline)+'</span>':'')+
       stopsVia(o0.stops,o0.via,o0.stops===0)+(o0.duration?'<span class="mini">⏱ '+dur(o0.duration)+'</span>':'')+'</div>':'';
-    add('<div class="rec reveal"><span class="sig '+r.signal+'">'+r.signal+'</span>'+
+    dh+='<div class="rec reveal" data-route="'+esc(routeKey(r.itinerary))+'"><span class="sig '+r.signal+'">'+r.signal+'</span>'+
       '<div class="rec-main"><div class="dates lead">'+esc(pi.dates)+(pi.nights?' · '+pi.nights+' nights':'')+'</div>'+
         '<div class="rec-sub">'+routeChip(pi.o,pi.d)+db+'</div>'+
         detail+
@@ -2043,7 +2182,8 @@ if(!D.recs.length){
         '<div class="tags">'+tags.map(t=>'<span class="tag'+(t[1]?' b':'')+'">'+esc(t[0])+'</span>').join('')+'</div></div>'+
       '<canvas class="spark" id="spark'+i+'"></canvas>'+
       '<div class="pricebox"><div class="price">'+fmt(r.price)+'</div><div class="pricelbl">low '+fmt(r.trailing_min)+' · '+r.points+' pts</div>'+
-        '<div style="margin-top:8px">'+bookRowLink(r.itinerary,'Book ↗')+'</div></div></div>');});
+        '<div style="margin-top:8px">'+bookRowLink(r.itinerary,'Book ↗')+'</div></div></div>';});
+  add('<section class="rsec"><div class="section reveal" id="deals"><h2>Today’s signals</h2><span class="hint">should you book now? · act-now first</span></div>'+dh+'</section>');
 }
 
 /* Live scraper status -- useful but secondary, so it renders last (deprioritised
@@ -2374,6 +2514,10 @@ if(!('IntersectionObserver' in window))revealAll();
 else{const io=new IntersectionObserver(es=>es.forEach(e=>{if(!e.isIntersecting)return;fireReveal(e.target);io.unobserve(e.target);}),{threshold:.14});
   document.querySelectorAll('.reveal').forEach(el=>io.observe(el));}
 setTimeout(()=>document.querySelectorAll('.reveal:not(.in)').forEach(el=>{if(el.getBoundingClientRect().top<innerHeight*1.2)fireReveal(el);}),1200);
+
+/* affiliate disclosure (config-driven, only when monetization is on) */
+(function(){const el=document.getElementById('affdisc');
+  if(el&&MON.enabled&&MON.disclosure)el.textContent=MON.disclosure;})();
 
 renderDeal();renderHeroChips();initTilt();scrollTilt();
 requestAnimationFrame(drawCharts);
