@@ -883,6 +883,12 @@ def build():
                 ai["narratives"] = {k: v for k, v in ai["narratives"].items() if k in fixed_keys}
             if ai.get("anomalies"):
                 ai["anomalies"] = [a for a in ai["anomalies"] if a.get("itin") in fixed_keys]
+            # Without this, the "Best moment to lock it in" panel renders one card
+            # per model rec across the WHOLE grid (~230) -- a wall of cards that
+            # also stretches its neighbouring fan-chart panel into a huge blank.
+            if ai.get("best_time_to_book"):
+                ai["best_time_to_book"] = [b for b in ai["best_time_to_book"]
+                                           if b.get("itin") in fixed_keys]
 
     payload = {
         "generated": datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC"),
@@ -2145,11 +2151,14 @@ if(!D.recs.length){
   if(AI){
     const btb=AI.best_time_to_book||[],modelRec=D.recs.find(r=>r.curve&&r.curve.length);
     if(btb.length||modelRec){
+      // Cap the cards so the list can never tower over (and visually stretch) the
+      // fan chart beside it; show the most actionable first (btb is sorted by saving).
+      const btbTop=btb.slice(0,6);
       add('<section class="sscope" data-for="flagship"><div class="section reveal" id="plan"><h2>When to book</h2><span class="hint">fare forecast</span></div>'+
-        '<div class="grid2"><div class="panel reveal"><h3>Predicted booking curve</h3><div class="ph">how much you can expect to pay depending on when you book</div>'+
+        '<div class="grid2" style="align-items:start"><div class="panel reveal"><h3>Predicted booking curve</h3><div class="ph">how much you can expect to pay depending on when you book</div>'+
         '<div class="canvas-wrap"><canvas id="fanChart"></canvas></div></div>'+
         '<div class="panel reveal"><h3>Best moment to lock it in</h3><div class="ph">when we expect the lowest fare</div><div class="cols3" style="grid-template-columns:1fr">'+
-        (btb.length?btb.map(b=>{const pi=parseItin(b.itin);return '<div class="bookcard reveal"><div class="rt">'+esc(pi.dates)+(pi.nights?' · '+pi.nights+'n':'')+'</div><div class="when">'+routeChip(pi.o,pi.d)+'</div>'+
+        (btbTop.length?btbTop.map(b=>{const pi=parseItin(b.itin);return '<div class="bookcard reveal"><div class="rt">'+esc(pi.dates)+(pi.nights?' · '+pi.nights+'n':'')+'</div><div class="when">'+routeChip(pi.o,pi.d)+'</div>'+
           '<div class="verdict '+(b.book_now?'now':'wait')+'">'+(b.book_now?'Book now':'Wait ~'+b.days_from_now+' days')+'</div>'+
           '<div class="sub">'+(b.book_now?'Already near the expected low of '+fmt(b.predicted_low)+'.':'We expect a low near '+fmt(b.predicted_low)+(b.save>0?' — about '+fmt(b.save)+' under today.':'.'))+'</div>'+
           (b.book_now?'<div style="margin-top:12px">'+bookBtn(b.itin,'Book now')+'</div>':'')+'</div>';}).join('')
