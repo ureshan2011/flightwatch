@@ -279,7 +279,29 @@ _EXTRACT_JS = r"""
         if (line.length >= 2 && line.length <= 40) { airline = line; break; }
       }
     }
-    out.push({price, airline, stops, duration_minutes: minutes});
+    // Layover airport(s) -- "where the stop is". Google labels each connection
+    // with an aria-label like "Layover (1 of 1) is a 2 hr 30 min layover at
+    // Singapore Changi Airport in Singapore" and, in the row, a bare 3-letter
+    // code. Wrapped so any markup change can NEVER break the core extraction.
+    let layover = '';
+    try {
+      const codes = [];
+      // (a) explicit layover aria-labels: pull a trailing/standalone 3-letter code.
+      for (const el of li.querySelectorAll('[aria-label*="layover" i],[aria-label*="stop in" i]')) {
+        const a = el.getAttribute('aria-label') || '';
+        const cm = a.match(/\b([A-Z]{3})\b/);
+        if (cm) codes.push(cm[1]);
+      }
+      // (b) fallback: a span whose WHOLE text is a 3-letter code (the layover chip).
+      if (!codes.length && stops > 0) {
+        for (const sp of li.querySelectorAll('span,div')) {
+          const t = (sp.textContent || '').trim();
+          if (/^[A-Z]{3}$/.test(t)) { codes.push(t); }
+        }
+      }
+      layover = [...new Set(codes)].slice(0, 3).join(', ');
+    } catch (e) { layover = ''; }
+    out.push({price, airline, stops, duration_minutes: minutes, layover});
   }
   return out;
 }
@@ -530,6 +552,7 @@ def _normalize_offers(raw, currency, max_offers):
             "airline": (o.get("airline") or "")[:60],
             "stops": int(o.get("stops", 0) or 0),
             "duration_minutes": int(o.get("duration_minutes", 0) or 0),
+            "layover": (o.get("layover") or "")[:40],
         })
     offers.sort(key=lambda x: x["price"])
     if not max_offers or len(offers) <= max_offers:
