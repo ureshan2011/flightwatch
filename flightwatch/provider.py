@@ -78,6 +78,16 @@ _FINGERPRINTS = [
            "(KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36 Edg/144.0.0.0",
      "platform": "Win32", "viewport": (1600, 900),
      "locale": "en-GB", "tz": "Europe/London", "lang": "en-GB,en;q=0.9"},
+    {"engine": "chromium",
+     "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+           "(KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+     "platform": "MacIntel", "viewport": (1680, 1050),
+     "locale": "en-AU", "tz": "Australia/Sydney", "lang": "en-AU,en;q=0.9"},
+    {"engine": "chromium",
+     "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+           "(KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0",
+     "platform": "Win32", "viewport": (1920, 1080),
+     "locale": "en-NZ", "tz": "Pacific/Auckland", "lang": "en-NZ,en;q=0.9"},
     # --- Firefox-family (Gecko) ----------------------------------------------
     {"engine": "firefox",
      "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:139.0) "
@@ -94,6 +104,16 @@ _FINGERPRINTS = [
            "Gecko/20100101 Firefox/139.0",
      "platform": "Linux x86_64", "viewport": (1680, 1050),
      "locale": "en-NZ", "tz": "Pacific/Auckland", "lang": "en-NZ,en;q=0.5"},
+    {"engine": "firefox",
+     "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:140.0) "
+           "Gecko/20100101 Firefox/140.0",
+     "platform": "Win32", "viewport": (1366, 768),
+     "locale": "en-GB", "tz": "Europe/London", "lang": "en-GB,en;q=0.5"},
+    {"engine": "firefox",
+     "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:139.0) "
+           "Gecko/20100101 Firefox/139.0",
+     "platform": "MacIntel", "viewport": (1440, 900),
+     "locale": "en-US", "tz": "America/Chicago", "lang": "en-US,en;q=0.5"},
 ]
 
 # Chromium launch flags that strip the most obvious automation tells. Firefox
@@ -102,6 +122,11 @@ _CHROMIUM_ARGS = [
     "--no-sandbox",
     "--disable-blink-features=AutomationControlled",
     "--disable-dev-shm-usage",
+    "--disable-infobars",
+    "--disable-background-networking",
+    "--disable-component-update",
+    "--no-first-run",
+    "--no-default-browser-check",
 ]
 # Backwards-compatible alias: older callers (and the collector) reference this.
 _LAUNCH_ARGS = _CHROMIUM_ARGS
@@ -135,6 +160,10 @@ _BLOCK_URL_HINTS = (
     "google-analytics", "googletagmanager", "googleadservices",
     "googlesyndication", "doubleclick", "/gen_204", "/maps/vt", "/maps/api",
     "play.google.com/log", "clients6.google.com",
+    "youtube.com", "ytimg.com", "gstatic.com/og/",
+    "pagead", "adservice", "adsense", "accounts.google.com",
+    "plus.google.com", "apis.google.com/js/platform",
+    "fundingchoicesmessages", "consent.google.com",
 )
 
 
@@ -208,6 +237,13 @@ def headless_mode() -> bool:
     return os.environ.get("FLIGHTWATCH_HEADFUL", "") != "1"
 
 
+def _jitter_viewport(vp):
+    """Add small random offsets to a viewport so consecutive scrapes with the same
+    fingerprint don't have pixel-identical window dimensions."""
+    w, h = vp
+    return (w + random.randint(-20, 20), h + random.randint(-14, 14))
+
+
 def _stealth_js(fp):
     """Per-context init script: hide webdriver and match navigator to the fingerprint.
 
@@ -216,14 +252,22 @@ def _stealth_js(fp):
     """
     langs = "['" + "','".join(fp["lang"].split(",")[0:2]).replace(";q=0.5", "")\
         .replace(";q=0.9", "") + "']"
+    hw_conc = random.choice([4, 8, 12, 16])
+    dev_mem = random.choice([4, 8, 16])
     js = (
         "Object.defineProperty(navigator,'webdriver',{get:()=>undefined});"
         f"Object.defineProperty(navigator,'platform',{{get:()=>'{fp['platform']}'}});"
         f"Object.defineProperty(navigator,'languages',{{get:()=>{langs}}});"
         "Object.defineProperty(navigator,'plugins',{get:()=>[1,2,3,4,5]});"
+        "Object.defineProperty(navigator,'maxTouchPoints',{get:()=>0});"
+        f"Object.defineProperty(navigator,'hardwareConcurrency',{{get:()=>{hw_conc}}});"
+        f"Object.defineProperty(navigator,'deviceMemory',{{get:()=>{dev_mem}}});"
     )
     if _engine_of(fp) == "chromium":
-        js += "window.chrome = window.chrome || {runtime:{}};"
+        js += "window.chrome = window.chrome || {runtime:{},loadTimes:()=>({}),csi:()=>({}),"
+        js += "app:{isInstalled:false,InstallState:{DISABLED:'disabled',INSTALLED:'installed',NOT_INSTALLED:'not_installed'},RunningState:{CANNOT_RUN:'cannot_run',READY_TO_RUN:'ready_to_run',RUNNING:'running'}}};"
+    js += ("if(window.Notification){"
+           "Object.defineProperty(Notification,'permission',{get:()=>'default'});}")
     return js
 
 
@@ -446,7 +490,7 @@ def _scrape(url, fingerprint=None, debug_tag=None):
     fp = fingerprint or random.choice(_FINGERPRINTS)
     headless = os.environ.get("FLIGHTWATCH_HEADFUL", "") != "1"
     engine = _engine_of(fp)
-    vw, vh = fp["viewport"]
+    vw, vh = _jitter_viewport(fp["viewport"])
     offers = []
     with sync_playwright() as p:
         launcher = getattr(p, engine)
@@ -529,7 +573,7 @@ def search_flight_offers(origin, destination, depart_date, return_date,
                 break
         except Exception as e:  # browser/launch hiccups -- retry with a new tag
             last_err = e
-        time.sleep(2 * (attempt + 1))
+        time.sleep(1.5 + attempt)
     if not raw and last_err is not None:
         raise last_err
 
@@ -699,7 +743,7 @@ async def _scrape_async(browsers, url, fingerprint=None, debug_tag=None):
     """Open one URL in a fresh context on the matching SHARED browser; return offers."""
     fp = fingerprint or random.choice(_FINGERPRINTS)
     browser = _pick_browser(browsers, fp)
-    vw, vh = fp["viewport"]
+    vw, vh = _jitter_viewport(fp["viewport"])
     ctx = await browser.new_context(
         user_agent=fp["ua"], locale=fp["locale"], timezone_id=fp["tz"],
         viewport={"width": vw, "height": vh},
@@ -748,7 +792,7 @@ async def search_flight_offers_async(browsers, origin, destination, depart_date,
                 break
         except Exception as e:
             last_err = e
-        await asyncio.sleep(2 * (attempt + 1))
+        await asyncio.sleep(1.5 + attempt)
     if not raw and last_err is not None:
         raise last_err
     return _normalize_offers(raw, cur, max_offers)
