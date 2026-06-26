@@ -977,6 +977,14 @@ def _html(p):
   --line:#222227;--line2:#2a2a31;
   --brand:#E7B25A;--brand2:#f3cd86;--teal:#5fd08a;--pink:#e0567d;
   --buy:#5fd08a;--buy-bg:rgba(95,208,138,.12);--wait:#E7B25A;--wait-bg:rgba(231,178,90,.13);--watch:#9b9384;--watch-bg:rgba(255,255,255,.06);
+  /* dark-native surface tokens: every soft chip/inset/track derives from these so
+     nothing reads as a stray light panel on the dark canvas. */
+  --inset:#101015;        /* deep inset (inputs, empty cells)           */
+  --soft:rgba(255,255,255,.05);   /* soft chip / nested card surface     */
+  --soft2:rgba(255,255,255,.04);  /* slightly quieter inset card         */
+  --track:rgba(255,255,255,.07);  /* progress / stacked-bar track        */
+  --raised:#2c2c35;       /* raised pill inside a soft segmented control */
+  --brand-soft:rgba(231,178,90,.1);
   --shadow:0 14px 38px -18px rgba(0,0,0,.6);--shadow-lg:0 30px 66px -24px rgba(0,0,0,.72);
   --radius:18px;
 }
@@ -1061,6 +1069,61 @@ img,canvas{max-width:100%}
 .cp-all:hover{border-color:var(--brand);color:var(--brand);transform:translateY(-1px)}
 @media(max-width:680px){.collectpanel{flex-direction:column;text-align:center;gap:18px;padding:26px 20px}.cp-actions{justify-content:center}}
 
+/* ===== route gate: the route-first chooser (the entry screen) =====
+   Faro opens on a focused "pick your route" step rather than dumping every route
+   at once. Picking one drives the whole dashboard into that single corridor; the
+   "all routes" overview becomes an explicit, secondary choice. */
+.gate{max-width:1080px;margin:0 auto;padding:clamp(40px,7vw,84px) 22px 90px;min-height:72vh;
+  display:flex;flex-direction:column;justify-content:center}
+.gate .g-eyebrow{font-family:'IBM Plex Mono',monospace;letter-spacing:.24em;color:var(--brand);font-size:12px;font-weight:600}
+.gate h1{font-size:clamp(30px,5.4vw,54px);font-weight:800;letter-spacing:-1.6px;line-height:1.02;margin:14px 0 0}
+.gate h1 .grad{background:linear-gradient(110deg,var(--brand),var(--brand2) 46%,var(--teal));
+  -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.gate .g-lead{color:var(--muted);font-size:clamp(15px,1.6vw,17.5px);max-width:560px;margin-top:14px;line-height:1.55}
+.gate-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,288px),1fr));gap:16px;margin-top:clamp(26px,4vw,40px)}
+.gcard{position:relative;overflow:hidden;text-align:left;cursor:pointer;font:inherit;color:var(--ink);
+  background:linear-gradient(162deg,#1b1b22,#141419);border:1px solid var(--line2);border-radius:20px;
+  padding:20px 21px;box-shadow:var(--shadow);display:flex;flex-direction:column;min-height:188px;
+  transition:transform .2s cubic-bezier(.2,.7,.2,1),box-shadow .25s,border-color .2s}
+.gcard::after{content:"";position:absolute;inset:0;border-radius:20px;pointer-events:none;opacity:0;transition:opacity .3s;
+  background:radial-gradient(380px circle at 18% -10%,rgba(231,178,90,.12),transparent 60%)}
+.gcard:hover{transform:translateY(-5px);border-color:var(--brand);box-shadow:var(--shadow-lg)}
+.gcard:hover::after{opacity:1}
+.gcard:focus-visible{outline:2px solid var(--brand);outline-offset:3px}
+.gcard .gc-head{display:flex;align-items:center;gap:11px}
+.gcard .gc-pin{font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:700;color:var(--brand);
+  background:var(--brand-soft);border:1px solid rgba(231,178,90,.2);border-radius:9px;padding:6px 8px;letter-spacing:.04em}
+.gcard .gc-cities{display:flex;flex-direction:column;line-height:1.18;min-width:0}
+.gcard .gc-cities b{font-size:15.5px;letter-spacing:-.3px}
+.gcard .gc-cities span{font-size:12px;color:var(--muted)}
+.gcard .gc-head .sigmini{margin-left:auto}
+.gcard .gc-price{margin-top:16px;font-family:'IBM Plex Mono',monospace;display:flex;align-items:baseline;gap:5px}
+.gcard .gc-price .cur{font-size:11px;color:var(--dim);font-weight:500}
+.gcard .gc-price b{font-size:27px;font-weight:600;letter-spacing:-.6px;color:var(--buy)}
+.gcard .gc-price small{font-size:10px;color:var(--dim);letter-spacing:.05em;margin-left:2px}
+.gcard .gc-meta{display:flex;flex-wrap:wrap;gap:6px;margin-top:11px}
+.gcard .gc-collect{display:flex;align-items:center;gap:9px;margin-top:16px;font-weight:600;font-size:13.5px;color:var(--muted)}
+.gcard .gc-note{font-size:11.5px;color:var(--dim);margin-top:7px;line-height:1.4}
+.gcard .gc-go{margin-top:auto;padding-top:16px;display:flex;align-items:center;gap:7px;
+  font-family:'IBM Plex Mono',monospace;font-size:12.5px;font-weight:600;color:var(--brand)}
+.gcard .gc-go svg{width:14px;height:14px;stroke:var(--brand);fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;
+  transition:transform .2s}
+.gcard:hover .gc-go svg{transform:translateX(3px)}
+.gate-foot{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-top:26px;
+  font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--dim)}
+.gate-all{display:inline-flex;align-items:center;gap:7px;cursor:pointer;font:inherit;font-size:12.5px;font-weight:600;
+  color:var(--muted);background:var(--soft);border:1px solid var(--line2);border-radius:11px;padding:9px 15px;transition:.18s ease}
+.gate-all:hover{border-color:var(--brand);color:var(--brand);transform:translateY(-1px)}
+.gate-meta{margin-left:auto}
+@media(max-width:560px){.gate-foot{gap:12px}.gate-meta{margin-left:0;width:100%;order:3}}
+
+/* slim "you are here" route header (the persistent switcher once inside a route) */
+.rb-back{flex:none;display:inline-flex;align-items:center;gap:6px;cursor:pointer;font:inherit;
+  font-family:'IBM Plex Mono',monospace;font-size:11.5px;font-weight:600;color:var(--muted);
+  background:var(--soft);border:1px solid var(--line2);border-radius:10px;padding:7px 11px;transition:.16s ease}
+.rb-back:hover{border-color:var(--brand);color:var(--brand)}
+.rb-back svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+
 /* hero */
 .hero{padding:54px 0 6px;display:grid;grid-template-columns:1.02fr .98fr;gap:36px;align-items:center}
 @media(max-width:920px){.hero{grid-template-columns:1fr;padding-top:40px}}
@@ -1108,11 +1171,11 @@ h1 .grad{background:linear-gradient(110deg,var(--brand),var(--brand2) 46%,var(--
 .deal .pricebig small{font-size:13px;color:var(--dim);letter-spacing:0;font-weight:400}
 .deal .meta2{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px;transform:translateZ(40px)}
 .deal .fx{margin-top:14px;display:flex;gap:7px;flex-wrap:wrap;transform:translateZ(26px)}
-.deal .fx span{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted);background:#eef3fd;border-radius:8px;padding:3px 8px}
+.deal .fx span{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted);background:var(--soft);border:1px solid var(--line);border-radius:8px;padding:3px 8px}
 
 .sig{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:12px;padding:6px 12px;border-radius:12px;white-space:nowrap}
 .BUY{background:var(--buy-bg);color:var(--buy)}.WAIT{background:var(--wait-bg);color:var(--wait)}.WATCH{background:var(--watch-bg);color:var(--watch)}
-.tag{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted);background:#eef3fd;border-radius:8px;padding:4px 9px}
+.tag{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted);background:var(--soft);border:1px solid var(--line);border-radius:8px;padding:4px 9px}
 .tag.b{color:var(--brand);background:rgba(231,178,90,.1)}
 
 /* airline logo / avatar */
@@ -1159,7 +1222,7 @@ h1 .grad{background:linear-gradient(110deg,var(--brand),var(--brand2) 46%,var(--
 .rec .reason{color:var(--muted);font-size:13.5px;margin-top:5px}
 .conf{margin-top:9px;max-width:300px}
 .conf .lab{font-size:11px;color:var(--dim);font-family:'IBM Plex Mono',monospace;display:flex;justify-content:space-between}
-.bar{height:7px;background:#eaf0fa;border-radius:7px;overflow:hidden;margin-top:4px}
+.bar{height:7px;background:var(--track);border-radius:7px;overflow:hidden;margin-top:4px}
 .bar>i{display:block;height:100%;width:0;border-radius:7px;background:linear-gradient(90deg,var(--brand),var(--teal));transition:width 1.1s cubic-bezier(.2,.7,.2,1)}
 .tags{margin-top:10px;display:flex;gap:7px;flex-wrap:wrap}
 .spark{width:130px;height:46px}
@@ -1192,7 +1255,7 @@ h1 .grad{background:linear-gradient(110deg,var(--brand),var(--brand2) 46%,var(--
 .aline{display:flex;align-items:center;gap:11px;font-size:13px}
 .aline .nm{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .aline .pr{font-family:'IBM Plex Mono',monospace;font-weight:600;color:var(--muted)}
-.stopbar{display:flex;height:8px;border-radius:6px;overflow:hidden;margin-top:14px;background:#eaf0fa}
+.stopbar{display:flex;height:8px;border-radius:6px;overflow:hidden;margin-top:14px;background:var(--track)}
 .stopbar i{display:block;height:100%}
 .stopkey{display:flex;gap:14px;margin-top:8px;font-size:11px;color:var(--muted);flex-wrap:wrap}
 .stopkey span{display:flex;align-items:center;gap:5px}
@@ -1224,7 +1287,7 @@ tr.best td{background:var(--buy-bg)}
   .cheapest{display:none}
 }
 .cheapest{font-size:10px;color:var(--buy);font-weight:700;font-family:'IBM Plex Mono',monospace;margin-left:8px}
-.chip{font-family:'IBM Plex Mono',monospace;font-size:11px;padding:2px 8px;border-radius:20px;background:#eef3fd;color:var(--muted)}
+.chip{font-family:'IBM Plex Mono',monospace;font-size:11px;padding:2px 8px;border-radius:20px;background:var(--soft);color:var(--muted)}
 .chip.ns{background:var(--buy-bg);color:var(--buy)}
 
 .empty{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:54px 30px;text-align:center;margin-top:34px;box-shadow:var(--shadow)}
@@ -1249,7 +1312,7 @@ tr.best td{background:var(--buy-bg)}
 .dealbadge.great{background:var(--buy-bg);color:var(--buy)}.dealbadge.good{background:rgba(231,178,90,.1);color:var(--brand)}
 .dealbadge.fair{background:var(--watch-bg);color:var(--watch)}.dealbadge.high{background:var(--wait-bg);color:var(--wait)}
 .narr{color:var(--muted);font-size:13px;line-height:1.6;margin-top:9px;border-left:3px solid var(--brand);padding-left:11px}
-.alertbar{display:flex;align-items:flex-start;gap:12px;background:linear-gradient(120deg,#fff6ec,#ffeef4);border:1px solid var(--line);
+.alertbar{display:flex;align-items:flex-start;gap:12px;background:linear-gradient(120deg,rgba(231,178,90,.12),rgba(224,86,125,.10));border:1px solid var(--line2);
   border-radius:16px;padding:14px 18px;margin-top:18px;box-shadow:var(--shadow)}
 .alertbar .ab-ic{font-size:20px;line-height:1}
 .alertbar .ab-t{font-weight:700;font-size:14px}.alertbar .ab-s{color:var(--muted);font-size:12.5px;margin-top:2px}
@@ -1263,7 +1326,7 @@ tr.best td{background:var(--buy-bg)}
 .heat .cell{flex:1;min-width:42px;text-align:center;border-radius:10px;padding:9px 4px;border:1px solid var(--line);background:var(--bg)}
 .heat .cell .d{font-size:11px;color:var(--dim);font-family:'IBM Plex Mono',monospace}
 .heat .cell .p{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:12.5px;margin-top:3px}
-.heat .cell.best{background:var(--buy-bg);border-color:#bfe9d8}.heat .cell.best .p{color:var(--buy)}
+.heat .cell.best{background:var(--buy-bg);border-color:rgba(95,208,138,.4)}.heat .cell.best .p{color:var(--buy)}
 .digest{display:flex;flex-direction:column;gap:9px;margin-top:6px}
 .digest .row{display:flex;align-items:center;gap:10px;font-size:13px;padding:8px 0;border-top:1px solid var(--line)}
 .digest .row:first-child{border-top:0}
@@ -1285,22 +1348,22 @@ tr.best td{background:var(--buy-bg)}
 .ops-top{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
 .ops-badge{display:inline-flex;align-items:center;gap:8px;font-family:'IBM Plex Mono',monospace;
   font-size:12px;font-weight:600;letter-spacing:.4px;padding:6px 12px;border-radius:30px;text-transform:uppercase}
-.ops-badge.live{color:#0a8f63;background:var(--buy-bg)}
-.ops-badge.due{color:#b9701a;background:var(--wait-bg)}
-.ops-badge.stale{color:#c0436a;background:#fdeaf0}
+.ops-badge.live{color:var(--buy);background:var(--buy-bg)}
+.ops-badge.due{color:var(--wait);background:var(--wait-bg)}
+.ops-badge.stale{color:var(--pink);background:rgba(224,86,125,.14)}
 .ops-badge .dot{width:8px;height:8px;border-radius:50%;background:currentColor;position:relative}
 .ops-badge.live .dot{animation:opspulse 1.6s ease-out infinite}
 @keyframes opspulse{0%{box-shadow:0 0 0 0 rgba(18,176,124,.55)}100%{box-shadow:0 0 0 9px rgba(18,176,124,0)}}
 .ops-title{font-weight:700;font-size:16px;letter-spacing:-.2px}
 .ops-sub{color:var(--dim);font-size:12.5px;margin-left:auto;font-family:'IBM Plex Mono',monospace}
 .ops-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,150px),1fr));gap:12px;margin-top:18px}
-.ops-cell{background:#f7faff;border:1px solid var(--line);border-radius:14px;padding:12px 14px}
+.ops-cell{background:var(--soft2);border:1px solid var(--line);border-radius:14px;padding:12px 14px}
 .ops-cell .k{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--dim);font-weight:600}
 .ops-cell .v{font-family:'IBM Plex Mono',monospace;font-size:18px;font-weight:600;color:var(--ink);margin-top:5px;letter-spacing:-.5px}
 .ops-cell .s{font-size:11.5px;color:var(--muted);margin-top:3px}
 .ops-cell .v small{font-size:12px;color:var(--muted);font-weight:400}
 .ops-next{margin-top:16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;
-  background:linear-gradient(100deg,#eef3ff,#f3f0ff);border:1px solid var(--line2);border-radius:14px;padding:12px 15px;font-size:13px;color:var(--muted)}
+  background:linear-gradient(100deg,rgba(231,178,90,.08),rgba(255,255,255,.03));border:1px solid var(--line2);border-radius:14px;padding:12px 15px;font-size:13px;color:var(--muted)}
 .ops-next b{color:var(--ink)}
 .ops-next .nxt-ic{width:26px;height:26px;border-radius:8px;flex:none;display:grid;place-items:center;
   background:linear-gradient(135deg,var(--brand),var(--brand2));color:#fff;font-size:14px}
@@ -1308,17 +1371,17 @@ tr.best td{background:var(--buy-bg)}
 .ops-runs .rh{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--dim);font-weight:600;margin-bottom:9px}
 .ops-bars{display:flex;gap:7px;align-items:flex-end;flex-wrap:wrap}
 .runbar{flex:1;min-width:46px;max-width:90px}
-.runbar .stack{height:46px;display:flex;flex-direction:column-reverse;border-radius:7px;overflow:hidden;background:#eef2fa;border:1px solid var(--line)}
+.runbar .stack{height:46px;display:flex;flex-direction:column-reverse;border-radius:7px;overflow:hidden;background:var(--soft);border:1px solid var(--line)}
 .runbar .seg{width:100%}
 .runbar .seg.ok{background:linear-gradient(var(--buy),#16c78d)}
-.runbar .seg.nr{background:#cfd9ea}
+.runbar .seg.nr{background:#4b4b57}
 .runbar .seg.er{background:var(--pink)}
 .runbar .cap{font-size:10px;color:var(--dim);text-align:center;margin-top:5px;font-family:'IBM Plex Mono',monospace}
 .runbar.now .cap{color:var(--brand);font-weight:700}
 .ops-legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:10px;font-size:11.5px;color:var(--muted)}
 .ops-legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
 .ops-routes{margin-top:14px;font-size:12px;color:var(--muted);display:flex;gap:6px;flex-wrap:wrap;align-items:center}
-.ops-routes .rt{background:#eef2fa;border:1px solid var(--line);border-radius:20px;padding:3px 10px;font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:var(--muted)}
+.ops-routes .rt{background:var(--soft);border:1px solid var(--line);border-radius:20px;padding:3px 10px;font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:var(--muted)}
 @media(max-width:560px){.ops-sub{margin-left:0;width:100%}}
 
 /* ---- trip finder (filters + fare calendar) ---- */
@@ -1330,25 +1393,25 @@ tr.best td{background:var(--buy-bg)}
   border:1px solid var(--line2);border-radius:11px;padding:9px 11px;width:100%;transition:.15s}
 /* replace the browser's default dark dropdown triangle with a soft branded chevron */
 .fld select{appearance:none;-webkit-appearance:none;-moz-appearance:none;padding-right:34px;cursor:pointer;
-  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2356678a' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238b8b95' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
   background-repeat:no-repeat;background-position:right 11px center;background-size:13px}
 .fld select::-ms-expand{display:none}
 .fld input:focus,.fld select:focus{outline:none;border-color:var(--brand);box-shadow:0 0 0 3px rgba(231,178,90,.18);background-color:#16161c}
 .fld.range{gap:8px}
 .fld .rangeval{font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--brand);font-weight:600}
 .fld input[type=range]{padding:0;accent-color:var(--brand);background:transparent;border:0}
-.seg-ctrl{display:flex;background:#eef2fa;border:1px solid var(--line2);border-radius:11px;padding:3px;gap:2px}
+.seg-ctrl{display:flex;background:var(--soft);border:1px solid var(--line2);border-radius:11px;padding:3px;gap:2px}
 .seg-ctrl button{flex:1;border:0;background:transparent;font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--muted);
   padding:6px 4px;border-radius:8px;cursor:pointer;transition:.15s;white-space:nowrap}
-.seg-ctrl button.on{background:var(--card);color:var(--brand);box-shadow:var(--shadow);font-weight:600}
+.seg-ctrl button.on{background:var(--raised);color:var(--brand);box-shadow:0 4px 12px -6px rgba(0,0,0,.7);font-weight:600}
 .finder-bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:16px;padding-top:14px;border-top:1px solid var(--line)}
 .finder-bar .count{font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--ink);font-weight:600}
 .finder-bar .count b{color:var(--brand)}
 .finder-bar .reset{margin-left:auto;font-size:12px;color:var(--muted);background:none;border:0;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
 .finder-bar .reset:hover{color:var(--brand)}
-.viewtoggle{display:flex;background:#eef2fa;border:1px solid var(--line2);border-radius:10px;padding:3px;gap:2px}
+.viewtoggle{display:flex;background:var(--soft);border:1px solid var(--line2);border-radius:10px;padding:3px;gap:2px}
 .viewtoggle button{border:0;background:transparent;font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--muted);padding:5px 12px;border-radius:7px;cursor:pointer}
-.viewtoggle button.on{background:var(--card);color:var(--brand);box-shadow:var(--shadow);font-weight:600}
+.viewtoggle button.on{background:var(--raised);color:var(--brand);box-shadow:0 4px 12px -6px rgba(0,0,0,.7);font-weight:600}
 
 /* calendar */
 .cal-wrap{margin-top:16px}
@@ -1366,9 +1429,10 @@ tr.best td{background:var(--buy-bg)}
   padding:2px;cursor:default;position:relative;transition:transform .12s,box-shadow .12s}
 .cal-cell .dnum{font-size:10px;color:var(--dim);font-family:'IBM Plex Mono',monospace;line-height:1}
 .cal-cell .cp{font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;line-height:1.1;margin-top:2px}
-.cal-cell.has{cursor:pointer;color:#0d2a4d}
+.cal-cell.has{cursor:pointer;color:#f4f6fb}
+.cal-cell.has .dnum{color:rgba(255,255,255,.7)}
 .cal-cell.has:hover{transform:translateY(-2px);box-shadow:var(--shadow);z-index:2}
-.cal-cell.empty{background:#f4f7fc;opacity:.55}
+.cal-cell.empty{background:rgba(255,255,255,.02);opacity:.7}
 .cal-cell.blank{border:0;background:transparent}
 .cal-cell.sel{outline:2px solid var(--brand);outline-offset:1px;box-shadow:0 6px 16px -6px rgba(231,178,90,.6)}
 .cal-cell.cheapest:after{content:"★";position:absolute;top:2px;right:4px;font-size:9px;color:var(--buy)}
@@ -1383,10 +1447,10 @@ tr.best td{background:var(--buy-bg)}
 .trip .pr{margin-left:auto;font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:17px;letter-spacing:-.5px}
 .trip .dt{font-size:12px;color:var(--muted);font-family:'IBM Plex Mono',monospace}
 .trip .mt{display:flex;gap:6px;flex-wrap:wrap}
-.trip .mt span{font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--muted);background:#eef3fd;border-radius:7px;padding:2px 7px}
+.trip .mt span{font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--muted);background:var(--soft);border-radius:7px;padding:2px 7px}
 .trip .mt span.ns{background:var(--buy-bg);color:var(--buy)}
-.trip .mt span.whole{background:rgba(18,176,124,.13);color:#0f7a52;font-weight:600}
-.trip .mt span.leg{background:rgba(232,144,42,.12);color:#9a6418}
+.trip .mt span.whole{background:rgba(95,208,138,.14);color:var(--buy);font-weight:600}
+.trip .mt span.leg{background:rgba(231,178,90,.13);color:var(--wait)}
 .trip .go{display:flex;align-items:center;gap:10px;margin-top:2px}
 .trip .go .btnbook{padding:8px 13px;font-size:12px}
 .trip .go .cmp{font-size:11px;color:var(--dim)}
@@ -1425,7 +1489,7 @@ tr.best td{background:var(--buy-bg)}
 .b-lowest{grid-column:span 2;background:linear-gradient(150deg,#16201a,#141419);border-color:#274a37}
 .b-lowest .b-ic{background:linear-gradient(135deg,rgba(18,176,124,.20),rgba(15,182,168,.16))}
 .b-lowest .b-ic svg{stroke:var(--buy)}
-.b-lowest .b-n{color:#0c8f63}
+.b-lowest .b-n{color:var(--buy)}
 /* spotlight carrier tile: lowest fare + buy/wait call + next-3-months lows */
 .b-focus{grid-column:span 2;grid-row:span 2;gap:0;
   background:linear-gradient(155deg,#1f1b12,#141419 58%,#141419);border-color:#33291a}
@@ -1436,18 +1500,18 @@ tr.best td{background:var(--buy-bg)}
 .b-focus .bf-price{font-family:'IBM Plex Mono',monospace;font-weight:600;letter-spacing:-1px;
   display:flex;align-items:baseline;gap:6px;margin-top:14px}
 .b-focus .bf-price .cur{font-size:12px;color:var(--dim);font-weight:500}
-.b-focus .bf-price .v{font-size:33px;color:#5b43c9}
+.b-focus .bf-price .v{font-size:33px;color:var(--brand2)}
 .b-focus .bf-price small{font-size:10px;color:var(--dim);font-weight:400;letter-spacing:.1em;
   text-transform:uppercase;margin-left:3px}
 .b-focus .bf-trip{font-size:13px;font-weight:600;color:var(--ink);margin-top:9px}
 .b-focus .bf-via{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px}
 .b-focus .bf-via span{font-size:11px;color:var(--muted);background:rgba(255,255,255,.05);
   border:1px solid var(--line);border-radius:8px;padding:3px 8px}
-.b-focus .bf-metal{color:#127a52!important;background:rgba(18,176,124,.12)!important;border-color:rgba(18,176,124,.3)!important;font-weight:600}
-.b-focus .bf-conn{color:#7a5b2e!important;background:rgba(232,144,42,.1)!important;border-color:rgba(232,144,42,.28)!important}
+.b-focus .bf-metal{color:var(--buy)!important;background:rgba(95,208,138,.13)!important;border-color:rgba(95,208,138,.3)!important;font-weight:600}
+.b-focus .bf-conn{color:var(--wait)!important;background:rgba(231,178,90,.12)!important;border-color:rgba(231,178,90,.28)!important}
 .b-focus .bf-solo{font-size:11.5px;color:var(--muted);margin-top:9px;padding:7px 10px;
   background:rgba(231,178,90,.07);border:1px dashed rgba(231,178,90,.32);border-radius:9px;line-height:1.4}
-.b-focus .bf-solo b{color:#5b43c9}
+.b-focus .bf-solo b{color:var(--brand2)}
 .b-focus .bf-call{font-size:12.5px;color:var(--muted);margin-top:13px;line-height:1.45}
 .b-focus .bf-call b{color:var(--ink)}.b-focus .bf-call i{color:var(--dim);font-style:normal}
 .b-focus .bf-months{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:13px}
@@ -1477,7 +1541,7 @@ tr.best td{background:var(--buy-bg)}
 .bp-metrics .v{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:15px;margin-top:4px;display:block}
 .bp-metrics .v small{font-size:10px;color:var(--dim);font-weight:400}
 .bp-metrics .v.down{color:var(--buy)}.bp-metrics .v.up{color:var(--wait)}
-.bp-metrics .sigmix{display:flex;height:7px;width:128px;border-radius:5px;overflow:hidden;background:#eef2fa;margin-top:7px}
+.bp-metrics .sigmix{display:flex;height:7px;width:128px;border-radius:5px;overflow:hidden;background:var(--track);margin-top:7px}
 .bp-metrics .sigmix i{display:block;height:100%}
 @media(max-width:900px){.bento{grid-template-columns:repeat(2,1fr)}.b-pulse,.b-lowest,.b-focus{grid-column:span 2}.b-pulse{grid-row:span 2}.b-focus{grid-row:auto}}
 @media(max-width:560px){
@@ -1495,8 +1559,8 @@ tr.best td{background:var(--buy-bg)}
 @media(max-width:820px){.mkt-hero{grid-template-columns:1fr}}
 .gauge-panel{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
 .gauge{--gp:0;--gcol:var(--brand);width:184px;height:184px;border-radius:50%;position:relative;
-  background:conic-gradient(var(--gcol) calc(var(--gp)*1%),#e8eef8 0);transition:--gp 1.3s cubic-bezier(.2,.7,.2,1);margin:6px 0 4px}
-.gauge::before{content:"";position:absolute;inset:15px;border-radius:50%;background:var(--card);box-shadow:inset 0 2px 12px rgba(24,46,92,.06)}
+  background:conic-gradient(var(--gcol) calc(var(--gp)*1%),#23232b 0);transition:--gp 1.3s cubic-bezier(.2,.7,.2,1);margin:6px 0 4px}
+.gauge::before{content:"";position:absolute;inset:15px;border-radius:50%;background:var(--card);box-shadow:inset 0 2px 12px rgba(0,0,0,.4)}
 .gauge .gv{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
 .gauge .gn{font-family:'IBM Plex Mono',monospace;font-size:46px;font-weight:600;letter-spacing:-2px;line-height:1}
 .gauge .gn small{font-size:15px;color:var(--dim);letter-spacing:0}
@@ -1504,20 +1568,20 @@ tr.best td{background:var(--buy-bg)}
 .gauge-lbl{font-weight:700;font-size:17px;letter-spacing:-.3px;margin-top:8px}
 .gauge-note{color:var(--muted);font-size:12.5px;margin-top:4px;max-width:260px}
 .pulse-bits{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,120px),1fr));gap:12px;align-content:center}
-.pbit{background:#f7faff;border:1px solid var(--line);border-radius:14px;padding:14px 15px}
+.pbit{background:var(--soft2);border:1px solid var(--line);border-radius:14px;padding:14px 15px}
 .pbit .k{font-size:10.5px;text-transform:uppercase;letter-spacing:.1em;color:var(--dim);font-weight:600}
 .pbit .v{font-family:'IBM Plex Mono',monospace;font-size:22px;font-weight:600;letter-spacing:-.5px;margin-top:6px;display:flex;align-items:baseline;gap:6px}
 .pbit .v small{font-size:12px;color:var(--muted);font-weight:400}
 .pbit .s{font-size:11.5px;color:var(--muted);margin-top:3px}
 .pbit .v.down{color:var(--buy)}.pbit .v.up{color:var(--wait)}
-.sigmix{display:flex;height:9px;border-radius:6px;overflow:hidden;margin-top:9px;background:#eef2fa}
+.sigmix{display:flex;height:9px;border-radius:6px;overflow:hidden;margin-top:9px;background:var(--track)}
 .sigmix i{display:block;height:100%}
-.callout{display:inline-flex;align-items:center;gap:8px;background:linear-gradient(100deg,#eef3ff,#f3f0ff);
+.callout{display:inline-flex;align-items:center;gap:8px;background:linear-gradient(100deg,rgba(231,178,90,.08),rgba(255,255,255,.03));
   border:1px solid var(--line2);border-radius:12px;padding:8px 13px;margin-top:14px;font-size:12.5px;color:var(--muted)}
 .callout b{color:var(--ink);font-family:'IBM Plex Mono',monospace}
 .lead-list{display:flex;flex-direction:column;gap:10px;margin-top:6px}
 .lead-row{display:grid;grid-template-columns:26px 1fr auto;gap:12px;align-items:center;padding:12px 14px;
-  background:#f7faff;border:1px solid var(--line);border-radius:14px;transition:transform .18s,box-shadow .18s}
+  background:var(--soft2);border:1px solid var(--line);border-radius:14px;transition:transform .18s,box-shadow .18s}
 .lead-row:hover{transform:translateX(3px);box-shadow:var(--shadow)}
 .lead-row .rk{font-family:'IBM Plex Mono',monospace;font-weight:600;color:var(--dim);font-size:13px;text-align:center}
 .lead-row .ld-main{min-width:0}
@@ -1534,14 +1598,14 @@ tr.best td{background:var(--buy-bg)}
 
 /* shared compact chips: route + stops/layover + mini signal -------------------- */
 .rchip{display:inline-flex;align-items:center;gap:4px;font-family:'IBM Plex Mono',monospace;font-size:10.5px;font-weight:600;
-  color:var(--muted);background:#eef3fd;border:1px solid var(--line);border-radius:7px;padding:2px 7px}
+  color:var(--muted);background:var(--soft);border:1px solid var(--line);border-radius:7px;padding:2px 7px}
 .rchip i{font-style:normal;color:var(--dim)}
-.mini{font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--muted);background:#f0f3f9;border-radius:7px;padding:2px 7px}
+.mini{font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--muted);background:var(--soft);border-radius:7px;padding:2px 7px}
 .mini.ns{background:var(--buy-bg);color:var(--buy);font-weight:600}
-.mini.via{background:rgba(231,178,90,.1);color:#5b43c9;font-weight:600}
+.mini.via{background:var(--brand-soft);color:var(--brand);font-weight:600}
 .sigmini{font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:700;border-radius:7px;padding:2px 7px;letter-spacing:.02em}
-.sigmini.BUY{background:var(--buy-bg);color:var(--buy)}.sigmini.WAIT{background:var(--wait-bg,#fdf0e1);color:var(--wait)}.sigmini.WATCH{background:#eef1f6;color:#6b7ba0}
-.viachip{font-family:'IBM Plex Mono',monospace;font-size:10px;color:#5b43c9;background:rgba(231,178,90,.1);border-radius:6px;padding:2px 6px;margin-left:6px}
+.sigmini.BUY{background:var(--buy-bg);color:var(--buy)}.sigmini.WAIT{background:var(--wait-bg);color:var(--wait)}.sigmini.WATCH{background:var(--watch-bg);color:var(--watch)}
+.viachip{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--brand);background:var(--brand-soft);border-radius:6px;padding:2px 6px;margin-left:6px}
 
 /* combined cross-route highlights --------------------------------------------- */
 .hlgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,260px),1fr));gap:14px;margin-top:16px}
@@ -1549,7 +1613,7 @@ tr.best td{background:var(--buy-bg)}
   transition:transform .22s,box-shadow .22s}
 .hlcard:hover{transform:translateY(-3px);box-shadow:var(--shadow-lg)}
 .hlcard .hl-ic{font-size:22px;line-height:1;flex:none;width:42px;height:42px;display:grid;place-items:center;border-radius:12px;
-  background:linear-gradient(135deg,#eef3ff,#f3f0ff);border:1px solid var(--line2)}
+  background:linear-gradient(135deg,rgba(231,178,90,.12),rgba(255,255,255,.04));border:1px solid var(--line2)}
 .hlcard .hl-body{min-width:0}
 .hlcard .hl-t{font-weight:700;font-size:14px;letter-spacing:-.2px;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
 .hlcard .hl-score{font-family:'IBM Plex Mono',monospace;color:var(--brand);font-weight:700}
@@ -1562,10 +1626,10 @@ tr.best td{background:var(--buy-bg)}
 .routecard{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px 17px;box-shadow:var(--shadow);
   display:flex;flex-direction:column;transition:transform .22s,box-shadow .22s}
 .routecard:hover{transform:translateY(-3px);box-shadow:var(--shadow-lg)}
-.routecard.collecting{background:#f9fbfe;border-style:dashed}
+.routecard.collecting{background:var(--soft2);border-style:dashed}
 .rc-head{display:flex;align-items:center;gap:10px}
-.rc-pin{font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:700;color:#5b43c9;background:rgba(231,178,90,.1);
-  border-radius:9px;padding:6px 8px;letter-spacing:.04em}
+.rc-pin{font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:700;color:var(--brand);background:var(--brand-soft);
+  border:1px solid rgba(231,178,90,.18);border-radius:9px;padding:6px 8px;letter-spacing:.04em}
 .rc-cities{display:flex;flex-direction:column;line-height:1.15;min-width:0}
 .rc-cities b{font-size:14px;letter-spacing:-.2px}.rc-cities span{font-size:11.5px;color:var(--muted)}
 .rc-head .sigmini{margin-left:auto}
@@ -1626,12 +1690,13 @@ tr.best td{background:var(--buy-bg)}
 <nav class="nav"><div class="row">
   <div class="brand"><span class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2"
     stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v3M9 8h6l1.5 11h-9L9 8zM7.5 19h9M10 8l.5-3h3l.5 3"/></svg></span>Faro</div>
-  <div class="links"><a href="#highlights">Highlights</a><a href="#routes">Routes</a><a href="#finder">Find a trip</a><a href="#market">Market</a><a href="#deals">Signals</a><a href="#insights">Insights</a><a href="#fares">Fares</a></div>
+  <div class="links"><a href="#deals">Signals</a><a href="#insights">Insights</a><a href="#fares">Fares</a><a href="#finder">Find a trip</a><a href="#status">Freshness</a></div>
   <div class="ctx"><span class="pulse"></span><span id="clock">live</span><span id="navwx"></span></div>
 </div></nav>
+<div class="gate" id="gate" style="display:none"></div>
 <div class="routebar" id="routebar"></div>
 
-<div class="wrap">
+<div class="wrap" id="wrap" style="display:none">
   <header class="hero">
     <div class="reveal">
       <div class="eyebrow" id="eyebrow">SMART FARE TIMING</div>
@@ -1757,15 +1822,23 @@ function renderRouteSwitcher(){
     const label=esc(c.from)+' <i>→</i> '+esc(c.to)+(c.flag?'<span class="rp-flag">★</span>':'');
     html+=pill(c.route,label,(c.has?'from '+CUR+' '+fmtv(c.min):'collecting…'),(c.has?'':' collecting'));
   });
-  bar.innerHTML='<div class="rb-inner"><span class="rb-lbl">Focus a route</span>'+
+  bar.innerHTML='<div class="rb-inner">'+
+    '<button class="rb-back" id="rb-back"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>Routes</button>'+
     '<div class="rb-pills">'+html+'</div></div>';
   bar.querySelectorAll('.rpill').forEach(b=>b.addEventListener('click',()=>setScope(b.dataset.route)));
+  const back=document.getElementById('rb-back');if(back)back.addEventListener('click',showGate);
 }
 function setScope(route){
   SCOPE=route||'all';
   const bar=document.getElementById('routebar');
   if(bar)bar.querySelectorAll('.rpill').forEach(b=>b.classList.toggle('on',b.dataset.route===SCOPE));
   document.body.setAttribute('data-scope',SCOPE);
+  // The bento command center is cross-route context (live market pulse, dataset
+  // totals, the spotlight carrier). It's representative on the all-routes overview
+  // and on the data-rich flagship corridor; on a thinner corridor it would read as
+  // someone else's numbers, so we hide it there and let the route's own deal lead.
+  const bento=document.getElementById('bento');
+  if(bento)bento.style.display=(SCOPE==='all'||SCOPE===FLAGSHIP)?'':'none';
   // Section-level scoping: every .sscope shows/hides by who it belongs to.
   document.querySelectorAll('.sscope').forEach(el=>{
     el.style.display=scopeShows(el.getAttribute('data-for')||'global')?'':'none';});
@@ -1796,9 +1869,82 @@ function updateScopeEmpty(){
     'expect buy/wait signals, fare forecasts and the cheapest-day calendar to appear '+
     'here within a few days.</p>'+
     '<div class="cp-actions">'+(flag?'<button class="btnbook" id="cp-toflag">'+_EXT+'Explore '+esc(flag.from)+' → '+esc(flag.to)+'</button>':'')+
-    '<button class="cp-all" id="cp-all">View all routes</button></div></div></div>';
-  const f=document.getElementById('cp-toflag');if(f)f.addEventListener('click',()=>setScope(FLAGSHIP));
-  const a=document.getElementById('cp-all');if(a)a.addEventListener('click',()=>setScope('all'));
+    '<button class="cp-all" id="cp-all">Choose another route</button></div></div></div>';
+  const f=document.getElementById('cp-toflag');if(f)f.addEventListener('click',()=>goRoute(FLAGSHIP));
+  const a=document.getElementById('cp-all');if(a)a.addEventListener('click',showGate);
+}
+
+/* ===== the route-first journey: gate (chooser) -> single-route dashboard =====
+   The page boots into #gate, a focused "pick your route" step. Choosing a route
+   hides the gate, reveals the dashboard and scopes everything to that one corridor;
+   the cross-route overview ('all') is an explicit, secondary choice. */
+let gateBuilt=false;
+function renderGate(){
+  if(gateBuilt)return; const el=document.getElementById('gate'); if(!el)return;
+  const R=D.routes_overview||[];
+  const arrow='<svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg>';
+  const card=c=>{
+    const key=c.o+'-'+c.d, flag=(key===FLAGSHIP);
+    const head='<div class="gc-head"><span class="gc-pin">'+esc((c.o||'').slice(0,3))+'</span>'+
+      '<div class="gc-cities"><b>'+esc(c.from)+'</b><span>→ '+esc(c.to)+'</span></div>'+
+      (c.has_data?signalPill(key+' '+(c.dep||'')+' -> '+(c.ret||'')):'')+'</div>';
+    if(!c.has_data)
+      return '<button class="gcard" data-route="'+esc(key)+'">'+head+
+        '<div class="gc-collect"><span class="spin"></span>Collecting fares</div>'+
+        '<div class="gc-note">Recently added — fares and signals appear within a few days.</div>'+
+        '<div class="gc-go">Preview route '+arrow+'</div></button>';
+    return '<button class="gcard" data-route="'+esc(key)+'">'+head+
+      '<div class="gc-price"><span class="cur">'+CUR+'</span><b>'+fmtv(c.min)+'</b><small>cheapest return</small></div>'+
+      '<div class="gc-meta">'+stopsVia(c.stops,c.via,c.nonstop)+
+        (c.carriers?'<span class="mini">'+c.carriers+' airline'+(c.carriers===1?'':'s')+'</span>':'')+
+        (flag?'<span class="mini">★ most data</span>':'')+'</div>'+
+      '<div class="gc-go">See fares '+arrow+'</div></button>';};
+  el.innerHTML='<div class="g-eyebrow">FARO · SMART FARE TIMING</div>'+
+    '<h1>Where are you<br>flying <span class="grad">next?</span></h1>'+
+    '<div class="g-lead">Pick a route to see its live fares, buy-or-wait signals and the '+
+      'cheapest days to fly — focused on just that trip, nothing else.</div>'+
+    '<div class="gate-grid">'+R.map(card).join('')+'</div>'+
+    '<div class="gate-foot"><button class="gate-all" id="gate-all">Compare all routes at a glance '+arrow+'</button>'+
+      '<span class="gate-meta">'+R.length+' routes tracked · updated '+esc(D.generated||'')+'</span></div>';
+  el.querySelectorAll('.gcard').forEach(b=>b.addEventListener('click',()=>goRoute(b.dataset.route)));
+  const ga=document.getElementById('gate-all');if(ga)ga.addEventListener('click',()=>goRoute('all'));
+  gateBuilt=true;
+}
+function showGate(){
+  renderGate();
+  SCOPE='pick';document.body.setAttribute('data-view','pick');
+  const g=document.getElementById('gate');if(g)g.style.display='';
+  const w=document.getElementById('wrap');if(w)w.style.display='none';
+  const rb=document.getElementById('routebar');if(rb)rb.style.display='none';
+  window.scrollTo(0,0);
+}
+function goRoute(key){
+  const g=document.getElementById('gate');if(g)g.style.display='none';
+  document.body.setAttribute('data-view','route');
+  const w=document.getElementById('wrap');if(w)w.style.display='';
+  const rb=document.getElementById('routebar');if(rb&&routeList().length>1)rb.style.display='';
+  setScope(key||'all');
+  applyRouteHero(key||'all');
+  renderDeal();
+  window.scrollTo(0,0);
+  // the wrap was display:none, so reveal anything now on-screen right away
+  document.querySelectorAll('#wrap .reveal:not(.in)').forEach(el=>{
+    if(el.getBoundingClientRect().top<innerHeight*1.15)fireReveal(el);});
+  // canvases were 0-sized while the dashboard was hidden; (re)draw what's now visible
+  requestAnimationFrame(()=>requestAnimationFrame(drawCharts));
+}
+/* retitle the hero for the chosen corridor (or the all-routes overview) */
+function applyRouteHero(key){
+  const eb=document.getElementById('eyebrow'),ld=document.getElementById('lead');
+  if(key==='all'){
+    if(eb)eb.textContent='ALL ROUTES · SMART FARE TIMING';
+    if(ld)ld.innerHTML='Every route Faro tracks across New Zealand ↔ Sri Lanka &amp; India, side by side — '+
+      'cheapest fares, live signals and the standout deals right now.';
+    return;}
+  const r=routeInfo(key);if(!r)return;
+  if(eb)eb.textContent=esc((r.from+' → '+r.to).toUpperCase())+' · SMART FARE TIMING';
+  if(ld)ld.innerHTML='Live fares for <b>'+esc(r.from)+' → '+esc(r.to)+'</b> — every airline, stops and flight '+
+    'time, with a clear buy-or-wait signal and the cheapest days to fly.';
 }
 
 /* ===== combined cross-route highlights (the hero hook) ===== */
@@ -1916,9 +2062,14 @@ function ltick(){const el=document.getElementById('lt');if(!el)return;
 
 /* ---- hero deal card ---- */
 function renderDeal(){const el=document.getElementById('deal');if(!el)return;
-  const best=(D.insights&&D.insights[0])||null;
+  // Lead with the best deal for the corridor in focus (or, on the overview, the
+  // single best across every route) so the hero always matches the active scope.
+  const ins=D.insights||[];
+  const scoped=(typeof SCOPE!=='undefined'&&SCOPE!=='all'&&SCOPE!=='pick')
+    ?ins.filter(x=>routeKey(x.itinerary)===SCOPE):ins;
+  const best=scoped[0]||ins[0]||null;
   if(!best){el.innerHTML='<div class="lbl">Best deal</div><div class="route" style="margin-top:10px">Collecting fares…</div>'+
-    '<div class="dates">The first deal will appear within a day or two.</div>';return;}
+    '<div class="dates">The first deal on this route will appear within a day or two.</div>';return;}
   const pi=parseItin(best.itinerary),rec=(D.recs||[]).find(r=>r.itinerary===best.itinerary),sig=rec?rec.signal:'WATCH';
   const save=Math.max(0,Math.round((best.median||best.min)-best.min));
   const sub=rec&&rec.signal==='BUY'?'Good time to book':rec&&rec.signal==='WAIT'?'Prices may still fall':'Worth watching';
@@ -2102,7 +2253,7 @@ function renderOps(){const ST=D.status; if(!ST)return;
     runs='<div class="ops-runs"><div class="rh">Recent updates</div>'+
       '<div class="ops-bars">'+bars+'</div>'+
       '<div class="ops-legend"><span><i style="background:var(--buy)"></i>got fares</span>'+
-      '<span><i style="background:#cfd9ea"></i>no results</span><span><i style="background:var(--pink)"></i>error</span></div></div>';}
+      '<span><i style="background:#4b4b57"></i>no results</span><span><i style="background:var(--pink)"></i>error</span></div></div>';}
 
   // what's expected next
   let next='';
@@ -2339,8 +2490,11 @@ function buildFinder(){
     date:(a,b)=>a.dep<b.dep?-1:a.dep>b.dep?1:(a.len||0)-(b.len||0),
     length:(a,b)=>(a.len||0)-(b.len||0),
     fast:(a,b)=>(fastOf(a)||1e9)-(fastOf(b)||1e9)};
-  const heat=(p,lo,hi)=>{if(hi<=lo)return 'hsl(150 62% 90%)';
-    const t=Math.max(0,Math.min(1,(p-lo)/(hi-lo)));return 'hsl('+(132-(132-6)*t).toFixed(0)+' 72% '+(91-t*16).toFixed(0)+'%)';};
+  // Dark-native fare heatmap: cheap = vivid green, dear = deep red, all at low
+  // lightness so the calendar reads as part of the dark canvas (not a white block).
+  const heat=(p,lo,hi)=>{if(hi<=lo)return 'hsl(150 46% 30%)';
+    const t=Math.max(0,Math.min(1,(p-lo)/(hi-lo)));
+    return 'hsl('+(150-142*t).toFixed(0)+' '+(48-10*t).toFixed(0)+'% '+(31-9*t).toFixed(0)+'%)';};
 
   async function ensureLoaded(){
     if(loaded)return;
@@ -2518,17 +2672,25 @@ function gridOpts(){return{responsive:true,maintainAspectRatio:false,
           y:{grid:{color:'rgba(255,255,255,.06)'},ticks:{color:'#8b8b95',font:{family:'IBM Plex Mono',size:10}}}}};}
 function placeholder(id,msg){const c=document.getElementById(id);if(!c)return;
   (c.closest('.canvas-wrap')||c.parentNode).innerHTML='<div style="height:100%;display:grid;place-items:center;color:var(--dim);font-size:13px;text-align:center;padding:0 20px">'+msg+'</div>';}
-let charted=false;
-function drawCharts(){if(charted)return;charted=true;
+function vis(c){return !!(c&&c.getClientRects().length);}
+const _drawn=(window.__fwDrawn=window.__fwDrawn||new Set());
+/* Charts are drawn lazily: a canvas is only rendered once it's actually on-screen
+   (the route-first gate keeps the dashboard hidden at boot, and per-route scoping
+   hides other corridors' charts), and never drawn twice. */
+function need(id){const c=document.getElementById(id);if(!c||_drawn.has(id)||!vis(c))return null;_drawn.add(id);return c;}
+function drawCharts(){
   if(typeof Chart==='undefined'){['trendChart','airChart','advChart','lenChart','distChart','fanChart','accChart']
-    .forEach(id=>placeholder(id,'Chart library unavailable.'));return;}
-  D.recs.forEach((r,i)=>{const h=D.history[r.itinerary]||[],c=document.getElementById('spark'+i);if(!c||h.length<2)return;
+    .forEach(id=>{if(need(id))placeholder(id,'Chart library unavailable.');});return;}
+  D.recs.forEach((r,i)=>{const h=D.history[r.itinerary]||[],c=need('spark'+i);if(!c||h.length<2)return;
     const g=c.getContext('2d').createLinearGradient(0,0,0,46);g.addColorStop(0,'rgba(231,178,90,.28)');g.addColorStop(1,'rgba(231,178,90,0)');
     new Chart(c,{type:'line',data:{labels:h.map(x=>x.d),datasets:[{data:h.map(x=>x.p),borderColor:'#E7B25A',borderWidth:2,pointRadius:0,tension:.35,fill:true,backgroundColor:g}]},
       options:{responsive:false,plugins:{legend:{display:false},tooltip:{enabled:false}},scales:{x:{display:false},y:{display:false}}}});});
-  const tc=document.getElementById('trendChart'),enough=Object.values(D.history).some(h=>h.length>=2);
-  if(tc&&!enough)placeholder('trendChart','Price history charts appear after a couple of days of tracking — check back soon.');
-  else if(tc){let itins=Object.keys(D.history).filter(k=>(D.history[k]||[]).length>=2);
+  const tc=need('trendChart');
+  // The trend panel lives in the flagship deep-dive, so chart only the flagship
+  // corridor's history (never mix another route's lines into it).
+  const fHist=Object.keys(D.history).filter(k=>routeKey(k)===FLAGSHIP&&(D.history[k]||[]).length>=2);
+  if(tc&&!fHist.length)placeholder('trendChart','Price history charts appear after a couple of days of tracking — check back soon.');
+  else if(tc){let itins=fHist.slice();
     // Label each line by what makes it DISTINCT -- its departure + nights (and the
     // route only when more than one corridor is charted) -- never 9x the same route.
     itins.sort((a,b)=>{const A=parseItin(a),B=parseItin(b);return (A.o+A.d).localeCompare(B.o+B.d)|| (a<b?-1:1);});
@@ -2539,12 +2701,12 @@ function drawCharts(){if(charted)return;charted=true;
       const lab=(multi?pi.o+'→'+pi.d+' · ':'')+dep+(pi.nights?' · '+pi.nights+'n':'');
       return{label:lab,data:labels.map(d=>m[d]??null),borderColor:palette[i%palette.length],backgroundColor:palette[i%palette.length],borderWidth:2,pointRadius:1.5,tension:.3,spanGaps:true};});
     new Chart(tc,{type:'line',data:{labels,datasets:ds},options:Object.assign(gridOpts(),{plugins:{legend:{position:'bottom',labels:{font:{family:'Sora',size:10},color:'#8b8b95',boxWidth:10,padding:9,usePointStyle:true}}}})});}
-  const ac=document.getElementById('airChart');
+  const ac=need('airChart');
   if(ac&&D.airline_market&&D.airline_market.length){const m=D.airline_market;
     new Chart(ac,{type:'bar',data:{labels:m.map(a=>a.name),datasets:[{label:'Lowest fare ('+CUR+')',data:m.map(a=>a.min),backgroundColor:m.map(a=>acolor(a.name)),borderRadius:8,maxBarThickness:30}]},
       options:Object.assign(gridOpts(),{indexAxis:'y',plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+fmt(c.raw)+' · '+m[c.dataIndex].offers+' offers'}}}})});}
   /* predicted booking-curve fan chart (median + calibrated band) */
-  const fcx=document.getElementById('fanChart'),mr=D.recs.find(r=>r.curve&&r.curve.length);
+  const fcx=need('fanChart'),mr=D.recs.find(r=>r.curve&&r.curve.length);
   if(fcx&&mr){const cv=mr.curve;
     new Chart(fcx,{type:'line',data:{labels:cv.map(c=>c.dtd),datasets:[
       {data:cv.map(c=>c.hi),borderColor:'rgba(231,178,90,0)',backgroundColor:'rgba(231,178,90,.12)',pointRadius:0,fill:'+1',tension:.3},
@@ -2555,7 +2717,7 @@ function drawCharts(){if(charted)return;charted=true;
                 y:{grid:{color:'rgba(255,255,255,.06)'},ticks:{color:'#8b8b95',font:{family:'IBM Plex Mono',size:10}}}}})});}
   else if(fcx)placeholder('fanChart','Fare predictions will appear once enough price history has been collected.');
   /* model accuracy over time (from the offline backtest) */
-  const acc=document.getElementById('accChart');
+  const acc=need('accChart');
   if(acc&&D.ai&&D.ai.backtest&&(D.ai.backtest.series||[]).length>=2){const s=D.ai.backtest.series;
     new Chart(acc,{type:'line',data:{labels:s.map(x=>x.d),datasets:[{data:s.map(x=>x.acc),borderColor:'#5fd08a',backgroundColor:'rgba(95,208,138,.14)',borderWidth:2,pointRadius:0,tension:.3,fill:true}]},
       options:Object.assign(gridOpts(),{plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+c.raw+'% right'}}},scales:{x:{display:false},y:{min:0,max:100,grid:{color:'rgba(255,255,255,.06)'},ticks:{color:'#8b8b95',font:{family:'IBM Plex Mono',size:10},callback:v=>v+'%'}}}})});}
@@ -2563,7 +2725,7 @@ function drawCharts(){if(charted)return;charted=true;
   /* ---- market analytics graphs ---- */
   const MK=(D.ai&&D.ai.market)||null;
   if(MK){
-    const adv=document.getElementById('advChart');
+    const adv=need('advChart');
     if(adv&&MK.advance_curve&&MK.advance_curve.points.length>=3){const pts=MK.advance_curve.points;
       const g=adv.getContext('2d').createLinearGradient(0,0,0,252);g.addColorStop(0,'rgba(231,178,90,.22)');g.addColorStop(1,'rgba(231,178,90,0)');
       new Chart(adv,{type:'line',data:{labels:pts.map(p=>p.dtd),datasets:[{data:pts.map(p=>p.p),borderColor:'#E7B25A',borderWidth:2,pointRadius:0,tension:.35,fill:true,backgroundColor:g}]},
@@ -2572,7 +2734,7 @@ function drawCharts(){if(charted)return;charted=true;
                   y:{grid:{color:'rgba(255,255,255,.06)'},ticks:{color:'#8b8b95',font:{family:'IBM Plex Mono',size:10}}}}})});}
     else if(adv)placeholder('advChart','This chart appears once fares have been collected across different booking windows.');
 
-    const len=document.getElementById('lenChart');
+    const len=need('lenChart');
     if(len&&MK.length_curve&&MK.length_curve.points.length>=2){const pts=MK.length_curve.points,best=MK.length_curve.best_len;
       new Chart(len,{type:'bar',data:{labels:pts.map(p=>p.len),datasets:[{data:pts.map(p=>p.min),
         backgroundColor:pts.map(p=>p.len===best?'#5fd08a':'rgba(231,178,90,.55)'),borderRadius:6,maxBarThickness:24}]},
@@ -2581,7 +2743,7 @@ function drawCharts(){if(charted)return;charted=true;
                   y:{grid:{color:'rgba(255,255,255,.06)'},ticks:{color:'#8b8b95',font:{family:'IBM Plex Mono',size:10}}}}})});}
     else if(len)placeholder('lenChart','Trip-length comparison appears once fares for different durations have been collected.');
 
-    const dist=document.getElementById('distChart');
+    const dist=need('distChart');
     if(dist&&MK.price_distribution&&MK.price_distribution.bins.length){const b=MK.price_distribution.bins,med=MK.price_distribution.median;
       new Chart(dist,{type:'bar',data:{labels:b.map(x=>x.lo),datasets:[{data:b.map(x=>x.count),
         backgroundColor:b.map(x=>(med>=x.lo&&med<x.hi)?'#E7B25A':'rgba(231,178,90,.4)'),borderRadius:5,barPercentage:1,categoryPercentage:.97}]},
@@ -2619,8 +2781,17 @@ setTimeout(()=>document.querySelectorAll('.reveal:not(.in)').forEach(el=>{if(el.
   if(el&&MON.enabled&&MON.disclosure)el.textContent=MON.disclosure;})();
 
 renderDeal();renderHeroChips();initTilt();scrollTilt();
-requestAnimationFrame(drawCharts);
 loadWeather();loadRates();
-/* set the initial "All routes" scope (activates the pill, tags the body) */
-if(document.getElementById('routebar'))setScope('all');
+/* ---- route-first boot: open on the chooser, or skip it for a lone corridor ---- */
+(function bootRoutes(){
+  renderRouteSwitcher();   // ensure the sticky switcher exists (also on the no-data path)
+  const RL=routeList();
+  if(RL.length<=1){
+    // a single corridor has nothing to choose between — drop straight into it
+    const w=document.getElementById('wrap');if(w)w.style.display='';
+    goRoute(RL.length?RL[0].route:'all');
+  }else{
+    showGate();
+  }
+})();
 </script></body></html>'''
