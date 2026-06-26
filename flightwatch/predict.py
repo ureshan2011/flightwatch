@@ -433,3 +433,101 @@ def backtest(df: pd.DataFrame, tolerance=0.03):
         "series": [{"d": d, "acc": round(100 * a)} for d, a in
                    zip(series["date"], series["acc"])],
     }
+
+
+# Routes thinner than this many graded calls don't get a headline accuracy figure
+# -- we refuse to publish an honest-looking percentage off a handful of decisions.
+MIN_CALLS_FOR_HITRATE = 8
+
+
+def backtests_by_route(df: pd.DataFrame, tolerance=0.03):
+    """Per-corridor walk-forward backtest summary for the Lab scorecard.
+
+    Same forward-chaining grading as `backtest()` (replay the heuristic at each
+    day using only data available then, grade it against what actually happened),
+    but aggregated per route and reporting, for each corridor::
+
+        {calls, right, hit_rate, saved_vs_searchday, missed_cost}
+
+    * ``calls``/``right`` -- graded BUY/WAIT/WATCH decision-points and how many
+      paid off; ``hit_rate`` is right/calls as a percent, or ``None`` when the
+      route is too thin (< ``MIN_CALLS_FOR_HITRATE`` calls) to headline honestly.
+    * ``saved_vs_searchday`` -- summed over every tracked itinerary: the price you
+      would have paid booking on the day you first searched (the itinerary's first
+      observation) minus the price you'd pay following Faro (book at its first BUY,
+      otherwise forced to book at the latest fare we have). Negative contributions
+      (where waiting cost money) are kept, so the figure is honest, not cherry-
+      picked.
+    * ``missed_cost`` -- summed regret on BUY calls that turned out wrong (the fare
+      later dropped further), counted against the total.
+
+    Returns ``{route: summary}``. An itinerary with too little history is simply
+    skipped; a route only appears once it has at least one graded call.
+    """
+    daily = daily_min(df)
+    if daily.empty:
+        return {}
+
+    acc = {}  # route -> running tallies
+
+    for itin, h in daily.groupby("itin"):
+        route = str(itin).split(" ", 1)[0]            # "CHC-CMB 2026-.. -> .." -> "CHC-CMB"
+        h = h.sort_values("scan_date").reset_index(drop=True)
+        prices = h["price"].astype(float).to_numpy()
+        if prices.size == 0:
+            continue
+        a = acc.setdefault(route, {"calls": 0, "right": 0, "missed": 0.0,
+                                   "saved": 0.0, "itins": 0})
+
+        first_buy_price = None
+        first_graded_price = None
+        for i in range(MIN_HISTORY_PER_ITIN, len(h)):
+            future = prices[i + 1:]
+            if future.size == 0:
+                continue
+            rec = _heuristic(h.iloc[:i + 1])
+            cur, fut_min = float(prices[i]), float(future.min())
+            drop = (cur - fut_min) / max(cur, 1.0)
+            sig = rec["signal"]
+            if first_graded_price is None:
+                first_graded_price = cur
+            if sig == "BUY":
+                correct = drop <= tolerance
+                if drop > tolerance:
+                    a["missed"] += max(0.0, cur - fut_min)
+                if first_buy_price is None:
+                    first_buy_price = cur
+            elif sig == "WAIT":
+                correct = drop > tolerance
+            else:
+                correct = abs(drop) <= tolerance
+            a["calls"] += 1
+            a["right"] += int(bool(correct))
+
+        # Money saved by following Faro vs booking the day Faro first had an opinion
+        # on this itinerary -- only counted for itineraries Faro actually reasoned
+        # about (>= 1 graded call), so the figure isn't swamped by the long tail of
+        # barely-observed dates. Faro books at its first BUY; if it never said BUY
+        # you're forced to book at the latest fare (which may have saved or cost you,
+        # both counted honestly).
+        if first_graded_price is not None:
+            faro_price = (first_buy_price if first_buy_price is not None
+                          else float(prices[-1]))
+            a["saved"] += first_graded_price - faro_price
+            a["itins"] += 1
+
+    out = {}
+    for route, a in acc.items():
+        calls = a["calls"]
+        if calls == 0 and a["itins"] == 0:
+            continue
+        out[route] = {
+            "calls": calls,
+            "right": a["right"],
+            "hit_rate": (round(100 * a["right"] / calls)
+                         if calls >= MIN_CALLS_FOR_HITRATE else None),
+            "saved_vs_searchday": round(a["saved"]),
+            "missed_cost": round(a["missed"]),
+            "itineraries": a["itins"],
+        }
+    return out
