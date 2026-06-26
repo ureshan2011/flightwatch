@@ -947,8 +947,18 @@ def build():
         with open(os.path.join(DOCS_DIR, "explore.json"), "w", encoding="utf-8") as ef:
             json.dump(explore, ef, default=_np)
     payload["explore"] = []
+
+    # Keep the Answer's critical path light: embed only the sections the three-view
+    # app actually reads, and lazy-load the ~MB finder grid (explore.json) outside
+    # it. The heavy analytics/insights are still computed (they feed alerts.py and
+    # are guarded by their own tests) -- they're just not shipped to the browser,
+    # which roughly halves the page. `ai` alone was ~170 KB of unused JSON.
+    embed_keys = {"generated", "status", "recs", "history", "explore", "explore_meta",
+                  "routes_overview", "backtests", "monetization", "stats", "cities",
+                  "currency"}
+    embedded = {k: v for k, v in payload.items() if k in embed_keys}
     with open(os.path.join(DOCS_DIR, "index.html"), "w", encoding="utf-8") as f:
-        f.write(_html(payload))
+        f.write(_html(embedded))
     _write_firebase_sw()
     print(f"Dashboard built: {stats['scans']} scans, {stats['total_offers']} fare "
           f"observations across {stats['routes']} routes"
