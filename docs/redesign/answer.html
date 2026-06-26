@@ -174,6 +174,61 @@ svg.spark{width:100%;height:90px;display:block}
 
 .note{margin-top:30px;padding:14px 16px;border:1px dashed var(--line2);border-radius:var(--r-md);font-size:12.5px;color:var(--dim);line-height:1.65}
 
+/* ── lab view ──────────────────────────────────────────────────────────── */
+.lab-intro{font-size:12.5px;color:var(--muted);margin:6px 0 0}
+.lab-focus{display:flex;align-items:center;gap:8px;margin:16px 0 0;font-size:12.5px;color:var(--muted);flex-wrap:wrap}
+.lab-focus select{appearance:none;background:var(--card2);border:1px solid var(--line2);color:var(--ink);
+  border-radius:var(--r-sm);padding:6px 28px 6px 10px;font-family:'IBM Plex Mono',monospace;font-size:12.5px;
+  background-image:linear-gradient(45deg,transparent 50%,var(--muted) 50%),linear-gradient(135deg,var(--muted) 50%,transparent 50%);
+  background-position:calc(100% - 14px) 14px,calc(100% - 9px) 14px;background-size:5px 5px,5px 5px;background-repeat:no-repeat}
+.labsec{margin-top:14px;background:var(--card);border:1px solid var(--line2);border-radius:var(--r-lg);padding:16px 18px}
+.labsec > h3{font-size:13px;font-weight:600;display:flex;align-items:baseline;gap:8px;margin-bottom:4px}
+.labsec > h3 span{font-size:11.5px;color:var(--dim);font-weight:400}
+.table{width:100%;border-collapse:collapse;font-size:13px;margin-top:8px}
+.table th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--dim);font-weight:600;
+  padding:8px 8px;border-bottom:1px solid var(--line2);cursor:pointer;white-space:nowrap}
+.table th.sorted::after{content:" ↓";color:var(--brand)}
+.table td{padding:9px 8px;border-bottom:1px solid var(--line);vertical-align:middle}
+.table tbody tr:hover td{background:var(--card2)}
+.table .num{font-family:'IBM Plex Mono',monospace;text-align:right}
+.minichip{font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:var(--r-pill)}
+.minichip.BUY{background:var(--buy-bg);color:var(--buy)} .minichip.WAIT{background:var(--wait-bg);color:var(--wait)} .minichip.WATCH{background:var(--watch-bg);color:var(--watch)}
+.focusbtn{border:1px solid var(--line2);background:none;color:var(--brand);border-radius:var(--r-pill);padding:4px 11px;font-size:12px;font-weight:600}
+.focusbtn:hover{border-color:var(--brand)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+/* backtest */
+.bt-top{display:flex;align-items:baseline;gap:14px;margin:10px 0}
+.bt-hit{font-family:'IBM Plex Mono',monospace;font-size:34px;font-weight:700;color:var(--buy)}
+.bt-strip{display:flex;gap:3px;flex-wrap:wrap;margin-top:8px}
+.bt-strip i{width:14px;height:14px;border-radius:3px;display:inline-block}
+.bt-strip i.r{background:var(--buy)} .bt-strip i.w{background:var(--up);opacity:.7}
+/* heatmap */
+.heat{display:grid;grid-template-columns:34px repeat(7,1fr);gap:4px;margin-top:10px}
+.hlabel{font-size:9.5px;color:var(--dim);display:grid;place-items:center;font-family:'IBM Plex Mono',monospace}
+.hcell{aspect-ratio:1.5;border-radius:5px;display:grid;place-items:center;font-size:9px;font-family:'IBM Plex Mono',monospace;color:#0b0b0e}
+.hcell.best{outline:2px solid var(--brand);outline-offset:-1px}
+.heat-legend{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--dim);margin-top:10px}
+.heat-ramp{height:8px;width:90px;border-radius:4px;background:linear-gradient(90deg,var(--buy),var(--brand),var(--up))}
+/* fan */
+svg.fan{width:100%;height:150px;display:block;margin-top:8px}
+/* finder */
+.finder-bar{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-top:8px}
+.ff{display:flex;flex-direction:column;gap:4px}
+.ff label{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim)}
+.ff select,.ff input[type=range]{background:var(--card2);border:1px solid var(--line2);color:var(--ink);border-radius:var(--r-sm);padding:7px 9px;font-size:13px}
+.ff input[type=range]{padding:0;width:140px}
+.fcount{font-size:12px;color:var(--muted);margin-left:auto}
+.fres{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding:9px 0;border-bottom:1px solid var(--line);font-size:13px}
+.fres .pr{font-family:'IBM Plex Mono',monospace;font-weight:600;text-align:right}
+.fres .meta{font-size:11.5px;color:var(--muted)}
+/* market tiles */
+.stiles{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:8px}
+.stile{background:var(--card2);border:1px solid var(--line2);border-radius:var(--r-md);padding:13px}
+.stile .v{font-family:'IBM Plex Mono',monospace;font-size:20px;font-weight:600}
+.stile .k{font-size:10.5px;color:var(--dim);text-transform:uppercase;letter-spacing:.08em;margin-top:3px}
+@media(max-width:560px){.grid2{grid-template-columns:1fr}.stiles{grid-template-columns:1fr 1fr}
+  .table .hide-sm{display:none}}
+
 #toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(20px);background:var(--ink);color:var(--bg);
   font-weight:600;font-size:13.5px;padding:11px 18px;border-radius:var(--r-pill);box-shadow:var(--shadow-lg);max-width:88vw;text-align:center;
   opacity:0;pointer-events:none;transition:.28s;z-index:50}
@@ -196,6 +251,7 @@ svg.spark{width:100%;height:90px;display:block}
     <div class="tabs">
       <button class="tab" id="tab-answer" data-go="#/">Answer</button>
       <button class="tab" id="tab-watch" data-go="#/watch">Watch <span class="badge" id="tabN">0</span></button>
+      <button class="tab" id="tab-lab" data-go="#/lab">Lab</button>
     </div>
     <div class="spacer"></div>
     <div class="outlook" id="outlook"></div>
@@ -247,6 +303,34 @@ svg.spark{width:100%;height:90px;display:block}
         live-update these cards. See <code>redesign/FIREBASE.md</code>.
       </div>
     </details>
+  </section>
+
+  <!-- ───────── LAB VIEW ───────── -->
+  <section id="view-lab" class="hidden">
+    <div class="watch-head"><h2>The Lab</h2></div>
+    <p class="lab-intro">The deep layer — every route, the receipts, the raw grid. Calm but dense; this is where the power user audits Faro. Pick a route to focus the charts.</p>
+    <div class="lab-focus">focused route <select id="labRoute"></select><span id="labMeta"></span></div>
+
+    <div class="labsec"><h3>Routes board <span>every corridor · click to focus the Answer</span></h3>
+      <table class="table" id="rbTable"></table></div>
+
+    <div class="grid2">
+      <div class="labsec"><h3>Signal accuracy <span>backtest receipts</span></h3><div id="btPanel"></div></div>
+      <div class="labsec"><h3>Forecast fan <span>conformal band, 14 days</span></h3><div id="fanPanel"></div></div>
+    </div>
+
+    <div class="labsec"><h3>Cheapest day to fly <span>departure × return weekday</span></h3><div id="heatPanel"></div></div>
+
+    <div class="labsec"><h3>Find a trip <span id="finderCount"></span></h3>
+      <div class="finder-bar">
+        <div class="ff"><label>route</label><select id="ff-route"></select></div>
+        <div class="ff"><label>max stops</label><select id="ff-stops"><option value="2">any</option><option value="1">≤ 1 stop</option><option value="0">non-stop</option></select></div>
+        <div class="ff"><label>max price <span id="ff-pv" class="mono"></span></label><input type="range" id="ff-price" min="1400" max="2800" step="50"></div>
+        <div class="ff"><label>sort</label><select id="ff-sort"><option value="price">cheapest</option><option value="dep">soonest</option></select></div>
+      </div>
+      <div id="finderRes"></div></div>
+
+    <div class="labsec"><h3>Market analytics <span>patterns across all routes</span></h3><div class="stiles" id="mkt"></div></div>
   </section>
 
   <div class="note">
@@ -476,12 +560,122 @@ function renderWatch(){const list=Store.trips();$('tabN').textContent=list.lengt
     toast(inp.value?`Price target set: under ${CUR} ${inp.value}`:'Price target cleared');});
   $('tripList').querySelectorAll('[data-rm]').forEach(b=>b.onclick=async()=>{await Store.remove(b.dataset.rm);toast('Removed from My trips');});}
 
+/* ═══════════════ Lab: data + render ═══════════════════════════════════════ */
+const AIRLINES={'CHC-CMB':['Singapore Airlines','Air NZ · SQ','Malaysia Airlines'],
+  'AKL-CMB':['SriLankan','Singapore Airlines','Malaysia Airlines'],
+  'AKL-DEL':['Air India','Singapore Airlines','Thai Airways'],
+  'AKL-BOM':['Air India','Singapore Airlines','Qantas · AI']};
+const BT={'CHC-CMB':{calls:34,right:24},'AKL-CMB':{calls:41,right:30},'AKL-DEL':{calls:9,right:5},'AKL-BOM':{calls:22,right:14}};
+const DOW=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+function rng(seed){let s=seed>>>0;return()=>{s=(s*1103515245+12345)&0x7fffffff;return s/0x7fffffff;};}
+const FINDER=(()=>{const out=[];let id=0;
+  for(const key of Object.keys(ROUTES)){const[o,d]=key.split('-');const base=ROUTES[key].now;
+    for(const m of ['2026-08','2026-09','2026-10','2026-11']){for(let k=0;k<4;k++){const r=rng(id*97+13);
+      const day=2+Math.floor(r()*26),dep=`${m}-${String(day).padStart(2,'0')}`,len=[14,21,28,35][Math.floor(r()*4)];
+      const rd=new Date(dep);rd.setDate(rd.getDate()+len);
+      const stops=r()<0.22?0:r()<0.82?1:2;
+      const price=Math.round(base*(0.85+r()*0.42)+(stops===0?250:0)-(m==='2026-11'?110:0));
+      out.push({id:id++,o,d,key,dep,ret:rd.toISOString().slice(0,10),len,stops,price,air:AIRLINES[key][Math.floor(r()*AIRLINES[key].length)]});}}}
+  return out;})();
+let LAB=A.o+'-'+A.d;
+
+function renderLab(){
+  const lr=$('labRoute');
+  lr.innerHTML=Object.keys(ROUTES).map(k=>`<option value="${k}"${k===LAB?' selected':''}>${k.replace('-',' → ')}</option>`).join('');
+  lr.onchange=()=>{LAB=lr.value;renderLab();};
+  const v=verdictFor(...LAB.split('-'),depDate(),21);
+  $('labMeta').innerHTML=`· ${v.obs} obs · ${money(v.now)} now`;
+  renderRoutesBoard();renderBacktest();renderFan();renderHeat();renderMarket();
+  initFinder();
+}
+let rbSort='now';
+function renderRoutesBoard(){
+  const rows=Object.keys(ROUTES).map(k=>{const[o,d]=k.split('-');const v=verdictFor(o,d,depDate(),21);
+    const best=['Nov','Aug','Sep','Oct'][Math.abs(k.length)%4];return {k,o,d,v,best};});
+  rows.sort((a,b)=>rbSort==='now'?a.v.now-b.v.now:rbSort==='conf'?b.v.conf-a.v.conf:a.k.localeCompare(b.k));
+  const sp=arr=>{const w=90,h=24,mn=Math.min(...arr),mx=Math.max(...arr),rg=(mx-mn)||1;
+    const p=arr.map((x,i)=>`${(i/(arr.length-1)*w).toFixed(1)},${(h-2-(x-mn)/rg*(h-4)).toFixed(1)}`).join(' ');
+    return `<svg width="${w}" height="${h}"><polyline points="${p}" fill="none" stroke="var(--brand)" stroke-width="1.5"/></svg>`;};
+  $('rbTable').innerHTML=`<thead><tr>
+     <th data-s="route">Route</th><th data-s="now" class="num ${rbSort==='now'?'sorted':''}">Cheapest now</th>
+     <th>Signal</th><th class="hide-sm">30-day</th><th class="hide-sm">Best month</th><th></th></tr></thead><tbody>`+
+   rows.map(r=>`<tr><td><b>${r.o} → ${r.d}</b></td><td class="num">${money(r.v.now)}</td>
+     <td><span class="minichip ${r.v.sig}">${r.v.sig}</span></td>
+     <td class="hide-sm">${sp(r.v.story)}</td><td class="hide-sm mono" style="color:var(--muted)">${r.best}</td>
+     <td><button class="focusbtn" data-foc="${r.k}">focus →</button></td></tr>`).join('')+`</tbody>`;
+  $('rbTable').querySelectorAll('th[data-s]').forEach(th=>th.onclick=()=>{rbSort=th.dataset.s;renderRoutesBoard();});
+  $('rbTable').querySelectorAll('[data-foc]').forEach(b=>b.onclick=()=>{[A.o,A.d]=b.dataset.foc.split('-');
+    fillComposer();syncURL();location.hash='#/';toast(`Focused ${A.o}→${A.d} — see the full Answer`);});
+}
+function renderBacktest(){const b=BT[LAB]||{calls:0,right:0};const hit=b.calls?Math.round(b.right/b.calls*100):0;
+  const r=rng(b.calls*31+7);const strip=Array.from({length:Math.min(b.calls,18)},()=>r()<b.right/b.calls?'r':'w');
+  $('btPanel').innerHTML=`<div class="bt-top"><span class="bt-hit">${hit}%</span>
+     <span style="font-size:12.5px;color:var(--muted)">of past BUY/WAIT calls on ${LAB.replace('-',' → ')} paid off<br>${b.right} right of ${b.calls} · walk-forward, no future leak</span></div>
+     <div class="bt-strip">${strip.map(c=>`<i class="${c}" title="${c==='r'?'correct':'missed'}"></i>`).join('')}</div>
+     <div style="font-size:11.5px;color:var(--dim);margin-top:8px">green = call paid off · pink = it didn't. Honesty is the product.</div>`;}
+function renderFan(){const v=verdictFor(...LAB.split('-'),depDate(),21);const N=14,w=700,h=150,pad=8;
+  const mid=[],lo=[],hi=[];for(let i=0;i<N;i++){const t=i/(N-1);
+    const c=v.now+(v.low-v.now)*Math.sin(t*Math.PI*0.7)*(v.sig==='BUY'?-0.3:1);const band=v.now*(0.02+t*0.06);
+    mid.push(c);lo.push(c-band);hi.push(c+band);}
+  const all=[...lo,...hi],mn=Math.min(...all),mx=Math.max(...all),rg=(mx-mn)||1;
+  const X=i=>pad+i/(N-1)*(w-2*pad),Y=val=>h-pad-(val-mn)/rg*(h-2*pad);
+  const lineP=mid.map((c,i)=>(i?'L':'M')+X(i).toFixed(1)+' '+Y(c).toFixed(1)).join(' ');
+  const bandP=hi.map((c,i)=>(i?'L':'M')+X(i).toFixed(1)+' '+Y(c).toFixed(1)).join(' ')+' '+lo.map((c,i)=>'L'+X(N-1-i).toFixed(1)+' '+Y(lo[N-1-i]).toFixed(1)).join(' ')+'Z';
+  const bi=v.sig==='BUY'?0:Math.min(N-1,(v.win||7));
+  $('fanPanel').innerHTML=`<svg class="fan" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
+     <path d="${bandP}" fill="var(--brand)" opacity=".14"/>
+     <path d="${lineP}" fill="none" stroke="var(--brand)" stroke-width="2"/>
+     <line x1="${X(bi)}" y1="0" x2="${X(bi)}" y2="${h}" stroke="var(--brand)" stroke-dasharray="3 3" opacity=".55"/>
+     <circle cx="${X(bi)}" cy="${Y(mid[bi])}" r="4" fill="var(--brand)"/></svg>
+     <div style="font-size:11.5px;color:var(--dim)">shaded = 80% conformal band · dashed = best-time-to-book (${v.sig==='BUY'?'now':'~'+(v.win||7)+'d'})</div>`;}
+function renderHeat(){const base=verdictFor(...LAB.split('-'),depDate(),21).now;
+  let min=Infinity,minij=[0,0],g=[];for(let i=0;i<7;i++){const row=[];for(let j=0;j<7;j++){
+    const val=Math.round(base*(1+0.07*Math.sin(i*0.9+0.4)+0.05*Math.cos(j*1.05)+((i>=5)?0.05:0)+((j===4)?0.04:0)-0.04));
+    row.push(val);if(val<min){min=val;minij=[i,j];}}g.push(row);}
+  const mx=Math.max(...g.flat());
+  const col=v=>{const t=(v-min)/((mx-min)||1);// 0=cheap(buy) .. 1=dear(up)
+    return t<0.5?`color-mix(in srgb,var(--buy) ${(1-t*2)*100}%, var(--brand))`:`color-mix(in srgb,var(--brand) ${(1-(t-0.5)*2)*100}%, var(--up))`;};
+  let html='<div class="heat"><div class="hlabel"></div>'+DOW.map(d=>`<div class="hlabel">${d}</div>`).join('');
+  for(let i=0;i<7;i++){html+=`<div class="hlabel">${DOW[i]}</div>`;for(let j=0;j<7;j++){const best=i===minij[0]&&j===minij[1];
+    html+=`<div class="hcell ${best?'best':''}" style="background:${col(g[i][j])}" aria-label="${DOW[i]} dep / ${DOW[j]} ret — ${money(g[i][j])}" title="${DOW[i]} dep / ${DOW[j]} ret — ${money(g[i][j])}">${best?'★':''}</div>`;}}
+  html+='</div><div class="heat-legend">cheaper <span class="heat-ramp"></span> dearer · ★ '+
+    `${DOW[minij[0]]} out / ${DOW[minij[1]]} back is cheapest (${money(min)})</div>`;
+  $('heatPanel').innerHTML=html;}
+function initFinder(){const fr=$('ff-route');
+  fr.innerHTML='<option value="all">all routes</option>'+Object.keys(ROUTES).map(k=>`<option value="${k}">${k.replace('-',' → ')}</option>`).join('');
+  fr.value='all';$('ff-price').value=2800;$('ff-stops').value='2';$('ff-sort').value='price';
+  ['ff-route','ff-stops','ff-price','ff-sort'].forEach(id=>$(id).oninput=drawFinder);drawFinder();}
+function drawFinder(){const rt=$('ff-route').value,st=+$('ff-stops').value,mp=+$('ff-price').value,so=$('ff-sort').value;
+  $('ff-pv').textContent=money(mp);
+  let res=FINDER.filter(f=>(rt==='all'||f.key===rt)&&f.stops<=st&&f.price<=mp);
+  res.sort((a,b)=>so==='price'?a.price-b.price:a.dep.localeCompare(b.dep));
+  $('finderCount').textContent=`${res.length} of ${FINDER.length} combos`;
+  $('finderRes').innerHTML=res.slice(0,10).map(f=>`<div class="fres">
+     <span class="minichip ${verdictFor(f.o,f.d,f.dep,f.len).sig}">${verdictFor(f.o,f.d,f.dep,f.len).sig}</span>
+     <span><b>${f.o} → ${f.d}</b> <span class="meta">· ${fmtD(f.dep)} – ${fmtD(f.ret)} · ${f.len}n · ${f.stops===0?'non-stop':f.stops+' stop'+(f.stops>1?'s':'')} · ${f.air}</span></span>
+     <span class="pr">${money(f.price)}</span></div>`).join('')||'<p style="font-size:13px;color:var(--muted);padding:12px 0">No combos match — loosen the filters.</p>';
+  $('finderRes').insertAdjacentHTML('beforeend','<p style="font-size:11.5px;color:var(--dim);margin-top:10px">In the live app this is the full ~1,900-itinerary grid loaded from <span class="mono">explore.json</span> — lazy-loaded only when you open the Lab.</p>');}
+function renderMarket(){const vs=Object.keys(ROUTES).map(k=>{const[o,d]=k.split('-');return {k,v:verdictFor(o,d,depDate(),21)};});
+  const cheapest=vs.reduce((a,b)=>b.v.now<a.v.now?b:a);
+  const drops=vs.map(x=>({k:x.k,pc:Math.round((x.v.story.at(-1)-x.v.story[0])/x.v.story[0]*100)})).reduce((a,b)=>b.pc<a.pc?b:a);
+  const months={};FINDER.forEach(f=>{(months[f.dep.slice(0,7)]??=[]).push(f.price);});
+  const cheapMonth=Object.entries(months).map(([m,a])=>[m,a.reduce((x,y)=>x+y,0)/a.length]).reduce((a,b)=>b[1]<a[1]?b:a);
+  const tiles=[['Cheapest route now',money(cheapest.v.now),cheapest.k.replace('-',' → ')],
+    ['Biggest 30-day drop',drops.pc+'%',drops.k.replace('-',' → ')],
+    ['Cheapest month',MON[+cheapMonth[0].slice(5)-1],'avg '+money(Math.round(cheapMonth[1]))],
+    ['Dataset',FINDER.length+' combos',Object.keys(ROUTES).length+' routes · '+new Set(Object.values(AIRLINES).flat()).size+' airlines']];
+  $('mkt').innerHTML=tiles.map(t=>`<div class="stile"><div class="v">${t[1]}</div><div class="k">${t[0]}</div><div style="font-size:11px;color:var(--muted);margin-top:4px">${t[2]}</div></div>`).join('');}
+
 /* ═══════════════ router ═══════════════════════════════════════════════════ */
-function route(){const watch=location.hash.startsWith('#/watch');
-  $('view-answer').classList.toggle('hidden',watch);
-  $('view-watch').classList.toggle('hidden',!watch);
-  $('tab-answer').classList.toggle('on',!watch);$('tab-watch').classList.toggle('on',watch);
-  if(watch)renderWatch();else renderAnswer();}
+function route(){const h=location.hash;
+  const view=h.startsWith('#/watch')?'watch':h.startsWith('#/lab')?'lab':'answer';
+  $('view-answer').classList.toggle('hidden',view!=='answer');
+  $('view-watch').classList.toggle('hidden',view!=='watch');
+  $('view-lab').classList.toggle('hidden',view!=='lab');
+  $('tab-answer').classList.toggle('on',view==='answer');
+  $('tab-watch').classList.toggle('on',view==='watch');
+  $('tab-lab').classList.toggle('on',view==='lab');
+  if(view==='watch')renderWatch();else if(view==='lab')renderLab();else renderAnswer();}
 document.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>{location.hash=b.dataset.go;});
 addEventListener('hashchange',route);
 
