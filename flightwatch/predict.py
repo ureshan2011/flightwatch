@@ -464,6 +464,8 @@ def backtests_by_route(df: pd.DataFrame, tolerance=0.03):
     Returns ``{route: summary}``. An itinerary with too little history is simply
     skipped; a route only appears once it has at least one graded call.
     """
+    if df is None or df.empty or "status" not in df.columns:
+        return {}
     daily = daily_min(df)
     if daily.empty:
         return {}

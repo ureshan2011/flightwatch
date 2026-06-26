@@ -49,9 +49,31 @@ jobs:
       - name: Collect fares and build dashboard
         # xvfb-run gives Chromium a virtual display; non-headless is less likely to
         # be soft-blocked by Google than pure headless.
+        # FARO_FIREBASE_CONFIG / FARO_FCM_VAPID_KEY are the PUBLIC Firebase web
+        # config (NOT secrets) -- set them as repo Variables (Settings -> Secrets
+        # and variables -> Actions -> Variables) to light up accounts/sync/alerts.
+        # Unset -> the page builds in demo (localStorage) mode, exactly as before.
         env:
           FLIGHTWATCH_HEADFUL: "1"
+          FARO_FIREBASE_CONFIG: ${{ vars.FARO_FIREBASE_CONFIG }}
+          FARO_FCM_VAPID_KEY: ${{ vars.FARO_FCM_VAPID_KEY }}
         run: xvfb-run -a python -m flightwatch all
+
+      - name: Publish route verdicts to Firestore (optional)
+        # Additive edge: writes the freshest per-route verdict to routes/* AFTER the
+        # CSV + dashboard build, so clients/the alert function read live data. It is
+        # a clean no-op unless FARO_FIREBASE_SERVICE_ACCOUNT (a GitHub SECRET holding
+        # the Admin service-account JSON) is set, and it never touches data/ or the
+        # commit step.
+        env:
+          FARO_FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FARO_FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          if [ -z "$FARO_FIREBASE_SERVICE_ACCOUNT" ]; then
+            echo "No Firebase service account secret set — skipping Firestore publish."
+            exit 0
+          fi
+          pip install firebase-admin
+          python -m flightwatch publish
 
       - name: Send alerts (no-op unless secrets are set)
         env:

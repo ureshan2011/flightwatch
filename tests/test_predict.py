@@ -59,3 +59,30 @@ def test_backtest_runs(synth):
     bt = P.backtest(synth(days=150, seed=5))
     assert bt and bt["n"] > 0 and 0 <= bt["hit_rate"] <= 100
     assert "series" in bt
+
+
+def test_backtests_by_route_shape(synth):
+    # Two corridors so the per-route split is exercised.
+    df = synth(itins=[("CHC", "CMB", "2026-09-01", "2026-09-22", 1200, 1),
+                      ("AKL", "DEL", "2026-10-03", "2026-10-24", 1600, 1)],
+               days=150, seed=7)
+    by = P.backtests_by_route(df)
+    assert "CHC-CMB" in by and "AKL-DEL" in by
+    for route, s in by.items():
+        assert set(s).issuperset(
+            {"calls", "right", "hit_rate", "saved_vs_searchday", "missed_cost"})
+        assert s["calls"] >= 0 and 0 <= s["right"] <= s["calls"]
+        # Accuracy is published only once the route has enough graded calls --
+        # never a fabricated percentage off a handful of decisions.
+        if s["calls"] >= P.MIN_CALLS_FOR_HITRATE:
+            assert s["hit_rate"] is None or 0 <= s["hit_rate"] <= 100
+        else:
+            assert s["hit_rate"] is None
+        assert isinstance(s["saved_vs_searchday"], int)
+    # The whole section must be JSON-serialisable for embedding in the payload.
+    import json
+    json.dumps(by)
+
+
+def test_backtests_by_route_empty():
+    assert P.backtests_by_route(pd.DataFrame()) == {}
