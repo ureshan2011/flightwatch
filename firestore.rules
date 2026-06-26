@@ -1,0 +1,30 @@
+rules_version = '2';
+// Faro Firestore security rules (redesign/FIREBASE.md §5).
+//
+//  routes/{route}          public read, server-only write  (the scan's Admin SDK
+//                          writer is the ONLY thing that writes verdicts here;
+//                          the Admin SDK bypasses these rules, clients cannot).
+//  users/{uid}/...         strictly the signed-in owner -- anonymous auth still
+//                          yields a real request.auth.uid, so even un-signed-in
+//                          visitors get a private, rules-protected trip list that
+//                          "upgrades" in place when they link a Google account.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    match /routes/{route} {
+      allow read: if true;
+      allow write: if false;                 // only the Admin-SDK scan writes here
+      match /fares/{fare} {
+        allow read: if true;
+        allow write: if false;
+      }
+    }
+
+    match /users/{uid} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+      match /trips/{trip} {
+        allow read, write: if request.auth != null && request.auth.uid == uid;
+      }
+    }
+  }
+}
