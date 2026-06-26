@@ -3,12 +3,15 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Faro · the Answer (UX prototype)</title>
-<meta name="description" content="Faro UX prototype — tell it your trip, get one honest verdict, pin it, get told when to buy.">
+<title>Faro · Answer + Watch (UX prototype)</title>
+<meta name="description" content="Faro UX prototype — tell it your trip, get one honest verdict, pin it, and get told when to buy. Firebase-ready Watch view.">
 <!-- ────────────────────────────────────────────────────────────────────────
-  PROTOTYPE — Answer view (redesign/UX_REVAMP.md).
+  PROTOTYPE — Answer + Watch (redesign/UX_REVAMP.md + redesign/FIREBASE.md).
   Self-contained, no build step, SAMPLE DATA only. Not the live app.
-  Deep-linkable: answer.html?o=CHC&d=CMB&dep=2026-09-04&ret=2026-09-25
+  Deep-linkable:  answer.html?o=CHC&d=CMB&dep=2026-09-04&len=21
+  Watch view:     answer.html#/watch
+  Firebase: runs in DEMO mode (localStorage) standalone. Set window.FARO_FIREBASE
+  to a real config and the same code paths talk to Auth + Firestore.
 ───────────────────────────────────────────────────────────────────────── -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -21,7 +24,7 @@
   --buy:#5fd08a;--buy-bg:rgba(95,208,138,.12);
   --wait:#E7B25A;--wait-bg:rgba(231,178,90,.13);
   --watch:#9b9384;--watch-bg:rgba(255,255,255,.06);
-  --down:#5fd08a;--up:#e0567d;
+  --down:#5fd08a;--up:#e0567d;--cloud:#6cb7ff;
   --shadow:0 14px 38px -18px rgba(0,0,0,.6);--shadow-lg:0 30px 66px -24px rgba(0,0,0,.72);
   --r-sm:10px;--r-md:14px;--r-lg:20px;--r-pill:999px;
 }
@@ -29,7 +32,7 @@ html[data-theme="light"]{
   --bg:#fbfaf7;--card:#ffffff;--card2:#f4f1ea;--ink:#161410;--muted:#5d5a52;--dim:#86827a;
   --line:#e8e3d8;--line2:#ded8c9;
   --buy-bg:rgba(34,150,94,.12);--wait-bg:rgba(196,140,40,.14);--watch-bg:rgba(0,0,0,.05);
-  --brand:#b07d1f;--brand2:#c4922b;--buy:#22965e;--down:#22965e;--up:#cc4a6f;
+  --brand:#b07d1f;--brand2:#c4922b;--buy:#22965e;--down:#22965e;--up:#cc4a6f;--cloud:#2f6bff;
   --shadow:0 14px 30px -20px rgba(40,33,15,.25);--shadow-lg:0 26px 60px -28px rgba(40,33,15,.30);
 }
 *{margin:0;box-sizing:border-box}
@@ -38,32 +41,46 @@ body{background:var(--bg);color:var(--ink);font-family:'Sora',system-ui,sans-ser
 .mono{font-family:'IBM Plex Mono',monospace;font-variant-numeric:tabular-nums}
 a{color:var(--brand);text-decoration:none}
 button{font-family:inherit;cursor:pointer}
+input,select{font-family:inherit}
 .aurora{position:fixed;inset:0;z-index:-1;background:
   radial-gradient(900px 520px at 50% -14%,rgba(231,178,90,.14) 0,rgba(231,178,90,.04) 44%,transparent 72%),var(--bg)}
-.wrap{max-width:760px;margin:0 auto;padding:0 18px 96px}
+.wrap{max-width:760px;margin:0 auto;padding:0 18px 110px}
+.hidden{display:none!important}
 
 /* ── shell ─────────────────────────────────────────────────────────────── */
 .shell{position:sticky;top:0;z-index:20;backdrop-filter:blur(10px);
   background:color-mix(in srgb,var(--bg) 82%,transparent);border-bottom:1px solid var(--line)}
-.shell-in{max-width:760px;margin:0 auto;display:flex;align-items:center;gap:12px;
-  padding:11px 18px;flex-wrap:wrap}
+.shell-in{max-width:760px;margin:0 auto;display:flex;align-items:center;gap:12px;padding:11px 18px;flex-wrap:wrap}
 .brand{display:flex;align-items:center;gap:9px;font-weight:800;letter-spacing:.2px}
 .mark{width:24px;height:24px;border-radius:7px;background:linear-gradient(135deg,var(--brand),var(--brand2));
   display:grid;place-items:center;color:#1a1305;font-weight:800;font-size:14px}
 .proto-tag{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);
   border:1px solid var(--line2);border-radius:var(--r-pill);padding:2px 8px}
+.tabs{display:flex;gap:4px;background:var(--card);border:1px solid var(--line2);border-radius:var(--r-pill);padding:3px}
+.tab{border:none;background:none;color:var(--muted);font-size:13px;font-weight:600;padding:6px 14px;border-radius:var(--r-pill)}
+.tab.on{background:var(--brand);color:#1a1305}
+.tab .badge{display:inline-block;min-width:17px;margin-left:5px;padding:0 4px;border-radius:9px;font-size:11px;
+  background:color-mix(in srgb,var(--ink) 12%,transparent);font-family:'IBM Plex Mono',monospace}
+.tab.on .badge{background:rgba(0,0,0,.18)}
 .spacer{flex:1}
 .outlook{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted)}
 .outlook b{color:var(--ink)}
-.iconbtn{background:var(--card);border:1px solid var(--line2);color:var(--ink);
-  width:34px;height:34px;border-radius:10px;display:grid;place-items:center;font-size:15px}
-.trips-pill{background:var(--card);border:1px solid var(--line2);color:var(--ink);
-  border-radius:var(--r-pill);padding:6px 12px;font-size:12.5px;font-weight:600}
-.trips-pill b{color:var(--brand)}
+.iconbtn{background:var(--card);border:1px solid var(--line2);color:var(--ink);width:34px;height:34px;
+  border-radius:10px;display:grid;place-items:center;font-size:15px}
+
+/* ── identity strip ────────────────────────────────────────────────────── */
+.idstrip{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:18px 0 2px;padding:10px 14px;
+  border:1px solid var(--line2);border-radius:var(--r-md);background:var(--card);font-size:12.5px;color:var(--muted)}
+.iddot{width:8px;height:8px;border-radius:50%}
+.iddot.anon{background:var(--dim)} .iddot.cloud{background:var(--cloud);box-shadow:0 0 0 3px color-mix(in srgb,var(--cloud) 25%,transparent)}
+.idstrip b{color:var(--ink)}
+.btn-sm{margin-left:auto;border:1px solid var(--line2);background:var(--card2);color:var(--ink);
+  border-radius:var(--r-pill);padding:6px 13px;font-size:12.5px;font-weight:600;display:inline-flex;align-items:center;gap:7px}
+.btn-sm.cloud{border-color:var(--cloud);color:var(--cloud)}
+.gicon{width:14px;height:14px;border-radius:50%;background:conic-gradient(#ea4335 0 25%,#fbbc05 0 50%,#34a853 0 75%,#4285f4 0)}
 
 /* ── composer ──────────────────────────────────────────────────────────── */
-.kicker{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--brand);
-  font-weight:700;margin:30px 0 10px}
+.kicker{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--brand);font-weight:700;margin:24px 0 10px}
 .composer{background:var(--card);border:1px solid var(--line2);border-radius:var(--r-lg);
   padding:14px;display:grid;grid-template-columns:1fr 1fr;gap:10px;box-shadow:var(--shadow)}
 .field{display:flex;flex-direction:column;gap:4px}
@@ -72,11 +89,9 @@ button{font-family:inherit;cursor:pointer}
   border-radius:var(--r-sm);padding:10px 12px;font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:500;
   background-image:linear-gradient(45deg,transparent 50%,var(--muted) 50%),linear-gradient(135deg,var(--muted) 50%,transparent 50%);
   background-position:calc(100% - 16px) 18px,calc(100% - 11px) 18px;background-size:5px 5px,5px 5px;background-repeat:no-repeat}
-.flexrow{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:10px;
-  font-size:12.5px;color:var(--muted);padding-top:2px}
+.flexrow{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:12.5px;color:var(--muted);padding-top:2px}
 .flexrow label{display:flex;align-items:center;gap:7px;cursor:pointer}
-.linkbtn{background:none;border:1px solid var(--line2);color:var(--muted);border-radius:var(--r-pill);
-  padding:5px 11px;font-size:12px;display:inline-flex;align-items:center;gap:6px}
+.linkbtn{background:none;border:1px solid var(--line2);color:var(--muted);border-radius:var(--r-pill);padding:5px 11px;font-size:12px;display:inline-flex;align-items:center;gap:6px}
 .linkbtn:hover{color:var(--ink);border-color:var(--brand)}
 
 /* ── verdict ───────────────────────────────────────────────────────────── */
@@ -84,78 +99,90 @@ button{font-family:inherit;cursor:pointer}
   padding:22px;box-shadow:var(--shadow-lg);position:relative;overflow:hidden}
 .verdict::before{content:"";position:absolute;inset:0 0 auto 0;height:3px}
 .verdict.s-BUY::before{background:var(--buy)} .verdict.s-WAIT::before{background:var(--wait)} .verdict.s-WATCH::before{background:var(--watch)}
-.ctx{font-size:12.5px;color:var(--muted)}
-.ctx b{color:var(--ink)}
+.ctx{font-size:12.5px;color:var(--muted)} .ctx b{color:var(--ink)}
 .sigrow{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin:8px 0 2px}
 .signal{font-size:46px;font-weight:800;letter-spacing:-1px;line-height:1}
 .s-BUY .signal{color:var(--buy)} .s-WAIT .signal{color:var(--wait)} .s-WATCH .signal{color:var(--watch)}
-.window{display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:600;
-  background:var(--card2);border:1px solid var(--line2);border-radius:var(--r-pill);padding:6px 13px}
+.window{display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:600;background:var(--card2);
+  border:1px solid var(--line2);border-radius:var(--r-pill);padding:6px 13px}
 .window b{font-family:'IBM Plex Mono',monospace}
+.live{display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--cloud)}
+.live .dot{width:7px;height:7px;border-radius:50%;background:var(--cloud);animation:pulse 1.8s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
 .reason{font-size:18px;margin:10px 0 16px;max-width:46ch}
-/* confidence */
 .conf{display:flex;align-items:center;gap:10px;margin-bottom:18px;font-size:12.5px;color:var(--muted)}
-.track{display:flex;gap:3px}
-.pip{width:22px;height:7px;border-radius:3px;background:var(--line2)}
+.track{display:flex;gap:3px}.pip{width:22px;height:7px;border-radius:3px;background:var(--line2)}
 .s-BUY .pip.on{background:var(--buy)} .s-WAIT .pip.on{background:var(--wait)} .s-WATCH .pip.on{background:var(--watch)}
-/* evidence numbers */
 .nums{display:flex;gap:22px;flex-wrap:wrap;padding:14px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
 .num .v{font-family:'IBM Plex Mono',monospace;font-size:22px;font-weight:600}
-.num .v.move{font-size:22px}
 .num .v.move.dn{color:var(--down)} .num .v.move.up{color:var(--up)}
 .num .k{font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.1em;margin-top:2px}
 .arrow{color:var(--dim);align-self:center;font-size:18px}
-/* CTAs */
 .cta{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}
-.btn{border-radius:var(--r-md);padding:13px 18px;font-size:14.5px;font-weight:700;border:1px solid transparent;
-  display:inline-flex;align-items:center;gap:8px}
+.btn{border-radius:var(--r-md);padding:13px 18px;font-size:14.5px;font-weight:700;border:1px solid transparent;display:inline-flex;align-items:center;gap:8px}
 .btn-primary{background:linear-gradient(135deg,var(--brand),var(--brand2));color:#1a1305}
 .btn-ghost{background:var(--card2);border-color:var(--line2);color:var(--ink)}
 .btn-pin.on{background:var(--buy-bg);border-color:var(--buy);color:var(--buy)}
-.auditlink{margin-left:auto;align-self:center;background:none;border:none;color:var(--muted);
-  font-size:13px;display:inline-flex;align-items:center;gap:6px}
+.auditlink{margin-left:auto;align-self:center;background:none;border:none;color:var(--muted);font-size:13px;display:inline-flex;align-items:center;gap:6px}
 .auditlink:hover{color:var(--ink)}
-.audit{margin-top:14px;border-top:1px dashed var(--line2);padding-top:14px;display:none;
-  font-size:14px;color:var(--muted)}
+.audit{margin-top:14px;border-top:1px dashed var(--line2);padding-top:14px;display:none;font-size:14px;color:var(--muted)}
 .audit.open{display:block;animation:fade .3s ease}
 .audit ul{margin:8px 0 0;padding-left:18px;display:grid;gap:5px}
 @keyframes fade{from{opacity:0;transform:translateY(-4px)}to{opacity:1}}
 
-/* ── fare weather strip ────────────────────────────────────────────────── */
-.weather{margin-top:14px;background:var(--card);border:1px solid var(--line2);border-radius:var(--r-lg);padding:16px 18px}
-.wx-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px}
-.wx-head h3{font-size:14px;font-weight:600}.wx-head span{font-size:12px;color:var(--dim)}
+/* ── fare weather + story ──────────────────────────────────────────────── */
+.panel{margin-top:14px;background:var(--card);border:1px solid var(--line2);border-radius:var(--r-lg);padding:16px 18px}
+.panel-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px}
+.panel-head h3{font-size:14px;font-weight:600}.panel-head span{font-size:12px;color:var(--dim)}
 .wx-cells{display:grid;grid-template-columns:repeat(7,1fr);gap:7px}
 .wx{border-radius:var(--r-sm);padding:9px 4px;text-align:center;border:1px solid var(--line2);background:var(--card2)}
 .wx .d{font-size:10.5px;color:var(--dim);text-transform:uppercase;letter-spacing:.06em}
 .wx .p{font-family:'IBM Plex Mono',monospace;font-size:12.5px;margin-top:5px;font-weight:500}
 .wx.best{border-color:var(--brand);box-shadow:0 0 0 1px var(--brand) inset}
-.wx.best .tag{font-size:9px;color:var(--brand);margin-top:3px;font-weight:700;letter-spacing:.04em}
+.wx.best .tag{font-size:9px;color:var(--brand);margin-top:3px;font-weight:700}
 .wx .bar{height:4px;border-radius:3px;margin-top:6px}
-
-/* ── fare story spark ──────────────────────────────────────────────────── */
-.story{margin-top:14px;background:var(--card);border:1px solid var(--line2);border-radius:var(--r-lg);padding:16px 18px}
-.story-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px}
-.story-head h3{font-size:14px;font-weight:600}.story-head span{font-size:12px;color:var(--dim)}
 svg.spark{width:100%;height:90px;display:block}
+.trust{margin-top:14px;font-size:12.5px;color:var(--dim);line-height:1.7;text-align:center}.trust b{color:var(--muted)}
 
-/* ── trust line ────────────────────────────────────────────────────────── */
-.trust{margin-top:14px;font-size:12.5px;color:var(--dim);line-height:1.7;text-align:center}
-.trust b{color:var(--muted)}
-.note{margin-top:34px;padding:14px 16px;border:1px dashed var(--line2);border-radius:var(--r-md);
-  font-size:12.5px;color:var(--dim);line-height:1.65}
+/* ── watch view ────────────────────────────────────────────────────────── */
+.watch-head{display:flex;justify-content:space-between;align-items:center;margin:6px 0 4px}
+.watch-head h2{font-size:20px;font-weight:700}
+.simbtn{border:1px solid var(--cloud);color:var(--cloud);background:none;border-radius:var(--r-pill);padding:7px 13px;font-size:12.5px;font-weight:600}
+.empty{margin-top:18px;padding:34px 22px;text-align:center;border:1px dashed var(--line2);border-radius:var(--r-lg);color:var(--muted)}
+.tcard{margin-top:14px;background:var(--card);border:1px solid var(--line2);border-radius:var(--r-lg);padding:16px 18px;
+  border-left:3px solid var(--brand)}
+.tc-top{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.tc-route{font-weight:700;font-size:16px}
+.chip{font-size:11.5px;font-weight:700;padding:3px 10px;border-radius:var(--r-pill);letter-spacing:.02em}
+.chip.BUY{background:var(--buy-bg);color:var(--buy)} .chip.WAIT{background:var(--wait-bg);color:var(--wait)} .chip.WATCH{background:var(--watch-bg);color:var(--watch)}
+.tc-now{margin-left:auto;font-family:'IBM Plex Mono',monospace;font-weight:600}
+.tc-sub{font-size:12.5px;color:var(--muted);margin-top:5px}
+.tc-alerts{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:13px;padding-top:13px;border-top:1px solid var(--line)}
+.atog{border:1px solid var(--line2);background:var(--card2);color:var(--muted);border-radius:var(--r-pill);
+  padding:6px 12px;font-size:12.5px;font-weight:600;display:inline-flex;align-items:center;gap:6px}
+.atog.on{border-color:var(--buy);color:var(--buy);background:var(--buy-bg)}
+.target{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted)}
+.target input{width:78px;background:var(--card2);border:1px solid var(--line2);color:var(--ink);border-radius:var(--r-sm);
+  padding:6px 8px;font-family:'IBM Plex Mono',monospace;font-size:12.5px}
+.tc-actions{margin-left:auto;display:flex;gap:8px}
+.txt-link{background:none;border:none;color:var(--dim);font-size:12.5px}.txt-link:hover{color:var(--up)}
+.fb-explain{margin-top:26px;border:1px solid var(--line2);border-radius:var(--r-md);overflow:hidden}
+.fb-explain summary{cursor:pointer;padding:13px 16px;font-size:13px;font-weight:600;color:var(--cloud);list-style:none}
+.fb-explain summary::-webkit-details-marker{display:none}
+.fb-explain .body{padding:2px 16px 16px;font-size:12.5px;color:var(--muted);line-height:1.7}
+.fb-explain code{font-family:'IBM Plex Mono',monospace;color:var(--ink);background:var(--card2);padding:1px 5px;border-radius:5px}
 
-/* ── toast ─────────────────────────────────────────────────────────────── */
-#toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(20px);
-  background:var(--ink);color:var(--bg);font-weight:600;font-size:13.5px;padding:11px 18px;border-radius:var(--r-pill);
-  box-shadow:var(--shadow-lg);opacity:0;pointer-events:none;transition:.28s;z-index:50}
+.note{margin-top:30px;padding:14px 16px;border:1px dashed var(--line2);border-radius:var(--r-md);font-size:12.5px;color:var(--dim);line-height:1.65}
+
+#toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(20px);background:var(--ink);color:var(--bg);
+  font-weight:600;font-size:13.5px;padding:11px 18px;border-radius:var(--r-pill);box-shadow:var(--shadow-lg);max-width:88vw;text-align:center;
+  opacity:0;pointer-events:none;transition:.28s;z-index:50}
 #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 
 @media(max-width:560px){
-  .composer{grid-template-columns:1fr 1fr}
-  .signal{font-size:40px}.reason{font-size:16.5px}
-  .nums{gap:16px}.num .v{font-size:19px}
+  .signal{font-size:40px}.reason{font-size:16.5px}.nums{gap:16px}.num .v{font-size:19px}
   .auditlink{margin-left:0;width:100%;justify-content:flex-start;order:5}
+  .shell-in{gap:8px}.outlook{order:5;width:100%}
 }
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
@@ -166,239 +193,317 @@ svg.spark{width:100%;height:90px;display:block}
 <header class="shell">
   <div class="shell-in">
     <div class="brand"><span class="mark">F</span>Faro <span class="proto-tag">prototype</span></div>
+    <div class="tabs">
+      <button class="tab" id="tab-answer" data-go="#/">Answer</button>
+      <button class="tab" id="tab-watch" data-go="#/watch">Watch <span class="badge" id="tabN">0</span></button>
+    </div>
     <div class="spacer"></div>
     <div class="outlook" id="outlook"></div>
-    <button class="trips-pill" id="tripsPill" title="Your watched trips">My trips <b id="tripsN">0</b></button>
     <button class="iconbtn" id="themeBtn" title="Toggle theme">☾</button>
   </div>
 </header>
 
 <main class="wrap">
-  <div class="kicker">Tell me your trip</div>
-  <div class="composer">
-    <div class="field"><label>From</label>
-      <select id="f-o"></select></div>
-    <div class="field"><label>To</label>
-      <select id="f-d"></select></div>
-    <div class="field"><label>Leave around</label>
-      <select id="f-dep"></select></div>
-    <div class="field"><label>Trip length</label>
-      <select id="f-len"></select></div>
-    <div class="flexrow">
-      <label><input type="checkbox" id="f-flex" checked> dates flexible ±3 days</label>
-      <button class="linkbtn" id="copyLink">🔗 copy link to this trip</button>
+  <!-- identity strip (shared) -->
+  <div class="idstrip" id="idstrip"></div>
+
+  <!-- ───────── ANSWER VIEW ───────── -->
+  <section id="view-answer">
+    <div class="kicker">Tell me your trip</div>
+    <div class="composer">
+      <div class="field"><label>From</label><select id="f-o"></select></div>
+      <div class="field"><label>To</label><select id="f-d"></select></div>
+      <div class="field"><label>Leave around</label><select id="f-dep"></select></div>
+      <div class="field"><label>Trip length</label><select id="f-len"></select></div>
+      <div class="flexrow">
+        <label><input type="checkbox" id="f-flex" checked> dates flexible ±3 days</label>
+        <button class="linkbtn" id="copyLink">🔗 copy link to this trip</button>
+      </div>
     </div>
-  </div>
+    <div id="verdict"></div>
+    <div class="panel" id="weather"></div>
+    <div class="panel" id="story"></div>
+    <p class="trust" id="trust"></p>
+  </section>
 
-  <!-- verdict (rendered) -->
-  <section id="verdict"></section>
-
-  <!-- fare weather -->
-  <section class="weather" id="weather"></section>
-
-  <!-- fare story -->
-  <section class="story" id="story"></section>
-
-  <p class="trust" id="trust"></p>
+  <!-- ───────── WATCH VIEW ───────── -->
+  <section id="view-watch" class="hidden">
+    <div class="watch-head">
+      <h2>My trips</h2>
+      <button class="simbtn" id="simBtn">⟳ simulate a new scan</button>
+    </div>
+    <p style="font-size:12.5px;color:var(--muted);margin-top:2px">Pinned trips, kept in sync. We watch each one and tell you the moment it's time to buy.</p>
+    <div id="tripList"></div>
+    <details class="fb-explain">
+      <summary>☁ How this maps to Firebase (what's real vs simulated) ▾</summary>
+      <div class="body">
+        This prototype runs in <b>demo mode</b> — trips live in <code>localStorage</code> and alerts are simulated.
+        Set <code>window.FARO_FIREBASE</code> to a real config and the same code paths become:
+        <br>• <b>Identity</b> → Firebase <code>Auth</code> (anonymous uid, upgradable to Google).
+        <br>• <b>Pinned trips</b> → Firestore <code>users/{uid}/trips</code>, synced across devices via <code>onSnapshot</code>.
+        <br>• <b>Alert toggles + price target</b> → fields on each trip doc, read by a scheduled <code>Cloud Function</code> that
+        pushes <code>FCM</code> / Telegram / email when <i>your</i> trip hits BUY, a new low, or a closing window.
+        <br>• <b>"Simulate a new scan"</b> stands in for the scan writing fresh verdicts to <code>routes/*</code> — which would
+        live-update these cards. See <code>redesign/FIREBASE.md</code>.
+      </div>
+    </details>
+  </section>
 
   <div class="note">
-    <b style="color:var(--muted)">This is a UX prototype</b> for the redesign in
-    <span class="mono">redesign/UX_REVAMP.md</span> — the <b style="color:var(--muted)">Answer view</b>: a trip
-    composer as the front door, the verdict upgraded with a <i>best-buy window</i> + confidence-with-provenance,
-    a “fare weather” forecast strip, a pinnable Watch, and a deep-linkable URL. Numbers are
-    <b style="color:var(--muted)">sample data</b>, not live fares. Change the trip above, pin one, copy its link, toggle the theme.
+    <b style="color:var(--muted)">UX prototype</b> for <span class="mono">redesign/UX_REVAMP.md</span> +
+    <span class="mono">redesign/FIREBASE.md</span>. Two views: the deep-linkable <b style="color:var(--muted)">Answer</b>
+    (trip composer · best-buy window · confidence-with-provenance · fare-weather) and a Firebase-ready
+    <b style="color:var(--muted)">Watch</b> (cloud identity · synced pinned trips · per-trip alert channels + price target ·
+    live updates). <b style="color:var(--muted)">Sample data</b>, not live fares.
   </div>
 </main>
 
 <div id="toast"></div>
 
 <script>
-/* ── sample dataset (stands in for Faro's recs/focus payload) ───────────── */
-const AIRPORTS={CHC:"Christchurch",AKL:"Auckland",CMB:"Colombo",DEL:"Delhi",BOM:"Mumbai",SIN:"Singapore"};
+/* ═══════════════ sample dataset (stands in for Faro's recs/focus payload) ═══ */
+const AIRPORTS={CHC:"Christchurch",AKL:"Auckland",CMB:"Colombo",DEL:"Delhi",BOM:"Mumbai"};
 const MONTHS=[["2026-08","Aug 2026"],["2026-09","Sep 2026"],["2026-10","Oct 2026"],["2026-11","Nov 2026"]];
 const LENGTHS=[[21,"~3 weeks"],[28,"~4 weeks"],[14,"~2 weeks"],[35,"~5 weeks"]];
-// per-route base verdicts
 const ROUTES={
-  "CHC-CMB":{sig:"WAIT",conf:78,now:2140,low:1960,win:9,obs:140,hit:71,carrier:"Singapore Airlines (via SIN)",
-    out:"falling",story:seed(2330,2140,30,-1),
+  "CHC-CMB":{sig:"WAIT",conf:78,now:2140,low:1960,win:9,obs:140,hit:71,out:"falling",story:seed(2330,2140,30,-1),
     reason:"Prices have eased 6% over the last fortnight and the model expects another leg down before they firm up for September departures.",
     why:["Current fare sits 9% above this route’s 90-day low.","Forecast band points down for ~2 more weeks, then flattens.","Drop probability in the next 14 days: 64%."]},
-  "AKL-CMB":{sig:"BUY",conf:82,now:1890,low:1890,win:0,obs:210,hit:74,carrier:"Sri Lankan / SQ",
-    out:"low",story:seed(2080,1890,30,-0.6),
+  "AKL-CMB":{sig:"BUY",conf:82,now:1890,low:1890,win:0,obs:210,hit:74,out:"low",story:seed(2080,1890,30,-0.6),
     reason:"This is the lowest fare we’ve recorded in 6 weeks and the curve is turning up — booking now beats the forecast.",
     why:["At/below the 90-day low.","Forecast low equals today — no expected saving from waiting.","Backtest: BUY calls on this route paid off 74% of the time."]},
-  "AKL-DEL":{sig:"WATCH",conf:54,now:1620,low:1560,win:null,obs:48,hit:null,carrier:"Air India / SQ",
-    out:"steady",story:seed(1660,1620,22,-0.2),thin:true,
+  "AKL-DEL":{sig:"WATCH",conf:54,now:1620,low:1560,win:null,obs:48,hit:null,out:"steady",story:seed(1660,1620,22,-0.2),thin:true,
     reason:"Still learning this route — only 48 observations so far, so we’re holding a low-confidence WATCH rather than guessing.",
     why:["Thin history (48 obs) — not enough for a calibrated call yet.","No strong directional signal in the current curve.","We’ll upgrade to BUY/WAIT once the booking curve fills in."]},
-  "AKL-BOM":{sig:"WAIT",conf:66,now:1705,low:1590,win:12,obs:96,hit:63,carrier:"Air India / SQ",
-    out:"falling",story:seed(1820,1705,28,-0.7),
+  "AKL-BOM":{sig:"WAIT",conf:66,now:1705,low:1590,win:12,obs:96,hit:63,out:"falling",story:seed(1820,1705,28,-0.7),
     reason:"A modest dip is likely over the next ~12 days; waiting has a decent shot at ~7% off.",
     why:["Fare is mid-range vs the route’s own band.","Forecast eases ~$115 then recovers.","Drop probability next 14 days: 58%."]},
 };
-function seed(start,end,n,drift){const a=[];let v=start;for(let i=0;i<n;i++){
-  const t=i/(n-1);const noise=Math.sin(i*0.9)*((start-end)*0.10);
-  v=start+(end-start)*t+noise+drift*Math.sin(i*0.5)*6;a.push(Math.round(v));}return a;}
-const CUR="NZD";
-
-/* ── state + url ────────────────────────────────────────────────────────── */
-const qs=new URLSearchParams(location.search);
-const state={o:qs.get('o')||'CHC',d:qs.get('d')||'CMB',
-  depMonth:(qs.get('dep')||'2026-09-04').slice(0,7),len:+(qs.get('len')||21),
-  flex:qs.get('flex')!=='0'};
-if(!ROUTES[state.o+'-'+state.d]){state.o='CHC';state.d='CMB';}
-
-/* ── build composer ─────────────────────────────────────────────────────── */
-function opt(v,t,sel){return `<option value="${v}"${sel?' selected':''}>${t}</option>`;}
+function seed(start,end,n,drift){const a=[];let v=start;for(let i=0;i<n;i++){const t=i/(n-1);
+  const noise=Math.sin(i*0.9)*((start-end)*0.10);v=start+(end-start)*t+noise+drift*Math.sin(i*0.5)*6;a.push(Math.round(v));}return a;}
+const CUR="NZD";const money=n=>CUR+' '+n.toLocaleString('en-NZ');
 const origins=[...new Set(Object.keys(ROUTES).map(r=>r.split('-')[0]))];
 const dests=[...new Set(Object.keys(ROUTES).map(r=>r.split('-')[1]))];
+
+/* ═══════════════ FaroStore — the Firebase data-layer abstraction ═══════════
+   DEMO mode (default): localStorage + simulated identity/alerts.
+   CLOUD mode (window.FARO_FIREBASE set): same API, backed by Auth + Firestore.
+   The UI only ever calls Store.*; swapping the backend changes nothing above. */
+const CFG=window.FARO_FIREBASE||null;
+const Store={
+  cloud:!!CFG, user:null, _trips:[], _subs:[], _scan:0,
+  async init(){
+    if(this.cloud){ await this._initCloud(); }
+    else{
+      // anonymous-by-default identity, persisted locally (mimics anon Auth uid)
+      this.user=JSON.parse(localStorage.getItem('faro.proto.user')||'null')||{uid:'anon-'+Math.random().toString(36).slice(2,8),anon:true};
+      localStorage.setItem('faro.proto.user',JSON.stringify(this.user));
+      this._trips=JSON.parse(localStorage.getItem(this._key())||'[]');
+    }
+  },
+  _key(){return 'faro.proto.trips.'+(this.user?.email||this.user?.uid||'anon');},
+  _persist(){ if(!this.cloud) localStorage.setItem(this._key(),JSON.stringify(this._trips)); this._emit(); },
+  onChange(cb){this._subs.push(cb);cb(this._trips,this.user);},          // ~ Firestore onSnapshot
+  // defer to next tick so a mutation fired from an input's change/blur can't
+  // re-render (and remove) the node mid-event
+  _emit(){setTimeout(()=>this._subs.forEach(cb=>cb(this._trips,this.user)),0);},
+  trips(){return this._trips;}, scanOffset(){return this._scan*-42;},
+  tripId(t){return `${t.o}-${t.d}-${t.dep}-${t.len}`;},
+  isWatched(t){const id=this.tripId(t);return this._trips.some(x=>x.id===id);},
+  async pin(t){const id=this.tripId(t);
+    if(this._trips.some(x=>x.id===id)){this._trips=this._trips.filter(x=>x.id!==id);}
+    else{this._trips.push({id,...t,alerts:{push:true,telegram:false,email:false},target:null,lastSig:null});}
+    this._persist();},                                                   // ~ setDoc / deleteDoc
+  async remove(id){this._trips=this._trips.filter(x=>x.id!==id);this._persist();},
+  async setAlert(id,ch,on){const t=this._trips.find(x=>x.id===id);if(t){t.alerts[ch]=on;this._persist();}},
+  async setTarget(id,v){const t=this._trips.find(x=>x.id===id);if(t){t.target=v||null;this._persist();}},
+  async signIn(){                                                        // ~ signInWithPopup(Google) + linkWithPopup
+    if(this.cloud){return this._cloudSignIn();}
+    const prev=this._trips;                                             // demo: carry anon trips into the account
+    this.user={uid:'u-demo',email:'you@gmail.com',name:'You',anon:false};
+    localStorage.setItem('faro.proto.user',JSON.stringify(this.user));
+    const existing=JSON.parse(localStorage.getItem(this._key())||'[]');
+    const ids=new Set(existing.map(t=>t.id));this._trips=existing.concat(prev.filter(t=>!ids.has(t.id)));
+    this._persist();this._emit();},
+  async signOut(){
+    if(this.cloud){return this._cloudSignOut();}
+    this.user={uid:'anon-'+Math.random().toString(36).slice(2,8),anon:true};
+    localStorage.setItem('faro.proto.user',JSON.stringify(this.user));
+    this._trips=JSON.parse(localStorage.getItem(this._key())||'[]');this._emit();},
+  simulateScan(){this._scan++;this._emit();},                            // ~ scan writes routes/* → onSnapshot fires
+  /* — cloud backend (only runs when a real config is provided) — */
+  async _initCloud(){
+    const A=await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js');
+    const Au=await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js');
+    const F=await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
+    this._app=A.initializeApp(CFG);this._auth=Au.getAuth();this._db=F.getFirestore();this._F=F;this._Au=Au;
+    Au.onAuthStateChanged(this._auth,async u=>{
+      if(!u){await Au.signInAnonymously(this._auth);return;}
+      this.user={uid:u.uid,email:u.email,name:u.displayName,anon:u.isAnonymous};
+      F.onSnapshot(F.collection(this._db,`users/${u.uid}/trips`),snap=>{
+        this._trips=snap.docs.map(d=>({id:d.id,...d.data()}));this._emit();});
+    });
+  },
+  async _cloudSignIn(){const p=new this._Au.GoogleAuthProvider();
+    try{await this._Au.linkWithPopup(this._auth.currentUser,p);}catch(e){await this._Au.signInWithPopup(this._auth,p);}},
+  async _cloudSignOut(){await this._Au.signOut(this._auth);},
+};
+/* In CLOUD mode pin/remove/setAlert/setTarget would write Firestore docs; the
+   onSnapshot listener above then re-emits. Kept localStorage in demo for clarity. */
+
+/* ═══════════════ verdict computation ══════════════════════════════════════ */
+function jitter(o,d,dep,len){let h=0;const s=o+d+dep+len;for(const c of s)h=(h*31+c.charCodeAt(0))%997;return (h%140)-70;}
+function verdictFor(o,d,dep,len){const R=ROUTES[o+'-'+d];if(!R)return null;
+  const j=jitter(o,d,dep,len)+Store.scanOffset();
+  const now=R.now+j, low=Math.min(R.low+Math.round(j*0.6),now);
+  return {...R,o,d,dep,len,now,low,movePct:Math.round((low-now)/now*100)};}
+
+/* ═══════════════ state + url (Answer view) ════════════════════════════════ */
+const qs=new URLSearchParams(location.search);
+const A={o:qs.get('o')||'CHC',d:qs.get('d')||'CMB',depMonth:(qs.get('dep')||'2026-09-04').slice(0,7),
+  len:+(qs.get('len')||21),flex:qs.get('flex')!=='0'};
+if(!ROUTES[A.o+'-'+A.d]){A.o='CHC';A.d='CMB';}
+const depDate=()=>A.depMonth+'-04';
+function retDate(){const x=new Date(depDate());x.setDate(x.getDate()+A.len);return x.toISOString().slice(0,10);}
+const MON=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const fmtD=iso=>{const[y,m,d]=iso.split('-');return `${+d} ${MON[+m-1]}`;};
+function syncURL(){const p=new URLSearchParams({o:A.o,d:A.d,dep:depDate(),len:A.len,flex:A.flex?1:0});
+  history.replaceState(null,'',location.pathname+'?'+p+location.hash);}
+
+/* ═══════════════ composer ═════════════════════════════════════════════════ */
+const opt=(v,t,sel)=>`<option value="${v}"${sel?' selected':''}>${t}</option>`;
 function fillComposer(){
-  document.getElementById('f-o').innerHTML=origins.map(o=>opt(o,`${o} · ${AIRPORTS[o]}`,o===state.o)).join('');
-  document.getElementById('f-d').innerHTML=dests.map(d=>opt(d,`${d} · ${AIRPORTS[d]}`,d===state.d)).join('');
-  document.getElementById('f-dep').innerHTML=MONTHS.map(m=>opt(m[0],m[1],m[0]===state.depMonth)).join('');
-  document.getElementById('f-len').innerHTML=LENGTHS.map(l=>opt(l[0],l[1],l[0]===state.len)).join('');
-  document.getElementById('f-flex').checked=state.flex;
-}
-function depDate(){return state.depMonth+'-04';}
-function retDate(){const dep=new Date(depDate());dep.setDate(dep.getDate()+state.len);return dep.toISOString().slice(0,10);}
-function fmtD(iso){const[y,m,d]=iso.split('-');return `${+d} ${["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][+m-1]}`;}
-function syncURL(){const p=new URLSearchParams({o:state.o,d:state.d,dep:depDate(),len:state.len,flex:state.flex?1:0});
-  history.replaceState(null,'',location.pathname+'?'+p);}
+  f_o.innerHTML=origins.map(o=>opt(o,`${o} · ${AIRPORTS[o]}`,o===A.o)).join('');
+  f_d.innerHTML=dests.map(d=>opt(d,`${d} · ${AIRPORTS[d]}`,d===A.d)).join('');
+  f_dep.innerHTML=MONTHS.map(m=>opt(m[0],m[1],m[0]===A.depMonth)).join('');
+  f_len.innerHTML=LENGTHS.map(l=>opt(l[0],l[1],l[0]===A.len)).join('');
+  f_flex.checked=A.flex;}
+const $=id=>document.getElementById(id);
+const f_o=$('f-o'),f_d=$('f-d'),f_dep=$('f-dep'),f_len=$('f-len'),f_flex=$('f-flex');
 
-/* deterministic per-date nudge so changing dates feels alive */
-function jitter(){let h=0;const s=state.o+state.d+depDate()+state.len;for(const c of s)h=(h*31+c.charCodeAt(0))%997;return (h%140)-70;}
-
-/* ── render ─────────────────────────────────────────────────────────────── */
-const money=n=>CUR+' '+n.toLocaleString('en-NZ');
-function render(){
-  const key=state.o+'-'+state.d, R=ROUTES[key];
-  const j=jitter(), now=R.now+j, low=Math.min(R.low+Math.round(j*0.6),now);
-  const movePct=Math.round((low-now)/now*100);
-  // outlook
-  const oi={falling:["▼","falling",'var(--down)'],low:["◆","low & firming",'var(--brand)'],steady:["◆","steady",'var(--muted)']}[R.out];
-  document.getElementById('outlook').innerHTML=`<span style="color:${oi[2]}">${oi[0]}</span> outlook: <b>${oi[1]}</b>`;
-
-  // window text
-  let win;
-  if(R.sig==='BUY') win=`<span class="window">⟳ best-buy window: <b>now</b></span>`;
-  else if(R.win) win=`<span class="window">⟳ best-buy window: <b>~${R.win} days</b></span>`;
-  else win='';
-
-  const pips=Math.round(R.conf/20);
-  const prov = R.thin
-    ? `based on only <b>${R.obs} observations</b> — still learning this route`
-    : `based on <b>${R.obs} observations</b> and a backtest that called this route right <b>${R.hit}% of the time</b>`;
-  const watching=isWatched();
-
-  document.getElementById('verdict').innerHTML=`
-   <div class="verdict s-${R.sig}">
-     <div class="ctx mono">${state.o} → ${state.d} · <b>${fmtD(depDate())} – ${fmtD(retDate())}</b> · ${state.len} nights${state.flex?' · ±3d':''}</div>
-     <div class="sigrow"><div class="signal">${R.sig}</div>${win}</div>
-     <div class="reason">${R.reason}</div>
-     <div class="conf"><span>Confidence</span>
-       <span class="track">${[0,1,2,3,4].map(i=>`<span class="pip ${i<pips?'on':''}"></span>`).join('')}</span>
-       <span>${R.conf}% — ${prov}.</span></div>
+/* ═══════════════ render: Answer ═══════════════════════════════════════════ */
+function renderAnswer(){
+  const v=verdictFor(A.o,A.d,depDate(),A.len);
+  const oi={falling:["▼","falling",'var(--down)'],low:["◆","low & firming",'var(--brand)'],steady:["◆","steady",'var(--muted)']}[v.out];
+  $('outlook').innerHTML=`<span style="color:${oi[2]}">${oi[0]}</span> outlook: <b>${oi[1]}</b>`;
+  let win = v.sig==='BUY'?`<span class="window">⟳ best-buy window: <b>now</b></span>`
+    : v.win?`<span class="window">⟳ best-buy window: <b>~${v.win} days</b></span>`:'';
+  const pips=Math.round(v.conf/20);
+  const prov=v.thin?`based on only <b>${v.obs} observations</b> — still learning this route`
+    :`based on <b>${v.obs} observations</b> and a backtest that called this route right <b>${v.hit}% of the time</b>`;
+  const watching=Store.isWatched({o:A.o,d:A.d,dep:depDate(),len:A.len});
+  const liveTag=Store._scan>0?`<span class="live"><span class="dot"></span>live · scan #${Store._scan+1}</span>`:'';
+  $('verdict').innerHTML=`
+   <div class="verdict s-${v.sig}">
+     <div class="ctx mono">${A.o} → ${A.d} · <b>${fmtD(depDate())} – ${fmtD(retDate())}</b> · ${A.len} nights${A.flex?' · ±3d':''} ${liveTag}</div>
+     <div class="sigrow"><div class="signal">${v.sig}</div>${win}</div>
+     <div class="reason">${v.reason}</div>
+     <div class="conf"><span>Confidence</span><span class="track">${[0,1,2,3,4].map(i=>`<span class="pip ${i<pips?'on':''}"></span>`).join('')}</span>
+       <span>${v.conf}% — ${prov}.</span></div>
      <div class="nums">
-       <div class="num"><div class="v mono">${money(now)}</div><div class="k">fare now</div></div>
-       <div class="arrow">→</div>
-       <div class="num"><div class="v mono">${money(low)}</div><div class="k">forecast low</div></div>
-       <div class="num"><div class="v move ${movePct<0?'dn':movePct>0?'up':''} mono">${movePct>0?'+':''}${movePct}%</div><div class="k">expected move</div></div>
+       <div class="num"><div class="v mono">${money(v.now)}</div><div class="k">fare now</div></div><div class="arrow">→</div>
+       <div class="num"><div class="v mono">${money(v.low)}</div><div class="k">forecast low</div></div>
+       <div class="num"><div class="v move ${v.movePct<0?'dn':v.movePct>0?'up':''} mono">${v.movePct>0?'+':''}${v.movePct}%</div><div class="k">expected move</div></div>
      </div>
      <div class="cta">
        <button class="btn btn-pin ${watching?'on':''}" id="pinBtn">${watching?'✓ Watching':'+ Pin &amp; watch this trip'}</button>
        <a class="btn btn-primary" href="#" onclick="toast('Sample — would deep-link to Aviasales for these exact dates');return false">Book on Aviasales →</a>
        <button class="auditlink" id="auditBtn">why we think this ▾</button>
      </div>
-     <div class="audit" id="audit">
-       <div>Faro’s reasoning, in full — generated from the numbers, no LLM:</div>
-       <ul>${R.why.map(w=>`<li>${w}</li>`).join('')}</ul>
-     </div>
+     <div class="audit" id="audit"><div>Faro’s reasoning, in full — generated from the numbers, no LLM:</div>
+       <ul>${v.why.map(w=>`<li>${w}</li>`).join('')}</ul></div>
    </div>`;
-  document.getElementById('pinBtn').onclick=togglePin;
-  const ab=document.getElementById('auditBtn');ab.onclick=()=>{document.getElementById('audit').classList.toggle('open');
-    ab.innerHTML=document.getElementById('audit').classList.contains('open')?'why we think this ▴':'why we think this ▾';};
-
-  renderWeather(R,now);
-  renderStory(R);
-  document.getElementById('trust').innerHTML=
-    `Source: <b>Google Flights</b>, scraped several times a day · last scan <b>2h ago</b> · ${R.obs} observations on this route.
+  $('pinBtn').onclick=async()=>{await Store.pin({o:A.o,d:A.d,dep:depDate(),len:A.len});
+    toast(Store.isWatched({o:A.o,d:A.d,dep:depDate(),len:A.len})
+      ? (Store.user.anon?'Watching ✓ — saved to this device. Sign in to sync + get alerts everywhere':'Watching ✓ — synced to '+Store.user.email+' · we’ll alert you when it’s time')
+      : 'Removed from My trips');renderAnswer();};
+  const ab=$('auditBtn');ab.onclick=()=>{const a=$('audit');a.classList.toggle('open');
+    ab.innerHTML=a.classList.contains('open')?'why we think this ▴':'why we think this ▾';};
+  renderWeather(v);renderStory(v);
+  $('trust').innerHTML=`Source: <b>Google Flights</b>, scraped several times a day · last scan <b>2h ago</b> · ${v.obs} observations on this route.
      <br>Fares are <b>informational</b> — always confirm the live price before booking.`;
 }
-
-function renderWeather(R,now){
-  const days=["Today","+1d","+2d","+3d","+4d","+5d","+6d"];
-  const bestIdx = R.sig==='BUY'?0:(R.win?Math.min(6,Math.round(R.win/2)):3);
-  let html=`<div class="wx-head"><h3>7-day fare forecast</h3><span>expected price pressure</span></div><div class="wx-cells">`;
-  for(let i=0;i<7;i++){
-    const t=i/6;
-    const drift = R.out==='falling'? -0.06*t : R.out==='low'? 0.03*t : 0.01*Math.sin(i);
-    const p=Math.round(now*(1+drift+Math.sin(i*1.3)*0.012));
-    const press=drift+Math.sin(i*1.3)*0.012;
+function renderWeather(v){const days=["Today","+1d","+2d","+3d","+4d","+5d","+6d"];
+  const best=v.sig==='BUY'?0:(v.win?Math.min(6,Math.round(v.win/2)):3);
+  let h=`<div class="panel-head"><h3>7-day fare forecast</h3><span>expected price pressure</span></div><div class="wx-cells">`;
+  for(let i=0;i<7;i++){const t=i/6;
+    const drift=v.out==='falling'?-0.06*t:v.out==='low'?0.03*t:0.01*Math.sin(i);
+    const press=drift+Math.sin(i*1.3)*0.012;const p=Math.round(v.now*(1+press));
     const col=press<-0.01?'var(--down)':press>0.01?'var(--up)':'var(--watch)';
-    html+=`<div class="wx ${i===bestIdx?'best':''}">
-      <div class="d">${days[i]}</div><div class="p">${p.toLocaleString('en-NZ')}</div>
-      <div class="bar" style="background:${col};opacity:${.35+Math.abs(press)*8}"></div>
-      ${i===bestIdx?'<div class="tag">BEST BUY</div>':''}</div>`;
-  }
-  document.getElementById('weather').innerHTML=html+'</div>';
-}
-
-function renderStory(R){
-  const data=R.story, w=700,h=90,pad=6;
-  const mn=Math.min(...data),mx=Math.max(...data),rng=(mx-mn)||1;
-  const pts=data.map((v,i)=>[pad+i/(data.length-1)*(w-2*pad), h-pad-(v-mn)/rng*(h-2*pad)]);
+    h+=`<div class="wx ${i===best?'best':''}"><div class="d">${days[i]}</div><div class="p">${p.toLocaleString('en-NZ')}</div>
+      <div class="bar" style="background:${col};opacity:${.35+Math.abs(press)*8}"></div>${i===best?'<div class="tag">BEST BUY</div>':''}</div>`;}
+  $('weather').innerHTML=h+'</div>';}
+function renderStory(v){const data=v.story,w=700,hh=90,pad=6,mn=Math.min(...data),mx=Math.max(...data),rng=(mx-mn)||1;
+  const pts=data.map((x,i)=>[pad+i/(data.length-1)*(w-2*pad),hh-pad-(x-mn)/rng*(hh-2*pad)]);
   const line=pts.map((p,i)=>(i?'L':'M')+p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' ');
-  const area=`M${pts[0][0]} ${h} `+pts.map(p=>'L'+p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' ')+`L${pts[pts.length-1][0]} ${h} Z`;
-  const last=pts[pts.length-1];
-  document.getElementById('story').innerHTML=`
-    <div class="story-head"><h3>Fare story</h3><span>this trip, last 30 days · low ${money(mn)}</span></div>
-    <svg class="spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
-      <defs><linearGradient id="g" x1="0" x2="0" y1="0" y2="1">
-        <stop offset="0" stop-color="var(--brand)" stop-opacity=".28"/><stop offset="1" stop-color="var(--brand)" stop-opacity="0"/></linearGradient></defs>
-      <path d="${area}" fill="url(#g)"/>
-      <path d="${line}" fill="none" stroke="var(--brand)" stroke-width="2" stroke-linejoin="round"/>
-      <circle cx="${last[0].toFixed(1)}" cy="${last[1].toFixed(1)}" r="3.5" fill="var(--brand)"/>
-    </svg>`;
-}
+  const area=`M${pts[0][0]} ${hh} `+pts.map(p=>'L'+p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' ')+`L${pts.at(-1)[0]} ${hh} Z`;
+  $('story').innerHTML=`<div class="panel-head"><h3>Fare story</h3><span>this trip, last 30 days · low ${money(mn)}</span></div>
+    <svg class="spark" viewBox="0 0 ${w} ${hh}" preserveAspectRatio="none">
+      <defs><linearGradient id="g" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="var(--brand)" stop-opacity=".28"/><stop offset="1" stop-color="var(--brand)" stop-opacity="0"/></linearGradient></defs>
+      <path d="${area}" fill="url(#g)"/><path d="${line}" fill="none" stroke="var(--brand)" stroke-width="2" stroke-linejoin="round"/>
+      <circle cx="${pts.at(-1)[0].toFixed(1)}" cy="${pts.at(-1)[1].toFixed(1)}" r="3.5" fill="var(--brand)"/></svg>`;}
 
-/* ── watch (localStorage) ───────────────────────────────────────────────── */
-const LS='faro.proto.trips';
-function trips(){try{return JSON.parse(localStorage.getItem(LS))||[]}catch(e){return[]}}
-function tripId(){return `${state.o}-${state.d}-${depDate()}-${state.len}`;}
-function isWatched(){return trips().some(t=>t.id===tripId());}
-function togglePin(){let t=trips();const id=tripId();
-  if(t.some(x=>x.id===id)){t=t.filter(x=>x.id!==id);toast('Removed from My trips');}
-  else{t.push({id,o:state.o,d:state.d,dep:depDate(),len:state.len});
-    toast('Watching ✓ — in the real app you’d now get a Telegram / calendar / push alert when it’s time to buy');}
-  localStorage.setItem(LS,JSON.stringify(t));updTrips();render();}
-function updTrips(){document.getElementById('tripsN').textContent=trips().length;}
+/* ═══════════════ render: identity strip + Watch ═══════════════════════════ */
+function renderIdentity(){const u=Store.user;const cloud=!u.anon;
+  $('idstrip').innerHTML = cloud
+    ? `<span class="iddot cloud"></span><span>Synced as <b>${u.email}</b> · trips & alerts follow you across devices</span>
+       <button class="btn-sm" id="authBtn">Sign out</button>`
+    : `<span class="iddot anon"></span><span>Trips saved on <b>this device</b> only. Sign in to sync everywhere & get alerts.</span>
+       <button class="btn-sm cloud" id="authBtn"><span class="gicon"></span> Sign in with Google</button>`;
+  $('authBtn').onclick=async()=>{cloud?await Store.signOut():await Store.signIn();
+    toast(cloud?'Signed out — back to device-only':'Signed in — your '+Store.trips().length+' trip(s) now sync'+(Store.cloud?'':' (demo)'));};}
 
-/* ── plumbing ───────────────────────────────────────────────────────────── */
-function update(){syncURL();render();}
-function bind(id,key,num){document.getElementById(id).onchange=e=>{state[key]=num?+e.target.value:e.target.value;
-  if(!ROUTES[state.o+'-'+state.d]){toast(`Not watching ${state.o}→${state.d} yet — showing the closest route I know cold`);
-    // fall back to a covered destination for that origin
-    const alt=Object.keys(ROUTES).find(r=>r.startsWith(state.o+'-'))||'CHC-CMB';
-    [state.o,state.d]=alt.split('-');fillComposer();}
-  update();};}
-bind('f-o','o');bind('f-d','d');bind('f-dep','depMonth');bind('f-len','len',true);
-document.getElementById('f-flex').onchange=e=>{state.flex=e.target.checked;update();};
-document.getElementById('copyLink').onclick=()=>{navigator.clipboard?.writeText(location.href);
-  toast('Link copied — share this exact verdict');};
-document.getElementById('tripsPill').onclick=()=>{const t=trips();
-  toast(t.length?`Watching ${t.length} trip(s): ${t.map(x=>x.o+'→'+x.d).join(', ')}`:'No pinned trips yet — pin one with the gold button');};
-const tb=document.getElementById('themeBtn');
-function applyTheme(){const dark=document.documentElement.dataset.theme==='dark';tb.textContent=dark?'☾':'☀';}
-tb.onclick=()=>{const cur=document.documentElement.dataset.theme;
-  document.documentElement.dataset.theme=cur==='dark'?'light':'dark';
+function renderWatch(){const list=Store.trips();$('tabN').textContent=list.length;
+  if(!list.length){$('tripList').innerHTML=`<div class="empty">No pinned trips yet.<br>Open the <b>Answer</b> tab, find your trip, and hit <b>Pin &amp; watch</b>.<br>
+    We’ll keep an eye on it and tell you the moment it’s time to buy.</div>`;return;}
+  $('tripList').innerHTML=list.map(t=>{const v=verdictFor(t.o,t.d,t.dep,t.len)||{sig:'WATCH',now:0};
+    const sub=`${fmtD(t.dep)} · ${t.len} nights · ${v.sig==='BUY'?'book now':v.win?'best-buy in ~'+v.win+'d':'watching'}`;
+    const tg=(ch,lbl)=>`<button class="atog ${t.alerts[ch]?'on':''}" data-id="${t.id}" data-ch="${ch}">${t.alerts[ch]?'✓ ':''}${lbl}</button>`;
+    return `<div class="tcard">
+      <div class="tc-top"><span class="tc-route">${t.o} → ${t.d}</span><span class="chip ${v.sig}">${v.sig}</span>
+        <span class="tc-now">${money(v.now)}</span></div>
+      <div class="tc-sub">${sub} · ${v.conf||''}${v.conf?'% confident':''}</div>
+      <div class="tc-alerts">
+        <span style="font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.1em">alert via</span>
+        ${tg('push','Push')}${tg('telegram','Telegram')}${tg('email','Email')}
+        <span class="target">· also if under <input type="number" data-id="${t.id}" class="tgt" placeholder="—" value="${t.target||''}"> ${CUR}</span>
+        <span class="tc-actions"><button class="txt-link" data-rm="${t.id}">remove</button></span>
+      </div></div>`;}).join('');
+  $('tripList').querySelectorAll('.atog').forEach(b=>b.onclick=async()=>{
+    const t=Store.trips().find(x=>x.id===b.dataset.id);await Store.setAlert(b.dataset.id,b.dataset.ch,!t.alerts[b.dataset.ch]);
+    toast((!t.alerts[b.dataset.ch]?'Alert off · ':'Alert on · ')+b.dataset.ch);});
+  $('tripList').querySelectorAll('.tgt').forEach(inp=>inp.onchange=async()=>{await Store.setTarget(inp.dataset.id,+inp.value||null);
+    toast(inp.value?`Price target set: under ${CUR} ${inp.value}`:'Price target cleared');});
+  $('tripList').querySelectorAll('[data-rm]').forEach(b=>b.onclick=async()=>{await Store.remove(b.dataset.rm);toast('Removed from My trips');});}
+
+/* ═══════════════ router ═══════════════════════════════════════════════════ */
+function route(){const watch=location.hash.startsWith('#/watch');
+  $('view-answer').classList.toggle('hidden',watch);
+  $('view-watch').classList.toggle('hidden',!watch);
+  $('tab-answer').classList.toggle('on',!watch);$('tab-watch').classList.toggle('on',watch);
+  if(watch)renderWatch();else renderAnswer();}
+document.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>{location.hash=b.dataset.go;});
+addEventListener('hashchange',route);
+
+/* ═══════════════ bindings ═════════════════════════════════════════════════ */
+function bind(el,key,num){el.onchange=e=>{A[key]=num?+e.target.value:e.target.value;
+  if(!ROUTES[A.o+'-'+A.d]){const alt=Object.keys(ROUTES).find(r=>r.startsWith(A.o+'-'))||'CHC-CMB';
+    toast(`Not watching ${A.o}→${A.d} yet — showing the closest route I know cold`);[A.o,A.d]=alt.split('-');fillComposer();}
+  syncURL();renderAnswer();};}
+bind(f_o,'o');bind(f_d,'d');bind(f_dep,'depMonth');bind(f_len,'len',true);
+f_flex.onchange=e=>{A.flex=e.target.checked;syncURL();renderAnswer();};
+$('copyLink').onclick=()=>{navigator.clipboard?.writeText(location.href);toast('Link copied — share this exact verdict');};
+$('simBtn').onclick=()=>{Store.simulateScan();toast('New scan landed — verdicts updated live (Firestore onSnapshot)');};
+const tb=$('themeBtn');function applyTheme(){tb.textContent=document.documentElement.dataset.theme==='dark'?'☾':'☀';}
+tb.onclick=()=>{const c=document.documentElement.dataset.theme;document.documentElement.dataset.theme=c==='dark'?'light':'dark';
   localStorage.setItem('faro.proto.theme',document.documentElement.dataset.theme);applyTheme();};
 if(localStorage.getItem('faro.proto.theme'))document.documentElement.dataset.theme=localStorage.getItem('faro.proto.theme');
+let toastT;function toast(m){const el=$('toast');el.textContent=m;el.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>el.classList.remove('show'),3600);}
 
-let toastT;function toast(msg){const el=document.getElementById('toast');el.textContent=msg;el.classList.add('show');
-  clearTimeout(toastT);toastT=setTimeout(()=>el.classList.remove('show'),3400);}
-
-/* boot */
-fillComposer();applyTheme();updTrips();syncURL();render();
+/* ═══════════════ boot ═════════════════════════════════════════════════════ */
+(async()=>{await Store.init();
+  Store.onChange(()=>{$('tabN').textContent=Store.trips().length;renderIdentity();route();});
+  fillComposer();applyTheme();syncURL();route();})();
 </script>
 </body>
 </html>
