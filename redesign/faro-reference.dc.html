@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&amp;family=JetBrains+Mono:wght@400;500;700&amp;display=swap" rel="stylesheet">
+<style>
+  *{ box-sizing:border-box; }
+  html{ scroll-behavior:smooth; }
+  body{ margin:0; background:#0B0B0E; }
+  ::selection{ background:rgba(231,178,90,.3); color:#fff; }
+  @keyframes needle { from { transform:rotate(-46deg); } to { transform:rotate(0deg); } }
+  @keyframes glowDrift { 0%,100% { transform:translate(-50%,0) scale(1); opacity:.55; } 50% { transform:translate(-50%,-22px) scale(1.08); opacity:.8; } }
+  @keyframes pulseDot { 0%,100% { opacity:1; } 50% { opacity:.25; } }
+  @keyframes floatY { 0%,100% { transform:translateY(0); } 50% { transform:translateY(-8px); } }
+  .faro-dot{ animation:pulseDot 2s ease-in-out infinite; }
+  .faro-needle{ transform-origin:100px 120px; animation:needle 1.5s cubic-bezier(.2,.8,.15,1) .25s both; }
+  .faro-glow{ animation:glowDrift 9s ease-in-out infinite; }
+  .faro-link{ transition:color .25s ease; }
+  .faro-link:hover{ color:#E7B25A !important; }
+</style>
+</helmet>
+
+<div style="background:#0B0B0E; color:#ECECEF; font-family:'Sora',system-ui,sans-serif; min-height:100%; overflow-x:hidden; position:relative;">
+
+  <!-- scroll progress -->
+  <div style="position:fixed; top:0; left:0; right:0; height:2px; z-index:60; background:rgba(255,255,255,.05);">
+    <div id="faro-prog" style="height:100%; width:100%; transform:scaleX(0); transform-origin:0 50%; background:linear-gradient(90deg,#E7B25A,#f3cd86); box-shadow:0 0 12px rgba(231,178,90,.7);"></div>
+  </div>
+
+  <!-- nav -->
+  <nav style="position:sticky; top:0; z-index:50; backdrop-filter:blur(14px); background:rgba(11,11,14,.72); border-bottom:1px solid rgba(255,255,255,.06);">
+    <div style="max-width:1080px; margin:0 auto; padding:15px clamp(18px,5vw,40px); display:flex; align-items:center; justify-content:space-between;">
+      <div style="display:flex; align-items:center; gap:9px;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="#E7B25A" stroke-width="2"></circle><circle cx="12" cy="12" r="2.5" fill="#E7B25A"></circle><path d="M12 3v3M12 18v3M3 12h3M18 12h3" stroke="#E7B25A" stroke-width="2" stroke-linecap="round"></path></svg>
+        <span style="font-weight:700; font-size:18px; letter-spacing:-.02em;">Faro</span>
+      </div>
+      <div style="display:flex; align-items:center; gap:clamp(14px,3vw,30px);">
+        <a href="#signal" class="faro-link" style="font-size:13px; color:#8b8b95; text-decoration:none; display:none;" data-desknav="">Signal</a>
+        <a href="#routes" class="faro-link" style="font-size:13px; color:#8b8b95; text-decoration:none; display:none;" data-desknav="">Routes</a>
+        <a href="#insights" class="faro-link" style="font-size:13px; color:#8b8b95; text-decoration:none; display:none;" data-desknav="">Insights</a>
+        <div style="display:flex; align-items:center; gap:7px; font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:.14em; color:#9b9384;">
+          <span class="faro-dot" style="width:7px; height:7px; border-radius:50%; background:#E7B25A; box-shadow:0 0 10px #E7B25A;"></span>LIVE
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ambient glow -->
+  <div class="faro-glow" style="position:absolute; top:40px; left:50%; width:min(640px,90vw); height:520px; background:radial-gradient(ellipse at center, rgba(231,178,90,.20), rgba(231,178,90,.06) 42%, transparent 70%); filter:blur(20px); pointer-events:none; z-index:0;"></div>
+
+  <main style="max-width:1080px; margin:0 auto; padding:0 clamp(18px,5vw,40px); position:relative; z-index:1;">
+
+    <!-- HERO -->
+    <section style="padding:clamp(48px,9vw,96px) 0 clamp(40px,7vw,72px);">
+      <div style="display:grid; gap:clamp(28px,5vw,56px); grid-template-columns:repeat(auto-fit,minmax(min(360px,100%),1fr)); align-items:center;">
+        <div data-reveal="" style="opacity:0; transform:translateY(22px); transition:opacity .8s cubic-bezier(.2,.7,.2,1), transform .8s cubic-bezier(.2,.7,.2,1);">
+          <div style="font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:.22em; color:#E7B25A;">SMART FARE TIMING</div>
+          <h1 style="margin:18px 0 0; font-weight:700; font-size:clamp(38px,7vw,62px); line-height:1.0; letter-spacing:-.035em;">Know the exact moment to book.</h1>
+          <p style="margin:20px 0 0; font-weight:300; font-size:clamp(15px,1.6vw,18px); line-height:1.55; color:#8b8b95; max-width:46ch;">Faro watches fares every day and tells you plainly — book now, or hold for a drop. No noise, no dark patterns.</p>
+          <div style="margin-top:26px; display:flex; align-items:center; gap:18px; flex-wrap:wrap;">
+            <div style="display:flex; align-items:center; gap:8px; font-size:13px; color:#8b8b95;"><span style="color:#E7B25A; font-weight:600;">2.4M</span> fares tracked daily</div>
+            <div style="width:4px; height:4px; border-radius:50%; background:#33333a;"></div>
+            <div style="display:flex; align-items:center; gap:8px; font-size:13px; color:#8b8b95;"><span style="color:#E7B25A; font-weight:600;">89%</span> drop calls correct</div>
+          </div>
+        </div>
+
+        <!-- finder -->
+        <div data-reveal="" style="opacity:0; transform:translateY(22px); transition:opacity .8s cubic-bezier(.2,.7,.2,1) .12s, transform .8s cubic-bezier(.2,.7,.2,1) .12s;">
+          <div style="border:1px solid #2a2a31; background:linear-gradient(180deg,#16161c,#121217); border-radius:20px; overflow:hidden; box-shadow:0 30px 60px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.04);">
+            <div style="padding:18px 20px 6px; font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:.18em; color:#6b6b75;">FIND YOUR MOMENT</div>
+            <div style="display:flex; align-items:center; justify-content:space-between; padding:14px 20px; border-top:1px solid #222;">
+              <span style="font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:.1em; color:#6b6b75;">FROM</span>
+              <span style="font-weight:500; font-size:15px;">CHC · Christchurch</span>
+            </div>
+            <div style="display:flex; align-items:center; justify-content:center; height:1px; position:relative;"><div style="position:absolute; right:20px; left:20px; border-top:1px solid #222;"></div></div>
+            <div style="display:flex; align-items:center; justify-content:space-between; padding:14px 20px;">
+              <span style="font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:.1em; color:#6b6b75;">TO</span>
+              <span style="font-weight:500; font-size:15px;">CMB · Colombo</span>
+            </div>
+            <div style="display:flex; align-items:center; justify-content:space-between; padding:14px 20px; border-top:1px solid #222;">
+              <span style="font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:.1em; color:#6b6b75;">WHEN</span>
+              <span style="font-weight:500; font-size:15px;">Flexible · September</span>
+            </div>
+            <button style="width:100%; border:none; padding:17px; background:#E7B25A; color:#1a1408; font-family:'Sora'; font-weight:600; font-size:14px; cursor:pointer; box-shadow:0 0 36px rgba(231,178,90,.32); transition:filter .2s ease;" onmouseover="this.style.filter='brightness(1.08)'" onmouseout="this.style.filter='none'">Find the moment →</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SIGNAL -->
+    <section id="signal" data-reveal="" style="opacity:0; transform:translateY(22px); transition:opacity .8s cubic-bezier(.2,.7,.2,1), transform .8s cubic-bezier(.2,.7,.2,1); padding:clamp(36px,6vw,64px) 0; border-top:1px solid rgba(255,255,255,.06);">
+      <div style="display:grid; gap:clamp(24px,5vw,56px); grid-template-columns:repeat(auto-fit,minmax(min(320px,100%),1fr)); align-items:center;">
+        <div style="display:flex; justify-content:center;">
+          <svg viewBox="0 0 200 150" style="width:min(340px,80vw);">
+            <path d="M20 120 A80 80 0 0 1 180 120" fill="none" stroke="#26262d" stroke-width="14" stroke-linecap="round"></path>
+            <path data-draw="" d="M20 120 A80 80 0 0 1 180 120" fill="none" stroke="#E7B25A" stroke-width="14" stroke-linecap="round" stroke-dasharray="80 400" style="filter:drop-shadow(0 0 7px rgba(231,178,90,.6));"></path>
+            <g class="faro-needle"><line x1="100" y1="120" x2="59" y2="63" stroke="#ECECEF" stroke-width="4.5" stroke-linecap="round"></line></g>
+            <circle cx="100" cy="120" r="8" fill="#ECECEF"></circle>
+            <circle cx="100" cy="120" r="3" fill="#0B0B0E"></circle>
+            <text x="20" y="142" font-family="JetBrains Mono" font-size="9" letter-spacing="1" fill="#6b6b75">WAIT</text>
+            <text x="148" y="142" font-family="JetBrains Mono" font-size="9" letter-spacing="1" fill="#6b6b75">BOOK</text>
+          </svg>
+        </div>
+        <div>
+          <div style="font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:.2em; color:#6b6b75;">TODAY'S SIGNAL · CHC → CMB</div>
+          <div style="margin-top:14px; font-weight:700; font-size:clamp(40px,7vw,58px); letter-spacing:-.02em; color:#E7B25A; text-shadow:0 0 30px rgba(231,178,90,.35);">Wait.</div>
+          <p style="margin:12px 0 0; font-weight:300; font-size:16px; line-height:1.55; color:#8b8b95; max-width:42ch;">Our model expects this fare to fall about <span style="color:#ECECEF; font-weight:500;">12%</span> within the next 9 days. We'll ping you the moment it bottoms out.</p>
+          <div style="margin-top:22px; display:flex; gap:10px; flex-wrap:wrap;">
+            <div style="border:1px solid #2a2a31; background:#141419; border-radius:12px; padding:11px 15px;"><div style="font-family:'JetBrains Mono',monospace; font-size:10px; color:#6b6b75;">NOW</div><div style="font-weight:600; font-size:18px; margin-top:3px;">$268</div></div>
+            <div style="border:1px solid #2a2a31; background:#141419; border-radius:12px; padding:11px 15px;"><div style="font-family:'JetBrains Mono',monospace; font-size:10px; color:#6b6b75;">FORECAST LOW</div><div style="font-weight:600; font-size:18px; margin-top:3px; color:#5fd08a;">~$236</div></div>
+            <div style="border:1px solid #2a2a31; background:#141419; border-radius:12px; padding:11px 15px;"><div style="font-family:'JetBrains Mono',monospace; font-size:10px; color:#6b6b75;">CONFIDENCE</div><div style="font-weight:600; font-size:18px; margin-top:3px;">High</div></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ROUTES -->
+    <section id="routes" style="padding:clamp(36px,6vw,64px) 0; border-top:1px solid rgba(255,255,255,.06);">
+      <div data-reveal="" style="opacity:0; transform:translateY(22px); transition:opacity .8s cubic-bezier(.2,.7,.2,1), transform .8s cubic-bezier(.2,.7,.2,1); display:flex; align-items:flex-end; justify-content:space-between; gap:16px; flex-wrap:wrap;">
+        <div>
+          <div style="font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:.2em; color:#6b6b75;">WATCHING</div>
+          <h2 style="margin:10px 0 0; font-weight:700; font-size:clamp(26px,4vw,38px); letter-spacing:-.025em;">Routes on your radar</h2>
+        </div>
+        <a href="#" class="faro-link" style="font-size:13px; color:#8b8b95; text-decoration:none;">View all →</a>
+      </div>
+      <div data-reveal="" style="opacity:0; transform:translateY(22px); transition:opacity .8s cubic-bezier(.2,.7,.2,1) .1s, transform .8s cubic-bezier(.2,.7,.2,1) .1s; margin-top:24px; display:grid; gap:14px; grid-template-columns:repeat(auto-fit,minmax(min(280px,100%),1fr));">
+        <sc-for list="{{ routes }}" as="r" hint-placeholder-count="4">
+          <div style="border:1px solid #222; background:linear-gradient(180deg,#15151b,#121217); border-radius:16px; padding:18px; transition:border-color .25s ease, transform .25s ease;" onmouseover="this.style.borderColor='#3a3a44'; this.style.transform='translateY(-3px)'" onmouseout="this.style.borderColor='#222'; this.style.transform='none'">
+            <div style="display:flex; align-items:center; justify-content:space-between;">
+              <div style="font-weight:600; font-size:18px; letter-spacing:-.01em;">{{ r.pair }}</div>
+              <div style="font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:.08em; padding:5px 9px; border-radius:20px; background:{{ r.pillBg }}; color:{{ r.pillFg }};">{{ r.verdict }}</div>
+            </div>
+            <div style="margin-top:5px; font-family:'JetBrains Mono',monospace; font-size:11px; color:#6b6b75;">{{ r.sub }}</div>
+            <div style="margin-top:16px; display:flex; align-items:flex-end; justify-content:space-between;">
+              <div>
+                <div style="font-family:'JetBrains Mono',monospace; font-size:10px; color:#6b6b75;">FROM</div>
+                <div style="font-weight:700; font-size:24px; letter-spacing:-.02em;">{{ r.price }}</div>
+              </div>
+              <svg width="92" height="34" viewBox="0 0 92 34" preserveAspectRatio="none"><polyline data-draw="" points="{{ r.points }}" fill="none" stroke="{{ r.stroke }}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></polyline></svg>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </section>
+
+    <!-- MARKET -->
+    <section data-reveal="" style="opacity:0; transform:translateY(22px); transition:opacity .8s cubic-bezier(.2,.7,.2,1), transform .8s cubic-bezier(.2,.7,.2,1); padding:clamp(28px,4vw,44px) 0; border-top:1px solid rgba(255,255,255,.06);">
+      <div style="font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:.2em; color:#6b6b75; margin-bottom:16px;">MARKET CONDITIONS</div>
+      <div style="display:flex; gap:12px; flex-wrap:wrap;">
+        <sc-for list="{{ market }}" as="m" hint-placeholder-count="4">
+          <div style="border:1px solid #222; background:#141419; border-radius:12px; padding:13px 17px; display:flex; align-items:center; gap:12px;">
+            <span style="font-size:18px;">{{ m.icon }}</span>
+            <div>
+              <div style="font-family:'JetBrains Mono',monospace; font-size:9.5px; letter-spacing:.1em; color:#6b6b75;">{{ m.label }}</div>
+              <div style="font-weight:600; font-size:15px; margin-top:2px;">{{ m.value }}</div>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </section>
+
+    <!-- INSIGHTS -->
+    <section id="insights" data-reveal="" style="opacity:0; transform:translateY(22px); transition:opacity .8s cubic-bezier(.2,.7,.2,1), transform .8s cubic-bezier(.2,.7,.2,1); padding:clamp(36px,6vw,64px) 0; border-top:1px solid rgba(255,255,255,.06);">
+      <div style="background:linear-gradient(160deg,#1b1710,#141419); border:1px solid #33291a; border-radius:22px; padding:clamp(24px,4vw,40px);">
+        <div style="display:grid; gap:clamp(20px,4vw,44px); grid-template-columns:repeat(auto-fit,minmax(min(300px,100%),1fr)); align-items:center;">
+          <div>
+            <div style="font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:.2em; color:#E7B25A;">WHEN TO BOOK</div>
+            <h2 style="margin:12px 0 0; font-weight:700; font-size:clamp(28px,4.5vw,42px); line-height:1.05; letter-spacing:-.025em;">The sweet spot is 6–8 weeks out.</h2>
+            <p style="margin:14px 0 0; font-weight:300; font-size:15px; line-height:1.55; color:#9b9384; max-width:44ch;">Book too early and you pay the premium. Too late and seats vanish. Faro learns the curve for every route — so you don't have to guess.</p>
+          </div>
+          <div>
+            <svg width="100%" height="160" viewBox="0 0 360 160" preserveAspectRatio="none">
+              <line x1="0" y1="130" x2="360" y2="130" stroke="#2a2a31" stroke-width="1"></line>
+              <path data-draw="" d="M0,40 C50,42 80,55 120,95 C150,122 180,128 200,126 C240,122 290,80 360,42" fill="none" stroke="#E7B25A" stroke-width="2.5" style="filter:drop-shadow(0 0 6px rgba(231,178,90,.5));"></path>
+              <circle cx="200" cy="126" r="5" fill="#5fd08a"></circle>
+              <text x="200" y="150" font-family="JetBrains Mono" font-size="10" fill="#5fd08a" text-anchor="middle">cheapest</text>
+            </svg>
+            <div style="display:flex; justify-content:space-between; font-family:'JetBrains Mono',monospace; font-size:10px; color:#6b6b75; margin-top:4px;"><span>5 mo out</span><span>7 wks</span><span>departure</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- FARES -->
+    <section data-reveal="" style="opacity:0; transform:translateY(22px); transition:opacity .8s cubic-bezier(.2,.7,.2,1), transform .8s cubic-bezier(.2,.7,.2,1); padding:clamp(36px,6vw,64px) 0; border-top:1px solid rgba(255,255,255,.06);">
+      <div style="font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:.2em; color:#6b6b75;">CHEAPEST RIGHT NOW</div>
+      <h2 style="margin:10px 0 22px; font-weight:700; font-size:clamp(26px,4vw,38px); letter-spacing:-.025em;">Fares worth grabbing</h2>
+      <div style="display:flex; flex-direction:column; gap:2px; border:1px solid #222; border-radius:16px; overflow:hidden;">
+        <sc-for list="{{ fares }}" as="f" hint-placeholder-count="5">
+          <div style="display:flex; align-items:center; gap:16px; padding:16px clamp(14px,3vw,22px); background:#121217; transition:background .2s ease;" onmouseover="this.style.background='#16161d'" onmouseout="this.style.background='#121217'">
+            <div style="width:38px; height:38px; flex:none; border-radius:9px; background:{{ f.logoBg }}; display:flex; align-items:center; justify-content:center; font-family:'JetBrains Mono',monospace; font-weight:700; font-size:12px; color:{{ f.logoFg }};">{{ f.code }}</div>
+            <div style="flex:1; min-width:0;">
+              <div style="font-weight:600; font-size:15px;">{{ f.pair }}</div>
+              <div style="font-family:'JetBrains Mono',monospace; font-size:11px; color:#6b6b75; margin-top:2px;">{{ f.meta }}</div>
+            </div>
+            <div style="text-align:right; flex:none;">
+              <div style="font-weight:700; font-size:18px; letter-spacing:-.01em;">{{ f.price }}</div>
+              <div style="font-family:'JetBrains Mono',monospace; font-size:10px; color:{{ f.tagColor }}; margin-top:2px;">{{ f.tag }}</div>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </section>
+
+    <!-- CTA -->
+    <section data-reveal="" style="opacity:0; transform:translateY(22px); transition:opacity .8s cubic-bezier(.2,.7,.2,1), transform .8s cubic-bezier(.2,.7,.2,1); padding:clamp(48px,8vw,90px) 0; text-align:center;">
+      <h2 style="margin:0 auto; max-width:18ch; font-weight:700; font-size:clamp(30px,5.5vw,52px); line-height:1.04; letter-spacing:-.03em;">Stop guessing. Start watching.</h2>
+      <p style="margin:18px auto 0; max-width:42ch; font-weight:300; font-size:16px; color:#8b8b95;">Set a route, get one clear signal. Free while in beta.</p>
+      <button style="margin-top:28px; border:none; padding:16px 34px; border-radius:30px; background:#E7B25A; color:#1a1408; font-family:'Sora'; font-weight:600; font-size:15px; cursor:pointer; box-shadow:0 0 40px rgba(231,178,90,.35); transition:filter .2s ease;" onmouseover="this.style.filter='brightness(1.08)'" onmouseout="this.style.filter='none'">Start watching a route →</button>
+    </section>
+  </main>
+
+  <!-- FOOTER -->
+  <footer style="border-top:1px solid rgba(255,255,255,.06); position:relative; z-index:1;">
+    <div style="max-width:1080px; margin:0 auto; padding:clamp(28px,5vw,44px) clamp(18px,5vw,40px); display:flex; align-items:center; justify-content:space-between; gap:18px; flex-wrap:wrap;">
+      <div style="display:flex; align-items:center; gap:9px;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="#E7B25A" stroke-width="2"></circle><circle cx="12" cy="12" r="2.5" fill="#E7B25A"></circle></svg>
+        <span style="font-weight:600;">Faro</span>
+      </div>
+      <div style="font-weight:300; font-size:13px; line-height:1.6; color:#6b6b75;">Built by hand in Christchurch· <span style="color: rgb(155, 147, 132); font-weight: 500;">Yasas Sri Wickramasinghe</span></div>
+    </div>
+  </footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:&quot;100%&quot;,&quot;height&quot;:1100}}">
+class Component extends DCLogic {
+  renderVals() {
+    const routes = [
+      { pair:'CMB → DXB', sub:'EMIRATES · DIRECT · 4H 20', price:'$268', verdict:'WAIT', pillBg:'#26262d', pillFg:'#9b9384', points:'0,8 18,12 36,7 54,16 72,13 92,22', stroke:'#E7B25A' },
+      { pair:'LHR → JFK', sub:'BRITISH A. · 1 STOP · 11H', price:'$389', verdict:'BOOK NOW', pillBg:'#E7B25A', pillFg:'#1a1408', points:'0,26 18,20 36,23 54,12 72,15 92,5', stroke:'#5fd08a' },
+      { pair:'CMB → SIN', sub:'SINGAPORE · DIRECT · 4H 20', price:'$241', verdict:'BOOK NOW', pillBg:'#E7B25A', pillFg:'#1a1408', points:'0,22 18,18 36,20 54,10 72,8 92,6', stroke:'#5fd08a' },
+      { pair:'DXB → LHR', sub:'EMIRATES · DIRECT · 7H 45', price:'$402', verdict:'WAIT', pillBg:'#26262d', pillFg:'#9b9384', points:'0,6 18,10 36,8 54,15 72,18 92,24', stroke:'#E7B25A' }
+    ];
+    const market = [
+      { icon:'💱', label:'USD → LKR', value:'305.40' },
+      { icon:'☀️', label:'DUBAI', value:'34° Clear' },
+      { icon:'🌧️', label:'LONDON', value:'14° Rain' },
+      { icon:'🛢️', label:'JET FUEL', value:'+2.1% wk' }
+    ];
+    const fares = [
+      { code:'EK', logoBg:'#3a1f1f', logoFg:'#ffb3b3', pair:'Colombo → Singapore', meta:'DIRECT · SEP 14 · 4H 20', price:'$241', tag:'▼ 9% this week', tagColor:'#5fd08a' },
+      { code:'SQ', logoBg:'#1f2a3a', logoFg:'#9cc4ff', pair:'Colombo → Dubai', meta:'DIRECT · SEP 09 · 4H 20', price:'$268', tag:'WAIT · drop likely', tagColor:'#9b9384' },
+      { code:'QR', logoBg:'#3a1f2e', logoFg:'#ffa6cf', pair:'London → New York', meta:'1 STOP · OCT 02 · 11H', price:'$389', tag:'▲ near floor', tagColor:'#E7B25A' },
+      { code:'TK', logoBg:'#3a3320', logoFg:'#ffe08a', pair:'Colombo → Istanbul', meta:'1 STOP · SEP 22 · 13H', price:'$455', tag:'▼ 4% today', tagColor:'#5fd08a' },
+      { code:'AF', logoBg:'#23203a', logoFg:'#b9b3ff', pair:'Dubai → Paris', meta:'DIRECT · OCT 11 · 7H 10', price:'$398', tag:'steady', tagColor:'#9b9384' }
+    ];
+    return { routes, market, fares };
+  }
+
+  componentDidMount() {
+    if (this._wired) return;
+    this._wired = true;
+    const run = () => {
+      // desktop nav links
+      if (window.innerWidth >= 720) {
+        document.querySelectorAll('[data-desknav]').forEach(a => { a.style.display = 'inline'; });
+      }
+      // prep sparkline / chart draw-in (before any reveal)
+      document.querySelectorAll('[data-draw]').forEach(p => {
+        try {
+          if (p.getAttribute('stroke-dasharray') && p.getAttribute('stroke-dasharray').indexOf(' ') > -1) return; // dial gauge keeps its own dash
+          const len = p.getTotalLength();
+          p.style.strokeDasharray = len;
+          p.style.strokeDashoffset = len;
+          p.style.transition = 'stroke-dashoffset 1.1s ease .15s';
+        } catch (err) {}
+      });
+      const reveal = (el) => {
+        if (el.dataset.shown) return;
+        el.dataset.shown = '1';
+        el.style.opacity = '1';
+        el.style.transform = 'none';
+        el.querySelectorAll('[data-draw]').forEach(d => {
+          if (d.getAttribute('stroke-dasharray') && d.getAttribute('stroke-dasharray').indexOf(' ') > -1) return;
+          d.style.strokeDashoffset = '0';
+        });
+      };
+      const items = Array.from(document.querySelectorAll('[data-reveal]'));
+      const sync = () => {
+        const vh = window.innerHeight || document.documentElement.clientHeight;
+        items.forEach(el => {
+          const top = el.getBoundingClientRect().top;
+          if (top < vh * 0.9) reveal(el);
+        });
+      };
+      // dial gauge draw-in
+      const dial = document.querySelector('path[stroke-dasharray="80 400"]');
+      if (dial) {
+        dial.style.strokeDashoffset = '80';
+        dial.style.transition = 'stroke-dashoffset 1.2s cubic-bezier(.2,.8,.15,1) .25s';
+        requestAnimationFrame(() => { requestAnimationFrame(() => { dial.style.strokeDashoffset = '0'; }); });
+      }
+      // scroll progress + reveal sync
+      const bar = document.getElementById('faro-prog');
+      const onScroll = () => {
+        const h = document.documentElement;
+        const max = h.scrollHeight - h.clientHeight;
+        const p = max > 0 ? h.scrollTop / max : 0;
+        if (bar) bar.style.transform = 'scaleX(' + p + ')';
+        sync();
+      };
+      window.addEventListener('scroll', onScroll, { passive: true });
+      window.addEventListener('resize', sync, { passive: true });
+      sync();
+      onScroll();
+      // safety net: nothing should stay invisible
+      setTimeout(() => items.forEach(reveal), 1600);
+    };
+    requestAnimationFrame(() => requestAnimationFrame(run));
+  }
+}
+</script>
+</body>
+</html>
