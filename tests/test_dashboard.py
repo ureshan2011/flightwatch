@@ -74,6 +74,26 @@ def test_clean_airline_rejects_price_strings():
     assert DB.clean_airline("305") == ""
 
 
+def test_clean_airline_drops_airport_code_sequences():
+    # The scraper sometimes captures a layover/route list where a carrier name
+    # belongs ("SYD, CAN, CKG", "CHC, SIN"). Bare airport codes must never reach
+    # the dashboard as airlines.
+    assert DB.clean_airline("SYD, CAN, CKG") == ""
+    assert DB.clean_airline("CHC, SIN") == ""
+    # ...but a real airline acronym is a carrier, not an airport code.
+    assert DB.clean_airline("ANA") == "ANA"
+    assert DB.airline_iata("ANA") == "NH"
+
+
+def test_clean_airline_splits_glued_carriers_in_comma_lists():
+    # A glued second carrier inside a comma list ("Air IndiaANA") must split into
+    # its real carriers rather than surfacing the joined token.
+    assert DB.clean_airline("Air New Zealand, Air IndiaANA") == \
+        "Air New Zealand + Air India + ANA"
+    assert DB.clean_airline("Jetstar, SriLankanQantas") == \
+        "Jetstar + SriLankan + Qantas"
+
+
 def test_clean_airline_recognises_india_carriers():
     # New India-corridor carriers must be recognised (with correct logos) and
     # "Air India Express" must not be mis-peeled as "Air India".
