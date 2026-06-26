@@ -226,8 +226,28 @@ svg.fan{width:100%;height:150px;display:block;margin-top:8px}
 .stile{background:var(--card2);border:1px solid var(--line2);border-radius:var(--r-md);padding:13px}
 .stile .v{font-family:'IBM Plex Mono',monospace;font-size:20px;font-weight:600}
 .stile .k{font-size:10.5px;color:var(--dim);text-transform:uppercase;letter-spacing:.08em;margin-top:3px}
+/* lab route gate */
+.gate-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:16px}
+.gate-card{background:var(--card);border:1px solid var(--line2);border-radius:var(--r-lg);padding:16px;cursor:pointer;text-align:left;transition:border-color .15s,transform .15s}
+.gate-card:hover{border-color:var(--brand);transform:translateY(-2px)}
+.gate-top{display:flex;align-items:center;gap:10px}
+.gate-route{font-weight:700;font-size:16px}
+.gate-acc{margin-top:12px;display:flex;gap:16px;font-size:11.5px;color:var(--dim);line-height:1.4}
+.gate-acc b{display:block;font-family:'IBM Plex Mono',monospace;font-size:14px;color:var(--ink);font-weight:600}
+.gate-cta{margin-top:12px;color:var(--brand);font-size:13px;font-weight:600}
+/* savings scorecard */
+.changebar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:6px 0 0}
+.changebar h2{font-size:20px;font-weight:700}
+.score-row{display:flex;gap:12px;flex-wrap:wrap}
+.score-big{flex:1;min-width:140px;background:var(--card2);border:1px solid var(--line2);border-radius:var(--r-md);padding:14px}
+.score-big .v{font-family:'IBM Plex Mono',monospace;font-size:30px;font-weight:700;line-height:1}
+.score-big.acc .v{color:var(--brand)} .score-big.saved .v{color:var(--buy)} .score-big.now .v{color:var(--buy)}
+.score-big .k{font-size:10.5px;color:var(--dim);text-transform:uppercase;letter-spacing:.08em;margin-top:7px}
+.score-big .s{font-size:11.5px;color:var(--muted);margin-top:6px;line-height:1.45}
+.savesvg{width:100%;height:60px;display:block;margin-top:6px}
+.honest{font-size:12.5px;color:var(--muted);margin-top:14px;line-height:1.65}.honest b{color:var(--ink)}
 @media(max-width:560px){.grid2{grid-template-columns:1fr}.stiles{grid-template-columns:1fr 1fr}
-  .table .hide-sm{display:none}}
+  .gate-grid{grid-template-columns:1fr}.table .hide-sm{display:none}}
 
 #toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(20px);background:var(--ink);color:var(--bg);
   font-weight:600;font-size:13.5px;padding:11px 18px;border-radius:var(--r-pill);box-shadow:var(--shadow-lg);max-width:88vw;text-align:center;
@@ -305,40 +325,18 @@ svg.fan{width:100%;height:150px;display:block;margin-top:8px}
     </details>
   </section>
 
-  <!-- ───────── LAB VIEW ───────── -->
+  <!-- ───────── LAB VIEW (route-first) ───────── -->
   <section id="view-lab" class="hidden">
-    <div class="watch-head"><h2>The Lab</h2></div>
-    <p class="lab-intro">The deep layer — every route, the receipts, the raw grid. Calm but dense; this is where the power user audits Faro. Pick a route to focus the charts.</p>
-    <div class="lab-focus">focused route <select id="labRoute"></select><span id="labMeta"></span></div>
-
-    <div class="labsec"><h3>Routes board <span>every corridor · click to focus the Answer</span></h3>
-      <table class="table" id="rbTable"></table></div>
-
-    <div class="grid2">
-      <div class="labsec"><h3>Signal accuracy <span>backtest receipts</span></h3><div id="btPanel"></div></div>
-      <div class="labsec"><h3>Forecast fan <span>conformal band, 14 days</span></h3><div id="fanPanel"></div></div>
-    </div>
-
-    <div class="labsec"><h3>Cheapest day to fly <span>departure × return weekday</span></h3><div id="heatPanel"></div></div>
-
-    <div class="labsec"><h3>Find a trip <span id="finderCount"></span></h3>
-      <div class="finder-bar">
-        <div class="ff"><label>route</label><select id="ff-route"></select></div>
-        <div class="ff"><label>max stops</label><select id="ff-stops"><option value="2">any</option><option value="1">≤ 1 stop</option><option value="0">non-stop</option></select></div>
-        <div class="ff"><label>max price <span id="ff-pv" class="mono"></span></label><input type="range" id="ff-price" min="1400" max="2800" step="50"></div>
-        <div class="ff"><label>sort</label><select id="ff-sort"><option value="price">cheapest</option><option value="dep">soonest</option></select></div>
-      </div>
-      <div id="finderRes"></div></div>
-
-    <div class="labsec"><h3>Market analytics <span>patterns across all routes</span></h3><div class="stiles" id="mkt"></div></div>
+    <div id="labBody"></div>
   </section>
 
   <div class="note">
     <b style="color:var(--muted)">UX prototype</b> for <span class="mono">redesign/UX_REVAMP.md</span> +
-    <span class="mono">redesign/FIREBASE.md</span>. Two views: the deep-linkable <b style="color:var(--muted)">Answer</b>
-    (trip composer · best-buy window · confidence-with-provenance · fare-weather) and a Firebase-ready
+    <span class="mono">redesign/FIREBASE.md</span>. Three views: the deep-linkable <b style="color:var(--muted)">Answer</b>
+    (trip composer · best-buy window · confidence-with-provenance · fare-weather); a Firebase-ready
     <b style="color:var(--muted)">Watch</b> (cloud identity · synced pinned trips · per-trip alert channels + price target ·
-    live updates). <b style="color:var(--muted)">Sample data</b>, not live fares.
+    live updates); and a route-first <b style="color:var(--muted)">Lab</b> (pick a route → its prediction accuracy,
+    money saved / on the table, forecast, cheapest days, raw grid). <b style="color:var(--muted)">Sample data</b>, not live fares.
   </div>
 </main>
 
@@ -560,12 +558,17 @@ function renderWatch(){const list=Store.trips();$('tabN').textContent=list.lengt
     toast(inp.value?`Price target set: under ${CUR} ${inp.value}`:'Price target cleared');});
   $('tripList').querySelectorAll('[data-rm]').forEach(b=>b.onclick=async()=>{await Store.remove(b.dataset.rm);toast('Removed from My trips');});}
 
-/* ═══════════════ Lab: data + render ═══════════════════════════════════════ */
+/* ═══════════════ Lab: route-first deep-dive (accuracy + savings) ═══════════ */
 const AIRLINES={'CHC-CMB':['Singapore Airlines','Air NZ · SQ','Malaysia Airlines'],
   'AKL-CMB':['SriLankan','Singapore Airlines','Malaysia Airlines'],
   'AKL-DEL':['Air India','Singapore Airlines','Thai Airways'],
   'AKL-BOM':['Air India','Singapore Airlines','Qantas · AI']};
-const BT={'CHC-CMB':{calls:34,right:24},'AKL-CMB':{calls:41,right:30},'AKL-DEL':{calls:9,right:5},'AKL-BOM':{calls:22,right:14}};
+/* per-route backtest: calls made, how many paid off, $ saved by following Faro
+   vs booking on search day, and $ lost on the calls that missed (counted honestly) */
+const BT={'CHC-CMB':{calls:34,right:24,saved:3420,missed:740},
+  'AKL-CMB':{calls:41,right:30,saved:4180,missed:610},
+  'AKL-DEL':{calls:9,right:5,saved:380,missed:210},
+  'AKL-BOM':{calls:22,right:14,saved:1840,missed:520}};
 const DOW=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
 function rng(seed){let s=seed>>>0;return()=>{s=(s*1103515245+12345)&0x7fffffff;return s/0x7fffffff;};}
 const FINDER=(()=>{const out=[];let id=0;
@@ -577,42 +580,86 @@ const FINDER=(()=>{const out=[];let id=0;
       const price=Math.round(base*(0.85+r()*0.42)+(stops===0?250:0)-(m==='2026-11'?110:0));
       out.push({id:id++,o,d,key,dep,ret:rd.toISOString().slice(0,10),len,stops,price,air:AIRLINES[key][Math.floor(r()*AIRLINES[key].length)]});}}}
   return out;})();
-let LAB=A.o+'-'+A.d;
+let LAB=null;
+const labRouteFromHash=()=>{const m=location.hash.match(/^#\/lab\/([A-Z]{3}-[A-Z]{3})/);return m&&ROUTES[m[1]]?m[1]:null;};
 
-function renderLab(){
-  const lr=$('labRoute');
-  lr.innerHTML=Object.keys(ROUTES).map(k=>`<option value="${k}"${k===LAB?' selected':''}>${k.replace('-',' → ')}</option>`).join('');
-  lr.onchange=()=>{LAB=lr.value;renderLab();};
-  const v=verdictFor(...LAB.split('-'),depDate(),21);
-  $('labMeta').innerHTML=`· ${v.obs} obs · ${money(v.now)} now`;
-  renderRoutesBoard();renderBacktest();renderFan();renderHeat();renderMarket();
-  initFinder();
+function renderLab(){const r=labRouteFromHash();LAB=r;if(r)renderLabRoute(r);else renderLabGate();}
+
+/* ── step 1: pick a route ─────────────────────────────────────────────── */
+function renderLabGate(){
+  const cards=Object.keys(ROUTES).map(k=>{const[o,d]=k.split('-');const v=verdictFor(o,d,depDate(),21);
+    const b=BT[k];const thin=b.calls<12;const hit=Math.round(b.right/b.calls*100);
+    return `<button class="gate-card" data-lab="${k}">
+      <div class="gate-top"><span class="gate-route">${o} → ${d}</span><span class="minichip ${v.sig}">${v.sig}</span></div>
+      <div class="gate-acc">
+        <span><b>${money(v.now)}</b>cheapest now</span>
+        <span><b>${thin?'—':hit+'%'}</b>${thin?'still learning':'accurate'}</span>
+        <span><b style="color:var(--buy)">${money(b.saved)}</b>saved so far</span></div>
+      <div class="gate-cta">Dig in →</div></button>`;}).join('');
+  $('labBody').innerHTML=`<div class="watch-head"><h2>The Lab</h2></div>
+    <p class="lab-intro">Pick a route to dig in. Everything below is then scoped to <b>just that corridor</b> — how accurate Faro's calls have been, how much they saved, the forecast, the cheapest days, and the raw grid.</p>
+    <div class="gate-grid">${cards}</div>`;
+  $('labBody').querySelectorAll('[data-lab]').forEach(b=>b.onclick=()=>{location.hash='#/lab/'+b.dataset.lab;});
 }
-let rbSort='now';
-function renderRoutesBoard(){
-  const rows=Object.keys(ROUTES).map(k=>{const[o,d]=k.split('-');const v=verdictFor(o,d,depDate(),21);
-    const best=['Nov','Aug','Sep','Oct'][Math.abs(k.length)%4];return {k,o,d,v,best};});
-  rows.sort((a,b)=>rbSort==='now'?a.v.now-b.v.now:rbSort==='conf'?b.v.conf-a.v.conf:a.k.localeCompare(b.k));
-  const sp=arr=>{const w=90,h=24,mn=Math.min(...arr),mx=Math.max(...arr),rg=(mx-mn)||1;
-    const p=arr.map((x,i)=>`${(i/(arr.length-1)*w).toFixed(1)},${(h-2-(x-mn)/rg*(h-4)).toFixed(1)}`).join(' ');
-    return `<svg width="${w}" height="${h}"><polyline points="${p}" fill="none" stroke="var(--brand)" stroke-width="1.5"/></svg>`;};
-  $('rbTable').innerHTML=`<thead><tr>
-     <th data-s="route">Route</th><th data-s="now" class="num ${rbSort==='now'?'sorted':''}">Cheapest now</th>
-     <th>Signal</th><th class="hide-sm">30-day</th><th class="hide-sm">Best month</th><th></th></tr></thead><tbody>`+
-   rows.map(r=>`<tr><td><b>${r.o} → ${r.d}</b></td><td class="num">${money(r.v.now)}</td>
-     <td><span class="minichip ${r.v.sig}">${r.v.sig}</span></td>
-     <td class="hide-sm">${sp(r.v.story)}</td><td class="hide-sm mono" style="color:var(--muted)">${r.best}</td>
-     <td><button class="focusbtn" data-foc="${r.k}">focus →</button></td></tr>`).join('')+`</tbody>`;
-  $('rbTable').querySelectorAll('th[data-s]').forEach(th=>th.onclick=()=>{rbSort=th.dataset.s;renderRoutesBoard();});
-  $('rbTable').querySelectorAll('[data-foc]').forEach(b=>b.onclick=()=>{[A.o,A.d]=b.dataset.foc.split('-');
-    fillComposer();syncURL();location.hash='#/';toast(`Focused ${A.o}→${A.d} — see the full Answer`);});
+
+/* ── step 2: the route's deep-dive, led by accuracy + savings ──────────── */
+function renderLabRoute(route){const[o,d]=route.split('-');
+  $('labBody').innerHTML=`
+    <div class="changebar"><button class="focusbtn" id="labBack">← all routes</button>
+      <h2>${o} → ${d}</h2>
+      <button class="focusbtn" id="labOpen" style="margin-left:auto">open in Answer →</button></div>
+    <div class="labsec" id="scoreSec"></div>
+    <div class="grid2">
+      <div class="labsec"><h3>Forecast fan <span>conformal band, 14 days</span></h3><div id="fanPanel"></div></div>
+      <div class="labsec"><h3>Cheapest day to fly <span>departure × return weekday</span></h3><div id="heatPanel"></div></div>
+    </div>
+    <div class="labsec"><h3>Find a trip on ${o} → ${d} <span id="finderCount"></span></h3>
+      <div class="finder-bar">
+        <div class="ff"><label>max stops</label><select id="ff-stops"><option value="2">any</option><option value="1">≤ 1 stop</option><option value="0">non-stop</option></select></div>
+        <div class="ff"><label>max price <span id="ff-pv" class="mono"></span></label><input type="range" id="ff-price" min="1400" max="2800" step="50"></div>
+        <div class="ff"><label>sort</label><select id="ff-sort"><option value="price">cheapest</option><option value="dep">soonest</option></select></div>
+      </div><div id="finderRes"></div></div>`;
+  $('labBack').onclick=()=>{location.hash='#/lab';};
+  $('labOpen').onclick=()=>{[A.o,A.d]=[o,d];fillComposer();syncURL();location.hash='#/';toast(`Opened ${o}→${d} in the Answer`);};
+  renderScorecard(route);renderFan();renderHeat();initFinderScoped(route);
 }
-function renderBacktest(){const b=BT[LAB]||{calls:0,right:0};const hit=b.calls?Math.round(b.right/b.calls*100):0;
-  const r=rng(b.calls*31+7);const strip=Array.from({length:Math.min(b.calls,18)},()=>r()<b.right/b.calls?'r':'w');
-  $('btPanel').innerHTML=`<div class="bt-top"><span class="bt-hit">${hit}%</span>
-     <span style="font-size:12.5px;color:var(--muted)">of past BUY/WAIT calls on ${LAB.replace('-',' → ')} paid off<br>${b.right} right of ${b.calls} · walk-forward, no future leak</span></div>
-     <div class="bt-strip">${strip.map(c=>`<i class="${c}" title="${c==='r'?'correct':'missed'}"></i>`).join('')}</div>
-     <div style="font-size:11.5px;color:var(--dim);margin-top:8px">green = call paid off · pink = it didn't. Honesty is the product.</div>`;}
+
+/* the headline: how accurate, and what it's worth */
+function renderScorecard(route){const[o,d]=route.split('-');const v=verdictFor(o,d,depDate(),21);
+  const b=BT[route];const thin=b.calls<12;const hit=Math.round(b.right/b.calls*100);const avg=Math.round(b.saved/b.calls);
+  let nowSave,nowSub,nowK;
+  if(v.sig==='BUY'){const hi=Math.max(...v.story);nowSave=hi-v.now;nowK='saved by buying now';nowSub=`you're at the low — vs this route's recent high ${money(hi)}`;}
+  else{nowSave=Math.max(0,v.now-v.low);nowK='on the table right now';nowSub=`wait → forecast low ${money(v.low)} (${v.sig})`;}
+  $('scoreSec').innerHTML=`<h3>How accurate is Faro here — and what it's worth <span>walk-forward backtest · sample</span></h3>
+    <div class="score-row" style="margin-top:12px">
+      <div class="score-big acc"><div class="v">${thin?'—':hit+'%'}</div><div class="k">prediction accuracy</div>
+        <div class="s">${thin?`only ${b.calls} calls so far — too thin to trust`:`${b.right} of ${b.calls} BUY/WAIT calls paid off`}</div></div>
+      <div class="score-big saved"><div class="v">${money(b.saved)}</div><div class="k">saved so far</div>
+        <div class="s">following Faro vs booking on search day · avg ${money(avg)}/trip</div></div>
+      <div class="score-big now"><div class="v">${money(nowSave)}</div><div class="k">${nowK}</div>
+        <div class="s">${nowSub}</div></div>
+    </div>
+    <div style="margin-top:16px"><div style="font-size:10.5px;color:var(--dim);text-transform:uppercase;letter-spacing:.1em">cumulative saved by following Faro</div>
+      ${savingsSvg(cumSaved(b))}</div>
+    <div class="bt-strip" style="margin-top:12px">${stripFor(b)}</div>
+    <div style="font-size:11.5px;color:var(--dim);margin-top:6px">green = the call paid off · pink = it missed</div>
+    <div class="honest">${thin
+      ? `We've made only <b>${b.calls} calls</b> on this route — too few to headline an accuracy figure, so we don't. The savings are indicative until the booking curve fills in.`
+      : `If you'd booked every Faro BUY/WAIT call instead of booking the day you first searched, you'd have paid <b>${money(b.saved)}</b> less across ${b.calls} trips (avg <b>${money(avg)}</b>/trip). <b>${b.calls-b.right} calls missed</b>, costing about ${money(b.missed)} — counted against the total, because honesty is the product.`}</div>`;
+}
+function stripFor(b){const r=rng(b.calls*31+7);let out='';
+  for(let i=0;i<Math.min(b.calls,22);i++)out+=`<i class="${r()<b.right/b.calls?'r':'w'}"></i>`;return out;}
+function cumSaved(b){const r=rng(b.calls*7+3);let acc=0;const per=b.saved/Math.max(1,b.right);const pen=b.missed/Math.max(1,b.calls-b.right);
+  const pts=[0];for(let i=0;i<b.calls;i++){if(r()<b.right/b.calls)acc+=per*(0.6+r()*0.8);else acc-=pen*(0.5+r()*0.7);pts.push(Math.max(0,acc));}
+  const mx=Math.max(...pts)||1;return pts.map(p=>Math.round(p/mx*b.saved));}
+function savingsSvg(pts){const w=700,h=60,pad=3,mx=Math.max(...pts)||1;
+  const X=i=>pad+i/(pts.length-1)*(w-2*pad),Y=v=>h-pad-v/mx*(h-2*pad);
+  const line=pts.map((v,i)=>(i?'L':'M')+X(i).toFixed(1)+' '+Y(v).toFixed(1)).join(' ');
+  const area=`M${X(0)} ${h} `+pts.map((v,i)=>'L'+X(i).toFixed(1)+' '+Y(v).toFixed(1)).join(' ')+`L${X(pts.length-1)} ${h} Z`;
+  return `<svg class="savesvg" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
+    <defs><linearGradient id="sg" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="var(--buy)" stop-opacity=".3"/><stop offset="1" stop-color="var(--buy)" stop-opacity="0"/></linearGradient></defs>
+    <path d="${area}" fill="url(#sg)"/><path d="${line}" fill="none" stroke="var(--buy)" stroke-width="2"/></svg>`;}
+
 function renderFan(){const v=verdictFor(...LAB.split('-'),depDate(),21);const N=14,w=700,h=150,pad=8;
   const mid=[],lo=[],hi=[];for(let i=0;i<N;i++){const t=i/(N-1);
     const c=v.now+(v.low-v.now)*Math.sin(t*Math.PI*0.7)*(v.sig==='BUY'?-0.3:1);const band=v.now*(0.02+t*0.06);
@@ -633,38 +680,25 @@ function renderHeat(){const base=verdictFor(...LAB.split('-'),depDate(),21).now;
     const val=Math.round(base*(1+0.07*Math.sin(i*0.9+0.4)+0.05*Math.cos(j*1.05)+((i>=5)?0.05:0)+((j===4)?0.04:0)-0.04));
     row.push(val);if(val<min){min=val;minij=[i,j];}}g.push(row);}
   const mx=Math.max(...g.flat());
-  const col=v=>{const t=(v-min)/((mx-min)||1);// 0=cheap(buy) .. 1=dear(up)
+  const col=v=>{const t=(v-min)/((mx-min)||1);
     return t<0.5?`color-mix(in srgb,var(--buy) ${(1-t*2)*100}%, var(--brand))`:`color-mix(in srgb,var(--brand) ${(1-(t-0.5)*2)*100}%, var(--up))`;};
   let html='<div class="heat"><div class="hlabel"></div>'+DOW.map(d=>`<div class="hlabel">${d}</div>`).join('');
   for(let i=0;i<7;i++){html+=`<div class="hlabel">${DOW[i]}</div>`;for(let j=0;j<7;j++){const best=i===minij[0]&&j===minij[1];
-    html+=`<div class="hcell ${best?'best':''}" style="background:${col(g[i][j])}" aria-label="${DOW[i]} dep / ${DOW[j]} ret — ${money(g[i][j])}" title="${DOW[i]} dep / ${DOW[j]} ret — ${money(g[i][j])}">${best?'★':''}</div>`;}}
+    html+=`<div class="hcell ${best?'best':''}" style="background:${col(g[i][j])}" title="${DOW[i]} dep / ${DOW[j]} ret — ${money(g[i][j])}" aria-label="${DOW[i]} dep / ${DOW[j]} ret — ${money(g[i][j])}">${best?'★':''}</div>`;}}
   html+='</div><div class="heat-legend">cheaper <span class="heat-ramp"></span> dearer · ★ '+
     `${DOW[minij[0]]} out / ${DOW[minij[1]]} back is cheapest (${money(min)})</div>`;
   $('heatPanel').innerHTML=html;}
-function initFinder(){const fr=$('ff-route');
-  fr.innerHTML='<option value="all">all routes</option>'+Object.keys(ROUTES).map(k=>`<option value="${k}">${k.replace('-',' → ')}</option>`).join('');
-  fr.value='all';$('ff-price').value=2800;$('ff-stops').value='2';$('ff-sort').value='price';
-  ['ff-route','ff-stops','ff-price','ff-sort'].forEach(id=>$(id).oninput=drawFinder);drawFinder();}
-function drawFinder(){const rt=$('ff-route').value,st=+$('ff-stops').value,mp=+$('ff-price').value,so=$('ff-sort').value;
-  $('ff-pv').textContent=money(mp);
-  let res=FINDER.filter(f=>(rt==='all'||f.key===rt)&&f.stops<=st&&f.price<=mp);
-  res.sort((a,b)=>so==='price'?a.price-b.price:a.dep.localeCompare(b.dep));
-  $('finderCount').textContent=`${res.length} of ${FINDER.length} combos`;
-  $('finderRes').innerHTML=res.slice(0,10).map(f=>`<div class="fres">
-     <span class="minichip ${verdictFor(f.o,f.d,f.dep,f.len).sig}">${verdictFor(f.o,f.d,f.dep,f.len).sig}</span>
-     <span><b>${f.o} → ${f.d}</b> <span class="meta">· ${fmtD(f.dep)} – ${fmtD(f.ret)} · ${f.len}n · ${f.stops===0?'non-stop':f.stops+' stop'+(f.stops>1?'s':'')} · ${f.air}</span></span>
-     <span class="pr">${money(f.price)}</span></div>`).join('')||'<p style="font-size:13px;color:var(--muted);padding:12px 0">No combos match — loosen the filters.</p>';
-  $('finderRes').insertAdjacentHTML('beforeend','<p style="font-size:11.5px;color:var(--dim);margin-top:10px">In the live app this is the full ~1,900-itinerary grid loaded from <span class="mono">explore.json</span> — lazy-loaded only when you open the Lab.</p>');}
-function renderMarket(){const vs=Object.keys(ROUTES).map(k=>{const[o,d]=k.split('-');return {k,v:verdictFor(o,d,depDate(),21)};});
-  const cheapest=vs.reduce((a,b)=>b.v.now<a.v.now?b:a);
-  const drops=vs.map(x=>({k:x.k,pc:Math.round((x.v.story.at(-1)-x.v.story[0])/x.v.story[0]*100)})).reduce((a,b)=>b.pc<a.pc?b:a);
-  const months={};FINDER.forEach(f=>{(months[f.dep.slice(0,7)]??=[]).push(f.price);});
-  const cheapMonth=Object.entries(months).map(([m,a])=>[m,a.reduce((x,y)=>x+y,0)/a.length]).reduce((a,b)=>b[1]<a[1]?b:a);
-  const tiles=[['Cheapest route now',money(cheapest.v.now),cheapest.k.replace('-',' → ')],
-    ['Biggest 30-day drop',drops.pc+'%',drops.k.replace('-',' → ')],
-    ['Cheapest month',MON[+cheapMonth[0].slice(5)-1],'avg '+money(Math.round(cheapMonth[1]))],
-    ['Dataset',FINDER.length+' combos',Object.keys(ROUTES).length+' routes · '+new Set(Object.values(AIRLINES).flat()).size+' airlines']];
-  $('mkt').innerHTML=tiles.map(t=>`<div class="stile"><div class="v">${t[1]}</div><div class="k">${t[0]}</div><div style="font-size:11px;color:var(--muted);margin-top:4px">${t[2]}</div></div>`).join('');}
+function initFinderScoped(route){$('ff-price').value=2800;$('ff-stops').value='2';$('ff-sort').value='price';
+  const draw=()=>{const st=+$('ff-stops').value,mp=+$('ff-price').value,so=$('ff-sort').value;$('ff-pv').textContent=money(mp);
+    let res=FINDER.filter(f=>f.key===route&&f.stops<=st&&f.price<=mp);
+    res.sort((a,b)=>so==='price'?a.price-b.price:a.dep.localeCompare(b.dep));
+    $('finderCount').textContent=`${res.length} combos`;
+    $('finderRes').innerHTML=res.slice(0,10).map(f=>`<div class="fres">
+       <span class="minichip ${verdictFor(f.o,f.d,f.dep,f.len).sig}">${verdictFor(f.o,f.d,f.dep,f.len).sig}</span>
+       <span><b>${f.o} → ${f.d}</b> <span class="meta">· ${fmtD(f.dep)} – ${fmtD(f.ret)} · ${f.len}n · ${f.stops===0?'non-stop':f.stops+' stop'+(f.stops>1?'s':'')} · ${f.air}</span></span>
+       <span class="pr">${money(f.price)}</span></div>`).join('')||'<p style="font-size:13px;color:var(--muted);padding:12px 0">No combos match — loosen the filters.</p>';
+    $('finderRes').insertAdjacentHTML('beforeend','<p style="font-size:11.5px;color:var(--dim);margin-top:10px">In the live app this is the route\'s slice of the full ~1,900-itinerary grid loaded from <span class="mono">explore.json</span> — lazy-loaded only when you open the Lab.</p>');};
+  ['ff-stops','ff-price','ff-sort'].forEach(id=>$(id).oninput=draw);draw();}
 
 /* ═══════════════ router ═══════════════════════════════════════════════════ */
 function route(){const h=location.hash;
