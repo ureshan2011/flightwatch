@@ -175,6 +175,20 @@ def _clean_layover(val):
     return ", ".join(seen[:3])
 
 
+def _via_airports(val, origin="", dest="", stops=None):
+    """The actual CONNECTION airport(s) for an offer -- never the trip's own
+    endpoints. Google's row sometimes lists the origin/destination chips alongside
+    the real layover (e.g. a 1-stop CHC->CMB shows "CHC, CMB, MEL" where only MEL
+    is the connection), which made the dashboard claim impossible "via" lists. We
+    strip the endpoints and, when we know the stop count, keep at most that many
+    codes so a 1-stop flight can never show two layovers."""
+    ends = {str(origin).upper(), str(dest).upper()}
+    codes = [c for c in _clean_layover(val).split(", ") if c and c not in ends]
+    if stops is not None and stops >= 0:
+        codes = codes[:int(stops)]
+    return ", ".join(codes)
+
+
 def _airlines_in(day):
     """Distinct, cleaned airline names present in a day's offers (order: cheapest first)."""
     seen, out = set(), []
@@ -283,18 +297,54 @@ def _insights(ok):
 
 
 def _latest_offers(ok, per_itin=10):
-    """The cheapest offers from each itinerary's most recent scan, with detail."""
+    """The DISTINCT flight options from each itinerary's most recent scan.
+
+    Each returned offer is a genuinely distinct flight, described with exactly
+    what the source gives us -- operating carrier(s), stops, the real connection
+    airport(s) and total duration -- so the dashboard can be specific instead of
+    collapsing a carrier to one line. Two clean-ups keep it honest:
+
+      * the same physical flight is often scraped more than once (e.g. a Jetstar
+        row plus a duplicate whose airline failed to parse); we fold those into
+        one option, keeping the row that actually names a carrier; and
+      * "via" lists only true connection airports, never the trip's own endpoints.
+
+    We never fabricate a flight number or a departure time -- those live only on
+    the booking page, which the Book CTA deep-links to.
+    """
     out = {}
     for itin, h in ok.groupby("itin"):
-        day = h[h["scan_date"] == h["scan_date"].max()].copy()
-        day = day.sort_values("price").head(per_itin)
-        out[itin] = [{"price": float(r.price),
-                      "airline": clean_airline(getattr(r, "airline", "")),
-                      "iata": airline_iata(clean_airline(getattr(r, "airline", ""))),
-                      "stops": int(r.stops) if pd.notna(r.stops) else 0,
-                      "via": _clean_layover(getattr(r, "layover", "")),
-                      "duration": int(r.duration_minutes) if pd.notna(r.duration_minutes) else 0}
-                     for r in day.itertuples()]
+        day = h[h["scan_date"] == h["scan_date"].max()]
+        if day.empty:
+            continue
+        o = str(day["origin"].iloc[0])
+        d = str(day["destination"].iloc[0])
+        named, blanks, phys, seen_blank = [], [], set(), set()
+        for r in day.sort_values("price").itertuples():
+            air = clean_airline(getattr(r, "airline", ""))
+            stops = int(r.stops) if pd.notna(r.stops) else 0
+            via = _via_airports(getattr(r, "layover", ""), o, d, stops)
+            dur = (int(r.duration_minutes)
+                   if pd.notna(r.duration_minutes) and r.duration_minutes > 0 else 0)
+            price = float(r.price)
+            pk = (stops, via, dur, round(price))          # one physical flight
+            offer = {"price": price, "airline": air, "iata": airline_iata(air),
+                     "stops": stops, "via": via, "duration": dur}
+            if air:
+                ik = (offer["iata"],) + pk
+                if ik not in phys:                        # distinct named flight
+                    phys.add(ik)
+                    phys.add(("*",) + pk)                 # mark physical-covered
+                    named.append(offer)
+            else:
+                blanks.append((pk, offer))
+        # Keep an unnamed offer only if no named flight already represents it.
+        for pk, offer in blanks:
+            if ("*",) + pk in phys or pk in seen_blank:
+                continue
+            seen_blank.add(pk)
+            named.append(offer)
+        out[itin] = sorted(named, key=lambda x: x["price"])[:per_itin]
     return out
 
 
@@ -328,7 +378,8 @@ def _carrier_fares(day):
         st = int(r.stops) if pd.notna(r.stops) else None
         du = (int(r.duration_minutes)
               if pd.notna(r.duration_minutes) and r.duration_minutes > 0 else 0)
-        lay = _clean_layover(getattr(r, "layover", ""))
+        lay = _via_airports(getattr(r, "layover", ""),
+                            getattr(r, "origin", ""), getattr(r, "destination", ""), st)
         carriers = [c.strip() for c in combined.split(" + ") if c.strip()]
         solo = len(carriers) == 1            # this carrier flies the whole trip
         for carrier in carriers:
@@ -398,7 +449,9 @@ def _explore(ok, cap=4000):
             "len": (int(cheap["trip_length"]) if pd.notna(cheap["trip_length"]) else None),
             "min": round(float(prices.min())),
             "airline": air, "iata": iata,
-            "via": _clean_layover(getattr(cheap, "layover", "")),
+            "via": _via_airports(getattr(cheap, "layover", ""),
+                                 cheap["origin"], cheap["destination"],
+                                 int(cheap["stops"]) if pd.notna(cheap["stops"]) else None),
             "al": al,
             "byair": byair,
             "stops": (int(stops_s.min()) if not stops_s.empty else None),
@@ -990,8 +1043,8 @@ def build():
     # are guarded by their own tests) -- they're just not shipped to the browser,
     # which roughly halves the page. `ai` alone was ~170 KB of unused JSON.
     embed_keys = {"generated", "status", "recs", "history", "explore", "explore_meta",
-                  "surface", "routes_overview", "backtests", "monetization", "stats",
-                  "cities", "currency", "model"}
+                  "surface", "latest_offers", "routes_overview", "backtests",
+                  "monetization", "stats", "cities", "currency", "model"}
     embedded = {k: v for k, v in payload.items() if k in embed_keys}
     with open(os.path.join(DOCS_DIR, "index.html"), "w", encoding="utf-8") as f:
         f.write(_html(embedded))
@@ -1237,6 +1290,18 @@ input,select{font-family:inherit}
 svg.spark{width:100%;height:90px;display:block}
 .trust{margin-top:14px;font-size:12.5px;color:var(--dim);line-height:1.7;text-align:center}.trust b{color:var(--muted)}
 
+/* ── specific flight options ────────────────────────────────────────────── */
+.optrow{display:grid;grid-template-columns:auto 1fr auto auto;gap:11px;align-items:center;
+  padding:10px 0;border-bottom:1px solid var(--line);font-size:13px}
+.optrow:last-of-type{border-bottom:none}
+.opt-logo{width:22px;height:22px;border-radius:5px;background:var(--card2);object-fit:contain;border:1px solid var(--line2)}
+.opt-main b{font-weight:600}
+.opt-meta{font-size:11.5px;color:var(--muted)}
+.opt-pr{font-family:'IBM Plex Mono',monospace;font-weight:600;text-align:right}
+.opt-best{font-size:9px;color:var(--buy);font-weight:700;letter-spacing:.06em;display:block}
+.opt-note{font-size:11.5px;color:var(--dim);margin-top:10px;line-height:1.6}
+.opt-note b{color:var(--muted)}
+
 /* ── flexibility engine ─────────────────────────────────────────────────── */
 .flex-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-top:4px}
 .flexcard{position:relative;background:var(--card2);border:1px solid var(--line2);border-radius:var(--r-md);
@@ -1395,6 +1460,7 @@ svg.fan{width:100%;height:150px;display:block;margin-top:8px}
       </div>
     </div>
     <div id="verdict">''' + prerender + r'''</div>
+    <div class="panel" id="options"></div>
     <div class="panel" id="flex"></div>
     <div class="panel" id="weather"></div>
     <div class="panel" id="story"></div>
@@ -1694,13 +1760,38 @@ function renderAnswer(){
       toast(w?(Store.user.anon?'Watching ✓ — saved to this device. Sign in to sync + get alerts':'Watching ✓ — synced · we’ll alert you when it’s time'):'Removed from My trips');renderAnswer();},30);};
   const ab=$('auditBtn');ab.onclick=()=>{const a=$('audit');a.classList.toggle('open');
     ab.textContent=a.classList.contains('open')?'why we think this ▴':'why we think this ▾';};
-  renderFlex(v);renderWeather(v);renderStory(v);
+  renderOptions(v);renderFlex(v);renderWeather(v);renderStory(v);
   const st=D.status||{};const last=st.last_scan_iso?relTime(st.last_scan_iso):'recently';
   $('trust').innerHTML='Source: <b>Google Flights</b>, scraped several times a day · last scan <b>'+esc(last)+'</b> · '+v.obs+' observations on this route.'
     +'<br>Fares are <b>informational</b> — always confirm the live price before booking.';
 }
 function relTime(iso){const t=Date.parse(String(iso).replace(' ','T').replace(/Z?$/,'Z'));if(isNaN(t))return'recently';
   const m=Math.round((Date.now()-t)/60000);if(m<60)return m+'m ago';const h=Math.round(m/60);if(h<48)return h+'h ago';return Math.round(h/24)+'d ago';}
+
+function fmtDur(m){m=+m||0;if(!m)return '';const h=Math.floor(m/60),mm=m%60;return h+'h'+(mm?' '+mm+'m':'');}
+/* The specific flights on this exact trip from the latest scan. We never collapse
+   a carrier to one line or invent a flight number -- each row is a real distinct
+   offer (a carrier can legitimately appear several times with different routing or
+   timing), described with exactly what the source gives us. */
+function renderOptions(v){const offers=(D.latest_offers||{})[v.itin]||[];
+  if(!offers.length){$('options').innerHTML='';$('options').style.display='none';return;}
+  $('options').style.display='';
+  const seen=new Set(),rows=[];
+  offers.forEach(o=>{const k=o.iata+'|'+o.stops+'|'+o.via+'|'+o.duration+'|'+Math.round(o.price);
+    if(seen.has(k))return;seen.add(k);rows.push(o);});
+  const cheapest=Math.min.apply(null,rows.map(o=>o.price));let taggedCheapest=false;
+  const head='<div class="panel-head"><h3>Flights on this trip</h3><span>'+rows.length+' distinct option'+(rows.length>1?'s':'')+' · '+esc(A.o)+'→'+esc(A.d)+' '+fmtD(v.dep)+'</span></div>';
+  const body=rows.slice(0,8).map(o=>{
+    const stops=o.stops===0?'non-stop':(o.stops+' stop'+(o.stops>1?'s':''));
+    const via=o.via?' via '+esc(o.via):'';
+    const logo=o.iata?'<img class="opt-logo" loading="lazy" alt="" src="https://pics.avs.io/al_square/44/44/'+esc(o.iata)+'.png">':'<span class="opt-logo"></span>';
+    const best=(o.price===cheapest&&!taggedCheapest)?(taggedCheapest=true,'<span class="opt-best">CHEAPEST</span>'):'';
+    return '<div class="optrow">'+logo
+      +'<span class="opt-main"><b>'+esc(o.airline||'Airline')+'</b><span class="opt-meta"> · '+stops+via+(o.duration?' · '+fmtDur(o.duration):'')+'</span></span>'
+      +'<span class="opt-pr">'+money(o.price)+best+'</span></div>';
+  }).join('');
+  const note='<div class="opt-note">Each row is a <b>distinct flight</b> tracked on this exact trip in the latest scan — the same airline can appear more than once (different routing or timing). We capture the <b>operating carrier(s), stops, connection airport and total duration</b>; <b>exact flight numbers and departure times are confirmed on the booking page</b> — we don’t invent them.</div>';
+  $('options').innerHTML=head+body+note;}
 
 function reanchor(o,d,dep,len){[A.o,A.d]=[o,d];A.depMonth=dep.slice(0,7);A.len=len;
   fillComposer();syncURL();renderAnswer();}
