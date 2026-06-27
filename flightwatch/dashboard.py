@@ -1161,8 +1161,8 @@ def _prerender_verdict(p):
     recs = p.get("recs") or []
     if not recs:
         st = (p.get("status") or {})
-        msg = ("Collecting the first fares for the tracked routes — the verdict "
-               "lights up as soon as there's price history to reason about.")
+        msg = ("We're gathering prices for these trips — your answer appears "
+               "as soon as there's enough to go on.")
         return ('<div class="verdict s-WATCH"><div class="ctx mono">Faro</div>'
                 '<div class="sigrow"><div class="signal">SOON</div></div>'
                 '<div class="reason">' + msg + '</div></div>')
@@ -1177,15 +1177,19 @@ def _prerender_verdict(p):
     now = round(float(r.get("price", 0)))
     low = round(float(r.get("predicted_low") or now))
     conf = r.get("confidence", "")
+    plain = {"BUY": "Book it now",
+             "WAIT": "Hold off — a better price is likely",
+             "WATCH": "Keep an eye on it"}.get(sig, "")
     return (
         '<div class="verdict s-' + sig + '">'
         '<div class="ctx mono">' + o + ' &rarr; ' + d + '</div>'
         '<div class="sigrow"><div class="signal">' + sig + '</div></div>'
+        '<div class="verdict-plain">' + plain + '</div>'
         '<div class="reason">' + reason + '</div>'
-        '<div class="conf"><span>Confidence ' + str(conf) + '%</span></div>'
+        '<div class="conf"><span>How sure we are: ' + str(conf) + '%</span></div>'
         '<div class="nums">'
-        '<div class="num"><div class="v mono">' + cur + ' ' + format(now, ",") + '</div><div class="k">fare now</div></div>'
-        '<div class="num"><div class="v mono">' + cur + ' ' + format(low, ",") + '</div><div class="k">forecast low</div></div>'
+        '<div class="num"><div class="v mono">' + cur + ' ' + format(now, ",") + '</div><div class="k">price now</div></div>'
+        '<div class="num"><div class="v mono">' + cur + ' ' + format(low, ",") + '</div><div class="k">price we expect</div></div>'
         '</div></div>')
 
 
@@ -1196,7 +1200,7 @@ def _html(p):
     return r'''<!DOCTYPE html><html lang="en" data-theme="dark"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Faro &middot; know when to book</title>
-<meta name="description" content="Tell Faro your trip and get one honest buy / wait / watch verdict from real scraped fares — best-buy window, confidence with provenance, 7-day fare weather, and per-route accuracy. Pin trips and get alerted when it's time to buy.">
+<meta name="description" content="Know whether to book your flight now or wait. Faro gives you a clear answer — book, wait, or watch — follows real fares every day, shows the price we expect next, and tells you the moment it's time to book.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="preconnect" href="https://pics.avs.io" crossorigin>
@@ -1286,6 +1290,23 @@ input,select{font-family:inherit}
 .linkbtn{background:none;border:1px solid var(--line2);color:var(--muted);border-radius:var(--r-pill);padding:5px 11px;font-size:12px;display:inline-flex;align-items:center;gap:6px}
 .linkbtn:hover{color:var(--ink);border-color:var(--brand)}
 
+/* ── plain-language intro / how-it-works ───────────────────────────────────── */
+.intro{position:relative;margin:22px 0 2px;padding:20px 20px 18px;border:1px solid var(--line2);
+  border-radius:var(--r-lg);background:linear-gradient(180deg,color-mix(in srgb,var(--brand) 7%,var(--card)),var(--card))}
+.intro h1{font-size:23px;font-weight:700;letter-spacing:-.02em;line-height:1.25;max-width:24ch}
+.intro p{font-size:13.5px;color:var(--muted);margin-top:7px;max-width:52ch}
+.intro .steps{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:16px}
+.intro .step{display:flex;flex-direction:column;gap:3px}
+.intro .step .n{width:22px;height:22px;border-radius:50%;background:var(--brand);color:var(--on-brand);
+  font-size:12px;font-weight:700;display:grid;place-items:center;margin-bottom:4px}
+.intro .step b{font-size:13px;font-weight:600}
+.intro .step span{font-size:12px;color:var(--muted);line-height:1.45}
+.intro .x{position:absolute;top:12px;right:13px;background:none;border:none;color:var(--dim);font-size:18px;
+  line-height:1;width:26px;height:26px;border-radius:8px}
+.intro .x:hover{color:var(--ink);background:var(--card2)}
+@media(max-width:560px){.intro .steps{grid-template-columns:1fr;gap:10px}
+  .intro .step{flex-direction:row;align-items:flex-start;gap:9px}.intro .step .n{flex:none;margin:0}}
+
 .verdict{margin-top:14px;background:var(--card);border:1px solid var(--line2);border-radius:var(--r-lg);
   padding:22px;box-shadow:var(--shadow-lg);position:relative;overflow:hidden}
 .verdict::before{content:"";position:absolute;inset:0 0 auto 0;height:3px}
@@ -1297,7 +1318,9 @@ input,select{font-family:inherit}
 .window{display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:600;background:var(--card2);
   border:1px solid var(--line2);border-radius:var(--r-pill);padding:6px 13px}
 .window b{font-family:'IBM Plex Mono',monospace}
-.reason{font-size:18px;margin:10px 0 16px;max-width:46ch}
+.verdict-plain{font-size:14px;font-weight:600;margin-top:9px}
+.s-BUY .verdict-plain{color:var(--buy)} .s-WAIT .verdict-plain{color:var(--wait)} .s-WATCH .verdict-plain{color:var(--watch)}
+.reason{font-size:16px;color:var(--muted);margin:4px 0 16px;max-width:50ch}
 .conf{display:flex;align-items:center;gap:10px;margin-bottom:18px;font-size:12.5px;color:var(--muted);flex-wrap:wrap}
 .track{display:flex;gap:3px}.pip{width:22px;height:7px;border-radius:3px;background:var(--line2)}
 .s-BUY .pip.on{background:var(--buy)} .s-WAIT .pip.on{background:var(--wait)} .s-WATCH .pip.on{background:var(--watch)}
@@ -1359,16 +1382,23 @@ svg.spark{width:100%;height:90px;display:block}
 .flexcard .fx-book svg{width:11px;height:11px}
 .flex-none{font-size:12.5px;color:var(--muted);padding:4px 0}
 .flexbar-wrap{margin-top:14px}
-.flexbar-cap{font-size:10.5px;color:var(--dim);text-transform:uppercase;letter-spacing:.1em;margin-bottom:6px}
+.flexbar-cap{font-size:10.5px;color:var(--dim);text-transform:uppercase;letter-spacing:.1em;margin-bottom:11px}
 .flexbar{display:flex;gap:3px;align-items:flex-end;height:64px}
 .flexbar .fb-col{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;min-width:0}
 .flexbar .fb-bar{width:100%;border-radius:3px 3px 0 0;background:var(--brand);transition:opacity .15s}
 .flexbar .fb-col:hover .fb-bar{opacity:.75}
 .flexbar .fb-col.anchor .fb-bar{background:var(--ink)}
 .flexbar .fb-col.cheap .fb-bar{background:var(--buy)}
+.flexbar .fb-col.sel .fb-bar{box-shadow:0 0 0 2px var(--brand)}
+.flexbar .fb-col.sel .fb-d{color:var(--brand);font-weight:600}
 .flexbar .fb-d{font-size:8.5px;color:var(--dim);font-family:'IBM Plex Mono',monospace;white-space:nowrap}
 .flexbar-legend{display:flex;gap:14px;font-size:11px;color:var(--dim);margin-top:8px;flex-wrap:wrap}
 .flexbar-legend i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:4px;vertical-align:middle}
+.flex-pick{margin-top:11px;padding:10px 12px;border:1px solid var(--line2);border-radius:var(--r-md);
+  background:var(--card2);font-size:12.5px;color:var(--muted);display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.flex-pick b{color:var(--ink)}
+.flex-pick .pk-pr{font-family:'IBM Plex Mono',monospace;font-weight:600;color:var(--ink)}
+.flex-pick .bookrow{margin-left:auto}
 
 /* ── price surface (Lab) ────────────────────────────────────────────────── */
 .surf-scroll{overflow-x:auto;margin-top:10px;padding-bottom:6px}
@@ -1497,9 +1527,9 @@ svg.fan{width:100%;height:150px;display:block;margin-top:8px}
   <div class="shell-in">
     <div class="brand"><span class="mark">F</span>Faro</div>
     <nav class="tabs" aria-label="Views">
-      <button class="tab" id="tab-answer" data-go="#/">Answer</button>
-      <button class="tab" id="tab-watch" data-go="#/watch">Watch <span class="badge" id="tabN">0</span></button>
-      <button class="tab" id="tab-lab" data-go="#/lab">Lab</button>
+      <button class="tab" id="tab-answer" data-go="#/">Book or wait</button>
+      <button class="tab" id="tab-watch" data-go="#/watch">My trips <span class="badge" id="tabN">0</span></button>
+      <button class="tab" id="tab-lab" data-go="#/lab">Explore</button>
     </nav>
     <div class="spacer"></div>
     <div class="outlook" id="outlook"></div>
@@ -1511,9 +1541,19 @@ svg.fan{width:100%;height:150px;display:block;margin-top:8px}
   <div class="idstrip" id="idstrip"></div>
 
   <section id="view-answer" aria-label="Answer">
+   <div class="intro" id="intro">
+     <button class="x" id="introX" title="Hide" aria-label="Hide intro">&times;</button>
+     <h1>Know whether to book your flight now — or wait for a better price.</h1>
+     <p>Pick your trip below and get a straight answer: book it, hold off, or keep an eye on it. We follow real fares every day so you don't have to.</p>
+     <div class="steps">
+       <div class="step"><span class="n">1</span><b>Pick your trip</b><span>Where you're going, roughly when, and for how long.</span></div>
+       <div class="step"><span class="n">2</span><b>Get a clear answer</b><span>Book now, wait, or watch — with the price we expect next.</span></div>
+       <div class="step"><span class="n">3</span><b>Let us watch it</b><span>Save the trip and we'll tell you the moment it's time to book.</span></div>
+     </div>
+   </div>
    <div class="answer-grid">
     <div class="answer-main">
-     <div class="kicker">Tell me your trip</div>
+     <div class="kicker">Your trip</div>
      <div class="composer">
       <div class="field"><label for="f-o">From</label><select id="f-o"></select></div>
       <div class="field"><label for="f-d">To</label><select id="f-d"></select></div>
@@ -1540,10 +1580,10 @@ svg.fan{width:100%;height:150px;display:block;margin-top:8px}
     <div class="watch-head">
       <h2>My trips</h2>
     </div>
-    <p style="font-size:12.5px;color:var(--muted);margin-top:2px">Pinned trips, kept in sync. We watch each one and tell you the moment it's time to buy.</p>
+    <p style="font-size:12.5px;color:var(--muted);margin-top:2px">Your saved trips, kept in sync. We keep an eye on each one and tell you the moment it's time to book.</p>
     <div id="tripList"></div>
     <details class="fb-explain">
-      <summary>&#9729; How the Watch syncs &amp; alerts (Firebase) &#9662;</summary>
+      <summary>&#9729; How saving &amp; alerts work &#9662;</summary>
       <div class="body" id="fbBody"></div>
     </details>
   </section>
@@ -1610,12 +1650,13 @@ function outlookOf(r){if(r.signal==='BUY')return'low';
 function winOf(r){if(r.signal==='BUY')return 0;
   if(r.best_dtd!=null&&r.days_to_departure!=null)return Math.max(0,r.days_to_departure-r.best_dtd);return null;}
 function whyOf(r,route){const W=[];const b=BT[route];
-  if(r.percentile!=null)W.push('Current fare sits around the '+r.percentile+'th percentile of this route’s recent range.');
-  if((r.expected_savings||0)>0)W.push('Model expects a low near '+money(r.predicted_low)+' — about '+money(r.expected_savings)+' under today.');
-  if(r.prob_drop!=null)W.push('Estimated chance of a further near-term drop: '+r.prob_drop+'%.');
-  if(b&&b.hit_rate!=null)W.push('Backtest: BUY/WAIT calls on this route paid off '+b.hit_rate+'% of the time ('+b.right+'/'+b.calls+').');
-  else W.push('Still learning this route — too few graded calls to headline an accuracy figure yet.');
-  if(r.method!=='model')W.push('Only '+r.points+' daily points so far — using the transparent heuristic, not the trained model.');
+  if(r.percentile!=null){const lo=r.percentile<=33,hi=r.percentile>=67;
+    W.push('Today’s price is '+(lo?'near the low end':hi?'on the high side':'about average')+' of what we’ve seen for this trip lately.');}
+  if((r.expected_savings||0)>0)W.push('We think it could drop to around '+money(r.predicted_low)+' — about '+money(r.expected_savings)+' less than today.');
+  if(r.prob_drop!=null)W.push('Roughly a '+r.prob_drop+'% chance it dips a bit more soon.');
+  if(b&&b.hit_rate!=null)W.push('On this route, our past book-or-wait calls were right '+b.hit_rate+'% of the time ('+b.right+' of '+b.calls+').');
+  else W.push('We’re still getting to know this route, so we’re not putting a track-record number on it yet.');
+  if(r.method!=='model')W.push('There’s only a little price history so far, so treat this as an early read.');
   return W;}
 
 function verdictFor(o,d,depMonth,len){const r=nearestRec(o,d,depMonth,len);if(!r)return null;
@@ -1783,14 +1824,15 @@ function renderAnswer(){
   const v=verdictFor(A.o,A.d,A.depMonth,A.len);
   if(!v){$('verdict').innerHTML='<div class="empty">No model call yet for '+esc(A.o)+'→'+esc(A.d)+' — still collecting fares.</div>';
     $('weather').innerHTML='';$('story').innerHTML='';$('trust').textContent='';return;}
-  const oi={falling:['▼','falling','var(--down)'],low:['◆','low & firming','var(--brand)'],steady:['◆','steady','var(--muted)']}[v.out];
-  $('outlook').innerHTML='<span style="color:'+oi[2]+'">'+oi[0]+'</span> outlook: <b>'+oi[1]+'</b>';
-  let win=v.sig==='BUY'?'<span class="window">⟳ best-buy window: <b>now</b></span>'
-    :(v.win!=null?'<span class="window">⟳ best-buy window: <b>~'+v.win+' days</b></span>':'');
+  const oi={falling:['▼','prices easing','var(--down)'],low:['◆','near its low','var(--brand)'],steady:['◆','holding steady','var(--muted)']}[v.out];
+  $('outlook').innerHTML='<span style="color:'+oi[2]+'">'+oi[0]+'</span> right now: <b>'+oi[1]+'</b>';
+  let win=v.sig==='BUY'?'<span class="window">⟳ best time to book: <b>now</b></span>'
+    :(v.win!=null?'<span class="window">⟳ best time to book: <b>in ~'+v.win+' days</b></span>':'');
+  const PLAIN={BUY:'Book it now',WAIT:'Hold off — a better price is likely',WATCH:'Keep an eye on it'};
   const pips=Math.round((v.conf||0)/20);
   const prov=v.hit!=null
-    ?'based on <b>'+v.obs+' observations</b> and a backtest that called this route right <b>'+v.hit+'% of the time</b>'
-    :'based on <b>'+v.obs+' observations</b> — still learning this route';
+    ?'we’ve checked this trip <b>'+v.obs+' times</b>, and past calls on this route were right <b>'+v.hit+'% of the time</b>'
+    :'we’ve checked this trip <b>'+v.obs+' times</b> — still getting to know this route';
   const watching=Store.isWatched({o:A.o,d:A.d,dep:v.dep,len:v.len});
   const L=bookLinks(v.itin);
   const compare=L&&L.compare.length?'<span class="altbook">or compare on '+L.compare.map(p=>'<a href="'+p.href+'" target="_blank" rel="noopener sponsored nofollow">'+esc(p.name)+'</a>').join(' · ')+'</span>':'';
@@ -1798,31 +1840,32 @@ function renderAnswer(){
    '<div class="verdict s-'+v.sig+'">'
    +'<div class="ctx mono">'+esc(A.o)+' → '+esc(A.d)+' · <b>'+fmtD(v.dep)+' – '+fmtD(v.ret)+'</b> · '+v.len+' nights'+(A.flex?' · ±3d':'')+'</div>'
    +'<div class="sigrow"><div class="signal">'+v.sig+'</div>'+win+'</div>'
+   +'<div class="verdict-plain">'+PLAIN[v.sig]+'</div>'
    +'<div class="reason">'+esc(v.reason)+'</div>'
-   +'<div class="conf"><span>Confidence</span><span class="track">'+[0,1,2,3,4].map(i=>'<span class="pip '+(i<pips?'on':'')+'"></span>').join('')+'</span>'
+   +'<div class="conf"><span>How sure we are</span><span class="track">'+[0,1,2,3,4].map(i=>'<span class="pip '+(i<pips?'on':'')+'"></span>').join('')+'</span>'
    +'<span>'+(v.conf||0)+'% — '+prov+'.</span></div>'
    +'<div class="nums">'
-   +'<div class="num"><div class="v mono">'+money(v.now)+'</div><div class="k">fare now</div></div><div class="arrow">→</div>'
-   +'<div class="num"><div class="v mono">'+money(v.low)+'</div><div class="k">forecast low</div></div>'
-   +'<div class="num"><div class="v move '+(v.movePct<0?'dn':v.movePct>0?'up':'')+' mono">'+(v.movePct>0?'+':'')+v.movePct+'%</div><div class="k">expected move</div></div>'
+   +'<div class="num"><div class="v mono">'+money(v.now)+'</div><div class="k">price now</div></div><div class="arrow">→</div>'
+   +'<div class="num"><div class="v mono">'+money(v.low)+'</div><div class="k">price we expect</div></div>'
+   +'<div class="num"><div class="v move '+(v.movePct<0?'dn':v.movePct>0?'up':'')+' mono">'+(v.movePct>0?'+':'')+v.movePct+'%</div><div class="k">likely change</div></div>'
    +'</div>'
    +'<div class="cta">'
-   +'<button class="btn btn-pin '+(watching?'on':'')+'" id="pinBtn">'+(watching?'✓ Watching':'+ Pin &amp; watch this trip')+'</button>'
-   +(L?'<a class="btn btn-primary" href="'+L.primary.href+'" target="_blank" rel="noopener sponsored nofollow">Book on '+esc(L.primary.name)+' →</a>':'')
-   +'<button class="auditlink" id="auditBtn">why we think this ▾</button>'
+   +'<button class="btn btn-pin '+(watching?'on':'')+'" id="pinBtn">'+(watching?'✓ Watching this trip':'+ Save &amp; watch this trip')+'</button>'
+   +(L?'<a class="btn btn-primary" href="'+L.primary.href+'" target="_blank" rel="noopener sponsored nofollow">See it on '+esc(L.primary.name)+' →</a>':'')
+   +'<button class="auditlink" id="auditBtn">why we say this ▾</button>'
    +'</div>'+compare
-   +'<div class="audit" id="audit"><div>Faro’s reasoning, in full — generated from the numbers, no LLM:</div>'
+   +'<div class="audit" id="audit"><div>Here’s the thinking behind this, in plain terms:</div>'
    +'<ul>'+v.why.map(w=>'<li>'+esc(w)+'</li>').join('')+'</ul></div>'
    +'</div>';
   $('pinBtn').onclick=async()=>{await Store.pin({o:A.o,d:A.d,dep:v.dep,ret:v.ret,len:v.len});
     setTimeout(()=>{const w=Store.isWatched({o:A.o,d:A.d,dep:v.dep,len:v.len});
-      toast(w?(Store.user.anon?'Watching ✓ — saved to this device. Sign in to sync + get alerts':'Watching ✓ — synced · we’ll alert you when it’s time'):'Removed from My trips');renderAnswer();},30);};
+      toast(w?(Store.user.anon?'Saved ✓ — kept on this device. Sign in to sync and get alerts':'Saved ✓ — we’ll let you know the moment it’s time to book'):'Removed from My trips');renderAnswer();},30);};
   const ab=$('auditBtn');ab.onclick=()=>{const a=$('audit');a.classList.toggle('open');
-    ab.textContent=a.classList.contains('open')?'why we think this ▴':'why we think this ▾';};
+    ab.textContent=a.classList.contains('open')?'why we say this ▴':'why we say this ▾';};
   renderOptions(v);renderFlex(v);renderWeather(v);renderStory(v);
   const st=D.status||{};const last=st.last_scan_iso?relTime(st.last_scan_iso):'recently';
-  $('trust').innerHTML='Source: <b>Google Flights</b>, scraped several times a day · last scan <b>'+esc(last)+'</b> · '+v.obs+' observations on this route.'
-    +'<br>Fares are <b>informational</b> — always confirm the live price before booking.';
+  $('trust').innerHTML='We follow real fares for this trip every day · last updated <b>'+esc(last)+'</b>.'
+    +'<br>Prices are a guide — always confirm the final price before you book.';
 }
 function relTime(iso){const t=Date.parse(String(iso).replace(' ','T').replace(/Z?$/,'Z'));if(isNaN(t))return'recently';
   const m=Math.round((Date.now()-t)/60000);if(m<60)return m+'m ago';const h=Math.round(m/60);if(h<48)return h+'h ago';return Math.round(h/24)+'d ago';}
@@ -1849,14 +1892,14 @@ function renderOptions(v){const offers=(D.latest_offers||{})[v.itin]||[];
       +'<span class="opt-main"><b>'+esc(o.airline||'Airline')+'</b><span class="opt-meta"> · '+stops+via+(o.duration?' · '+fmtDur(o.duration):'')+'</span></span>'
       +'<span class="opt-pr">'+money(o.price)+best+'</span></div>';
   }).join('');
-  const note='<div class="opt-note">Each row is a <b>distinct flight</b> tracked on this exact trip in the latest scan — the same airline can appear more than once (different routing or timing). We capture the <b>operating carrier(s), stops, connection airport and total duration</b>; <b>exact flight numbers and departure times are confirmed on the booking page</b> — we don’t invent them.</div>';
+  const note='<div class="opt-note">Each row is a <b>real flight</b> we’ve seen on this trip — the same airline can show up more than once with different routes or times. Exact flight numbers and departure times are confirmed when you book.</div>';
   $('options').innerHTML=head+body+note;}
 
 function reanchor(o,d,dep,len){[A.o,A.d]=[o,d];A.depMonth=dep.slice(0,7);A.len=len;
   fillComposer();syncURL();renderAnswer();}
 function renderFlex(v){const F=flexFor(v.o,v.d,v.dep,v.len,v.now);
-  const head='<div class="panel-head"><h3>Save by being flexible</h3><span>cheapest nearby trips, vs your '+money((F&&F.anchorPrice)||v.now)+'</span></div>';
-  if(!F){$('flex').innerHTML=head+'<p class="flex-none">Flexibility options appear once this route has more of the date grid scraped.</p>';return;}
+  const head='<div class="panel-head"><h3>Could shifting your dates save money?</h3><span>cheaper nearby trips, next to your '+money((F&&F.anchorPrice)||v.now)+'</span></div>';
+  if(!F){$('flex').innerHTML=head+'<p class="flex-none">We’ll show cheaper nearby dates here once we’ve tracked a few more for this trip.</p>';return;}
   let cards='';
   if(F.suggestions.length){cards='<div class="flex-cards">'+F.suggestions.slice(0,3).map(s=>{
     const itin=s.o+'-'+s.d+' '+s.dep+' -> '+isoAdd(s.dep,s.len);const L=bookLinks(itin);
@@ -1869,43 +1912,58 @@ function renderFlex(v){const F=flexFor(v.o,v.d,v.dep,v.len,v.now);
       +'<span class="fx-what">'+esc(what)+'</span><span class="fx-sub">'+esc(sub)+' · '+money(s.price)+'</span>'
       +(L?'<a class="fx-book" href="'+L.primary.href+'" target="_blank" rel="noopener sponsored nofollow" onclick="event.stopPropagation()">'+_EXT+'book this</a>':'')
       +'</div>';}).join('')+'</div>';
-  }else{cards='<p class="flex-none">Your dates already look like the cheapest in this window — flexing nearby wouldn’t beat '+money(F.anchorPrice)+' by a meaningful margin.</p>';}
-  // mini surface bar: same length, departure dates within ±10 days, coloured by price
+  }else{cards='<p class="flex-none">Your dates already look like the cheapest around here — shifting them wouldn’t save you much.</p>';}
+  // price-by-date inspector: same length, departure dates within ±10 days
   const win=F.cells.filter(c=>c.len===v.len&&Math.abs(c.off-F.anchorOff)<=10).sort((a,b)=>a.off-b.off);
   let bar='';
   if(win.length>=3){const ps=win.map(c=>c.p),mn=Math.min(...ps),mx=Math.max(...ps),rg=(mx-mn)||1,cheap=mn;
-    bar='<div class="flexbar-wrap"><div class="flexbar-cap">price by departure date (same '+v.len+'-night trip)</div><div class="flexbar">'
+    bar='<div class="flexbar-wrap"><div class="flexbar-cap">price by the day you leave · same '+v.len+'-night trip · tap a bar</div><div class="flexbar">'
       +win.map(c=>{const h=18+(1-(c.p-mn)/rg)*46;const cls=c.dep===v.dep?'anchor':(c.p===cheap?'cheap':'');
-        return '<div class="fb-col '+cls+'" data-o="'+v.o+'" data-d="'+v.d+'" data-dep="'+c.dep+'" data-len="'+v.len+'" title="'+fmtD(c.dep)+' — '+money(c.p)+'">'
+        return '<div class="fb-col '+cls+'" data-o="'+v.o+'" data-d="'+v.d+'" data-dep="'+c.dep+'" data-len="'+v.len+'" data-p="'+c.p+'" title="'+fmtD(c.dep)+' — '+money(c.p)+'">'
           +'<div class="fb-bar" style="height:'+h.toFixed(0)+'px"></div><div class="fb-d">'+(+c.dep.slice(8))+'</div></div>';}).join('')
-      +'</div><div class="flexbar-legend"><span><i style="background:var(--ink)"></i>your date</span><span><i style="background:var(--buy)"></i>cheapest</span><span>click a bar to explore it</span></div></div>';}
+      +'</div><div class="flexbar-legend"><span><i style="background:var(--ink)"></i>your date</span><span><i style="background:var(--buy)"></i>cheapest</span></div>'
+      +'<div class="flex-pick" id="flexPick"></div></div>';}
   $('flex').innerHTML=head+cards+bar;
-  $('flex').querySelectorAll('[data-dep]').forEach(el=>el.onclick=()=>{
+  // Tapping a bar inspects that exact day — shows its price next to yours and a way
+  // to open it. It deliberately does NOT swap the verdict above (the answer is tied
+  // to your chosen dates); use a suggestion card or the composer to actually move.
+  function showPick(o,d,dep,len,price){const itin=o+'-'+d+' '+dep+' -> '+isoAdd(dep,len);
+    const diff=Math.round(F.anchorPrice-price);
+    const cmp=dep===v.dep?'this is your current date':(diff>0?'<b style="color:var(--buy)">'+money(diff)+' cheaper</b> than your date':diff<0?money(-diff)+' more than your date':'same as your date');
+    $('flexPick').innerHTML='<span>Leave <b>'+fmtD(dep)+'</b> · '+len+' nights — <span class="pk-pr">'+money(price)+'</span> · '+cmp+'</span>'+bookRowLink(itin,'See this date');}
+  const bars=$('flex').querySelectorAll('.fb-col[data-dep]');
+  if(bars.length){const anchorBar=$('flex').querySelector('.fb-col.anchor')||bars[0];
+    showPick(anchorBar.dataset.o,anchorBar.dataset.d,anchorBar.dataset.dep,+anchorBar.dataset.len,+anchorBar.dataset.p);
+    bars.forEach(el=>el.onclick=()=>{bars.forEach(b=>b.classList.remove('sel'));el.classList.add('sel');
+      showPick(el.dataset.o,el.dataset.d,el.dataset.dep,+el.dataset.len,+el.dataset.p);});}
+  // Suggestion cards are genuinely different trips, so they re-point the whole page.
+  $('flex').querySelectorAll('.flexcard[data-dep]').forEach(el=>el.onclick=()=>{
     reanchor(el.dataset.o,el.dataset.d,el.dataset.dep,+el.dataset.len);
-    toast('Now showing '+el.dataset.o+'→'+el.dataset.d+' · '+fmtD(el.dataset.dep)+' · '+el.dataset.len+'n');});
+    $('verdict').scrollIntoView({behavior:'smooth',block:'start'});
+    toast('Updated the answer above ↑');});
 }
 
 function renderWeather(v){
   // Real near-term forecast from the model's conformal curve (next ~7 days).
   const cur=(v.curve||[]).filter(c=>v.dtd==null||c.dtd<=v.dtd).sort((a,b)=>b.dtd-a.dtd).slice(0,7);
-  if(cur.length<2){$('weather').innerHTML='<div class="panel-head"><h3>7-day fare forecast</h3><span>still learning</span></div>'
-    +'<p style="font-size:12.5px;color:var(--muted)">Not enough history on this route yet for a near-term forecast — the fare weather appears once the booking curve fills in.</p>';return;}
+  if(cur.length<2){$('weather').innerHTML='<div class="panel-head"><h3>What the price may do next</h3><span>still learning</span></div>'
+    +'<p style="font-size:12.5px;color:var(--muted)">We need a little more history for this trip before we can show the days ahead.</p>';return;}
   const prices=cur.map(c=>c.p);const mn=Math.min(...prices),best=prices.indexOf(mn);
-  let h='<div class="panel-head"><h3>7-day fare forecast</h3><span>model curve, '+CUR+'</span></div><div class="wx-cells">';
+  let h='<div class="panel-head"><h3>What the price may do next</h3><span>next 7 days</span></div><div class="wx-cells">';
   cur.forEach((c,i)=>{const prev=i?cur[i-1].p:c.p;const press=(c.p-prev)/Math.max(prev,1);
     const col=press<-0.005?'var(--down)':press>0.005?'var(--up)':'var(--watch)';
     h+='<div class="wx '+(i===best?'best':'')+'"><div class="d">'+(i===0?'now':'+'+i+'d')+'</div><div class="p">'+Math.round(c.p).toLocaleString('en-NZ')+'</div>'
-      +'<div class="bar" style="background:'+col+';opacity:'+(.4+Math.min(.5,Math.abs(press)*8))+'"></div>'+(i===best?'<div class="tag">BEST BUY</div>':'')+'</div>';});
+      +'<div class="bar" style="background:'+col+';opacity:'+(.4+Math.min(.5,Math.abs(press)*8))+'"></div>'+(i===best?'<div class="tag">CHEAPEST</div>':'')+'</div>';});
   $('weather').innerHTML=h+'</div>';}
 
 function renderStory(v){let data=v.story;
-  if(!data||data.length<2){$('story').innerHTML='<div class="panel-head"><h3>Fare story</h3><span>collecting history</span></div>'
-    +'<p style="font-size:12.5px;color:var(--muted)">The fare story for this exact trip appears as daily scans accumulate.</p>';return;}
+  if(!data||data.length<2){$('story').innerHTML='<div class="panel-head"><h3>Price history</h3><span>collecting</span></div>'
+    +'<p style="font-size:12.5px;color:var(--muted)">The price history for this trip builds up as we track it day by day.</p>';return;}
   const w=700,hh=90,pad=6,mn=Math.min(...data),mx=Math.max(...data),rng=(mx-mn)||1;
   const pts=data.map((x,i)=>[pad+i/(data.length-1)*(w-2*pad),hh-pad-(x-mn)/rng*(hh-2*pad)]);
   const line=pts.map((p,i)=>(i?'L':'M')+p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' ');
   const area='M'+pts[0][0]+' '+hh+' '+pts.map(p=>'L'+p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' ')+'L'+pts[pts.length-1][0]+' '+hh+' Z';
-  $('story').innerHTML='<div class="panel-head"><h3>Fare story</h3><span>this trip · low '+money(mn)+'</span></div>'
+  $('story').innerHTML='<div class="panel-head"><h3>Price history</h3><span>this trip · lowest '+money(mn)+'</span></div>'
     +'<svg class="spark" viewBox="0 0 '+w+' '+hh+'" preserveAspectRatio="none" role="img" aria-label="Fare history, low '+money(mn)+'">'
     +'<defs><linearGradient id="g" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="var(--brand)" stop-opacity=".28"/><stop offset="1" stop-color="var(--brand)" stop-opacity="0"/></linearGradient></defs>'
     +'<path d="'+area+'" fill="url(#g)"/><path d="'+line+'" fill="none" stroke="var(--brand)" stroke-width="2" stroke-linejoin="round"/>'
@@ -1925,14 +1983,14 @@ function renderIdentity(){const u=Store.user;if(!u)return;const signedIn=!u.anon
     toast(signedIn?'Signed out — back to device-only':'Signed in — your trips now sync across devices');};}
 
 function renderWatch(){const list=Store.trips();$('tabN').textContent=list.length;
-  if(!list.length){$('tripList').innerHTML='<div class="empty">No pinned trips yet.<br>Open the <b>Answer</b> tab, find your trip, and hit <b>Pin &amp; watch</b>.<br>We’ll keep an eye on it and tell you the moment it’s time to buy.</div>';return;}
+  if(!list.length){$('tripList').innerHTML='<div class="empty">No saved trips yet.<br>Open <b>Book or wait</b>, find your trip, and tap <b>Save &amp; watch</b>.<br>We’ll keep an eye on it and tell you the moment it’s time to book.</div>';return;}
   $('tripList').innerHTML=list.map(t=>{const v=verdictFor(t.o,t.d,(t.dep||'').slice(0,7),t.len)||{sig:'WATCH',now:0,conf:''};
     const al=t.alerts||{};
-    const sub=fmtD(t.dep)+' · '+t.len+' nights · '+(v.sig==='BUY'?'book now':v.win?'best-buy in ~'+v.win+'d':'watching');
+    const sub=fmtD(t.dep)+' · '+t.len+' nights · '+(v.sig==='BUY'?'book now':v.win?'best price in ~'+v.win+'d':'watching');
     const tg=(ch,lbl)=>'<button class="atog '+(al[ch]?'on':'')+'" data-id="'+esc(t.id)+'" data-ch="'+ch+'">'+(al[ch]?'✓ ':'')+lbl+'</button>';
     return '<div class="tcard"><div class="tc-top"><span class="tc-route">'+esc(t.o)+' → '+esc(t.d)+'</span><span class="chip '+v.sig+'">'+v.sig+'</span>'
       +'<span class="tc-now">'+money(v.now)+'</span></div>'
-      +'<div class="tc-sub">'+sub+(v.conf?' · '+v.conf+'% confident':'')+'</div>'
+      +'<div class="tc-sub">'+sub+(v.conf?' · '+v.conf+'% sure':'')+'</div>'
       +'<div class="tc-alerts"><span style="font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.1em">alert via</span>'
       +tg('push','Push')+tg('telegram','Telegram')+tg('email','Email')
       +'<span class="target">· also if under <input type="number" data-id="'+esc(t.id)+'" class="tgt" placeholder="—" value="'+(t.target!=null?t.target:'')+'"> '+CUR+'</span>'
@@ -1953,39 +2011,39 @@ const labRouteFromHash=()=>{const m=location.hash.match(/^#\/lab\/([A-Z]{3}-[A-Z
 function renderLab(){const r=labRouteFromHash();if(r)renderLabRoute(r);else renderLabGate();}
 
 function renderLabGate(){
-  if(!ROUTE_KEYS.length){$('labBody').innerHTML='<div class="watch-head"><h2>The Lab</h2></div><div class="empty">No routes with enough history yet — the Lab opens up once the first booking curves fill in.</div>';return;}
+  if(!ROUTE_KEYS.length){$('labBody').innerHTML='<div class="watch-head"><h2>Explore routes</h2></div><div class="empty">No routes to explore yet — this opens up once we’ve followed a few for a while.</div>';return;}
   const cards=ROUTE_KEYS.map(k=>{const[o,d]=k.split('-');const v=verdictFor(o,d,A.depMonth,21);const b=BT[k]||{};
     const thin=b.hit_rate==null;
     return '<button class="gate-card" data-lab="'+k+'"><div class="gate-top"><span class="gate-route">'+o+' → '+d+'</span><span class="minichip '+(v?v.sig:'WATCH')+'">'+(v?v.sig:'WATCH')+'</span></div>'
-      +'<div class="gate-acc"><span><b>'+(v?money(v.now):'—')+'</b>cheapest call</span>'
-      +'<span><b>'+(thin?'—':b.hit_rate+'%')+'</b>'+(thin?'still learning':'accurate')+'</span>'
+      +'<div class="gate-acc"><span><b>'+(v?money(v.now):'—')+'</b>from</span>'
+      +'<span><b>'+(thin?'—':b.hit_rate+'%')+'</b>'+(thin?'still learning':'we got right')+'</span>'
       +'<span><b style="color:var(--buy)">'+(b.saved_vs_searchday!=null?money(b.saved_vs_searchday):'—')+'</b>saved so far</span></div>'
-      +'<div class="gate-cta">Dig in →</div></button>';}).join('');
-  $('labBody').innerHTML='<div class="watch-head"><h2>The Lab</h2></div>'
-    +'<p class="lab-intro">Pick a route to dig in. Everything below is scoped to <b>just that corridor</b> — how accurate Faro’s calls have been, how much they saved, the forecast, the cheapest days, and the raw grid.</p>'
+      +'<div class="gate-cta">Take a look →</div></button>';}).join('');
+  $('labBody').innerHTML='<div class="watch-head"><h2>Explore routes</h2></div>'
+    +'<p class="lab-intro">Pick a route to see the bigger picture — the cheapest dates to fly, where the price might head next, and how well we’ve done calling it so far.</p>'
     +'<div class="gate-grid">'+cards+'</div>';
   $('labBody').querySelectorAll('[data-lab]').forEach(b=>b.onclick=()=>{location.hash='#/lab/'+b.dataset.lab;});}
 
 function renderLabRoute(route){const[o,d]=route.split('-');
   $('labBody').innerHTML='<div class="changebar"><button class="focusbtn" id="labBack">← all routes</button><h2>'+o+' → '+d+'</h2>'
-    +'<button class="focusbtn" id="labOpen" style="margin-left:auto">open in Answer →</button></div>'
+    +'<button class="focusbtn" id="labOpen" style="margin-left:auto">open in Book or wait →</button></div>'
     +'<div class="labsec" id="scoreSec"></div>'
-    +'<div class="labsec"><h3>Best dates to fly <span>each square = a departure date (across) and trip length (down) · greener = cheaper · tap one to use it</span></h3><div id="surfPanel"></div></div>'
-    +'<div class="grid2"><div class="labsec"><h3>Fare forecast <span>what we expect this fare to do over the coming weeks</span></h3><div id="fanPanel"></div></div>'
-    +'<div class="labsec"><h3>Cheapest day to fly <span>which weekday to leave (down) and fly home (across) · greener = cheaper</span></h3><div id="heatPanel"></div></div></div>'
-    +'<div class="labsec"><h3>Find a trip on '+o+' → '+d+' <span id="finderCount"></span></h3>'
+    +'<div class="labsec"><h3>Cheapest dates to fly <span>each square is a departure date (across) and trip length (down) · greener = cheaper · tap one to use it</span></h3><div id="surfPanel"></div></div>'
+    +'<div class="grid2"><div class="labsec"><h3>Where the price might head <span>what we expect this trip to do over the coming weeks</span></h3><div id="fanPanel"></div></div>'
+    +'<div class="labsec"><h3>Cheapest days of the week <span>which day to leave (down) and fly home (across) · greener = cheaper</span></h3><div id="heatPanel"></div></div></div>'
+    +'<div class="labsec"><h3>Browse trips on '+o+' → '+d+' <span id="finderCount"></span></h3>'
     +'<div class="finder-bar"><div class="ff"><label for="ff-stops">max stops</label><select id="ff-stops"><option value="2">any</option><option value="1">≤ 1 stop</option><option value="0">non-stop</option></select></div>'
     +'<div class="ff"><label for="ff-price">max price <span id="ff-pv" class="mono"></span></label><input type="range" id="ff-price"></div>'
     +'<div class="ff"><label for="ff-sort">sort</label><select id="ff-sort"><option value="price">cheapest</option><option value="dep">soonest</option></select></div></div>'
     +'<div id="finderRes"><p style="font-size:12.5px;color:var(--muted);padding:12px 0">Loading the route’s slice of the full grid…</p></div></div>';
   $('labBack').onclick=()=>{location.hash='#/lab';};
-  $('labOpen').onclick=()=>{[A.o,A.d]=[o,d];fillComposer();syncURL();location.hash='#/';toast('Opened '+o+'→'+d+' in the Answer');};
+  $('labOpen').onclick=()=>{[A.o,A.d]=[o,d];fillComposer();syncURL();location.hash='#/';toast('Opened '+o+'→'+d+' in Book or wait');};
   renderScorecard(route);renderSurface(route);renderFan(route);loadFinder(()=>{renderHeat(route);initFinderScoped(route);});}
 
 /* the price surface: a real dep-date × trip-length heatmap straight from
    D.surface — the visual heart of the flexibility story (cheaper = greener). */
 function renderSurface(route){const cells=surfaceCells(route);
-  if(!cells||cells.length<6){$('surfPanel').innerHTML='<p style="font-size:12.5px;color:var(--dim)">This grid fills in as we scrape more dates for this route.</p>';return;}
+  if(!cells||cells.length<6){$('surfPanel').innerHTML='<p style="font-size:12.5px;color:var(--dim)">These dates fill in as we follow this route over time.</p>';return;}
   const lens=[...new Set(cells.map(c=>c.len))].sort((a,b)=>a-b);
   const offs=[...new Set(cells.map(c=>c.off))].sort((a,b)=>a-b);
   const base=SURFACE[route].base;
@@ -2006,34 +2064,34 @@ function renderSurface(route){const cells=surfaceCells(route);
     +'<div class="surf-legend">cheaper <span class="surf-ramp"></span> pricier · ★ cheapest is <b style="color:var(--brand)">'+money(best.p)+'</b> — leave '+fmtD(isoAdd(base,best.off))+', stay '+best.len+' nights · tap any square to open that trip</div>';
   $('surfPanel').querySelectorAll('.surf-cell[data-dep]').forEach(el=>el.onclick=()=>{
     reanchor(el.dataset.o,el.dataset.d,el.dataset.dep,+el.dataset.len);location.hash='#/';
-    toast('Opened '+fmtD(el.dataset.dep)+' · '+el.dataset.len+'n in the Answer');});}
+    toast('Opened '+fmtD(el.dataset.dep)+' · '+el.dataset.len+'n in Book or wait');});}
 
 function renderScorecard(route){const[o,d]=route.split('-');const v=verdictFor(o,d,A.depMonth,21);const b=BT[route]||{};
   const thin=b.hit_rate==null;const avg=(b.itineraries&&b.saved_vs_searchday!=null)?Math.round(b.saved_vs_searchday/Math.max(1,b.itineraries)):null;
   let nowSave,nowK,nowSub;
-  if(v&&v.sig==='BUY'){const hi=v.story?Math.max(...v.story):v.now;nowSave=Math.max(0,hi-v.now);nowK='saved by buying now';nowSub='you’re at the low — vs this trip’s recent high '+money(hi);}
-  else if(v){nowSave=Math.max(0,v.now-v.low);nowK='on the table right now';nowSub='wait → forecast low '+money(v.low)+' ('+v.sig+')';}
-  else{nowSave=0;nowK='—';nowSub='no current call';}
+  if(v&&v.sig==='BUY'){const hi=v.story?Math.max(...v.story):v.now;nowSave=Math.max(0,hi-v.now);nowK='saved by booking now';nowSub='you’re at the low — vs this trip’s recent high '+money(hi);}
+  else if(v){nowSave=Math.max(0,v.now-v.low);nowK='you could still save';nowSub='if you wait → price we expect '+money(v.low);}
+  else{nowSave=0;nowK='—';nowSub='no call right now';}
   const savedStr=b.saved_vs_searchday!=null?money(b.saved_vs_searchday):'—';
-  $('scoreSec').innerHTML='<h3>How accurate is Faro here — and what it’s worth <span>walk-forward backtest</span></h3>'
+  $('scoreSec').innerHTML='<h3>How well we’ve done on this route <span>based on past calls</span></h3>'
     +'<div class="score-row" style="margin-top:12px">'
-    +'<div class="score-big acc"><div class="v">'+(thin?'—':b.hit_rate+'%')+'</div><div class="k">prediction accuracy</div>'
-    +'<div class="s">'+(thin?'only '+(b.calls||0)+' graded calls so far — too thin to trust':b.right+' of '+b.calls+' BUY/WAIT calls paid off')+'</div></div>'
-    +'<div class="score-big saved"><div class="v">'+savedStr+'</div><div class="k">saved vs search-day</div>'
-    +'<div class="s">following Faro vs booking when you first searched'+(avg!=null?' · ~'+money(avg)+'/trip':'')+'</div></div>'
+    +'<div class="score-big acc"><div class="v">'+(thin?'—':b.hit_rate+'%')+'</div><div class="k">calls we got right</div>'
+    +'<div class="s">'+(thin?'only '+(b.calls||0)+' calls so far — not enough to trust yet':b.right+' of '+b.calls+' book-or-wait calls paid off')+'</div></div>'
+    +'<div class="score-big saved"><div class="v">'+savedStr+'</div><div class="k">saved by not booking early</div>'
+    +'<div class="s">vs booking the day you first looked'+(avg!=null?' · about '+money(avg)+' a trip':'')+'</div></div>'
     +'<div class="score-big now"><div class="v">'+money(nowSave)+'</div><div class="k">'+nowK+'</div><div class="s">'+nowSub+'</div></div></div>'
     +'<div class="bt-strip">'+stripFor(b)+'</div>'
-    +'<div style="font-size:11.5px;color:var(--dim);margin-top:6px">green = the call paid off · red = it missed</div>'
+    +'<div style="font-size:11.5px;color:var(--dim);margin-top:6px">green = we got it right · red = we got it wrong</div>'
     +'<div class="honest">'+(thin
-      ?'We’ve made only <b>'+(b.calls||0)+' calls</b> on this route — too few to headline an accuracy figure, so we don’t. Numbers fill in as the booking curve grows.'
-      :'Following every Faro BUY/WAIT call instead of booking the day you first searched would have changed your spend by <b>'+savedStr+'</b> across '+(b.itineraries||0)+' tracked trips. <b>'+(b.calls-b.right)+' calls missed</b>'+(b.missed_cost?', costing about '+money(b.missed_cost)+' — counted against the total, because honesty is the product':'')+'.')+'</div>';}
-function stripFor(b){if(!b.calls)return'<span style="font-size:12px;color:var(--dim)">no graded calls yet</span>';
+      ?'We’ve only made <b>'+(b.calls||0)+' calls</b> on this route so far — not enough to put a number on, so we don’t. It builds up over time.'
+      :'Following our book-or-wait calls instead of booking the day you first looked would have changed your spend by <b>'+savedStr+'</b> across '+(b.itineraries||0)+' trips. We got <b>'+(b.calls-b.right)+' calls wrong</b>'+(b.missed_cost?', which cost about '+money(b.missed_cost)+' — we count that against the total too':'')+'.')+'</div>';}
+function stripFor(b){if(!b.calls)return'<span style="font-size:12px;color:var(--dim)">no calls yet</span>';
   const n=Math.min(b.calls,28),rightFrac=b.right/b.calls;let out='';
   for(let i=0;i<n;i++)out+='<i class="'+((i/n)<rightFrac?'r':'w')+'"></i>';return out;}
 
 function renderFan(route){const[o,d]=route.split('-');const r=nearestRec(o,d,A.depMonth,21);
   const cv=(r&&r.curve||[]).slice().sort((a,b)=>b.dtd-a.dtd);
-  if(cv.length<3){$('fanPanel').innerHTML='<p style="font-size:12.5px;color:var(--dim)">This forecast appears once we have enough history to model the route.</p>';return;}
+  if(cv.length<3){$('fanPanel').innerHTML='<p style="font-size:12.5px;color:var(--dim)">This appears once we have enough history for this route.</p>';return;}
   const N=Math.min(cv.length,30),slice=cv.slice(0,N);
   const w=700,h=150,pad=8;const all=slice.flatMap(c=>[c.lo,c.hi]);const mn=Math.min(...all),mx=Math.max(...all),rg=(mx-mn)||1;
   const X=i=>pad+i/(N-1)*(w-2*pad),Y=val=>h-pad-(val-mn)/rg*(h-2*pad);
@@ -2049,7 +2107,7 @@ function renderFan(route){const[o,d]=route.split('-');const r=nearestRec(o,d,A.d
 
 const DOW=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
 function renderHeat(route){const rows=(FINDER||[]).filter(f=>(f.o+'-'+f.d)===route);
-  if(rows.length<6){$('heatPanel').innerHTML='<p style="font-size:12.5px;color:var(--dim)">This fills in once we’ve scraped more dates for this route.</p>';return;}
+  if(rows.length<6){$('heatPanel').innerHTML='<p style="font-size:12.5px;color:var(--dim)">This fills in once we’ve followed this route for a while.</p>';return;}
   const g=Array.from({length:7},()=>Array(7).fill(null));
   rows.forEach(f=>{const di=(new Date(f.dep).getDay()+6)%7,ri=(new Date(f.ret).getDay()+6)%7;
     if(g[di][ri]==null||f.min<g[di][ri])g[di][ri]=f.min;});
@@ -2098,7 +2156,11 @@ function bind(el,key,num){el.onchange=e=>{A[key]=num?+e.target.value:e.target.va
   syncURL();renderAnswer();};}
 bind($('f-o'),'o');bind($('f-d'),'d');bind($('f-dep'),'depMonth');bind($('f-len'),'len',true);
 $('f-flex').onchange=e=>{A.flex=e.target.checked;syncURL();renderAnswer();};
-$('copyLink').onclick=()=>{navigator.clipboard&&navigator.clipboard.writeText(location.href);toast('Link copied — share this exact verdict');};
+$('copyLink').onclick=()=>{navigator.clipboard&&navigator.clipboard.writeText(location.href);toast('Link copied — share this trip');};
+// intro: dismissible, remembered on this browser
+(function(){const intro=$('intro');if(!intro)return;
+  if(localStorage.getItem('faro.intro')==='hide')intro.classList.add('hidden');
+  $('introX').onclick=()=>{intro.classList.add('hidden');localStorage.setItem('faro.intro','hide');};})();
 const tb=$('themeBtn');function applyTheme(){tb.textContent=document.documentElement.dataset.theme==='dark'?'☾':'☀';}
 tb.onclick=()=>{const c=document.documentElement.dataset.theme;document.documentElement.dataset.theme=c==='dark'?'light':'dark';
   localStorage.setItem('faro.theme',document.documentElement.dataset.theme);applyTheme();};
@@ -2106,9 +2168,9 @@ if(localStorage.getItem('faro.theme'))document.documentElement.dataset.theme=loc
 let toastT;function toast(m){const el=$('toast');el.textContent=m;el.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>el.classList.remove('show'),3600);}
 
 $('fbBody').innerHTML=(Store.cloud
-  ?'Identity is Firebase <code>Auth</code> — every visitor starts anonymous and can upgrade to Google to sync. Pinned trips live in Firestore <code>users/{uid}/trips</code> and follow you across devices in real time via <code>onSnapshot</code>. Your alert toggles and price target are fields a scheduled <code>Cloud Function</code> reads to push <code>FCM</code> / Telegram / email the moment a trip hits BUY, a new low, or a closing best-buy window.'
+  ?'Save any trip and we’ll keep an eye on it for you. Sign in with Google and your saved trips follow you to any device. Turn on alerts and we’ll message you the moment a trip is worth booking — when it hits a good price, drops to a new low, or the best time to book is running out. You can also set a price target and we’ll tell you if it falls below it.'
   :'You’re offline — trips are saved on <b>this device</b> only and will sync once you’re back online.');
-$('footnote').innerHTML='<b style="color:var(--muted)">Faro</b> — one honest <b style="color:var(--muted)">Answer</b> (buy / wait / watch with provenance), a synced <b style="color:var(--muted)">Watch</b> (pinned trips + per-trip alert channels + price target), and a route-first <b style="color:var(--muted)">Lab</b> (accuracy, money saved, forecast, cheapest days, raw grid). Built from real scraped Google Flights fares — informational only.';
+$('footnote').innerHTML='<b style="color:var(--muted)">Faro</b> tells you whether to book your flight now or wait. Get a clear answer in <b style="color:var(--muted)">Book or wait</b>, keep your saved trips with alerts in <b style="color:var(--muted)">My trips</b>, and see the bigger picture for each route in <b style="color:var(--muted)">Explore</b>. Prices are a guide — always confirm the final price before you book.';
 (function(){const el=$('affdisc');if(el&&MON.enabled&&MON.disclosure)el.textContent=MON.disclosure;})();
 
 /* ══════════ boot ══════════ */
