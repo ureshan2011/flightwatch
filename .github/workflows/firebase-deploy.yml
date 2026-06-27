@@ -1,0 +1,82 @@
+name: firebase-deploy
+
+# Deploy Firestore rules/indexes, Cloud Functions and (optionally) Hosting to the
+# Firebase project on every merge to main that touches them. Fully gated on the
+# FARO_FIREBASE_SERVICE_ACCOUNT secret: with no secret set this is a clean no-op,
+# so forks and the $0 build are never affected.
+#
+# One-time setup to enable it:
+#   1. Firebase console -> Project settings -> Service accounts -> Generate new
+#      private key. Paste the JSON into a GitHub SECRET named
+#      FARO_FIREBASE_SERVICE_ACCOUNT (Settings -> Secrets and variables -> Actions).
+#   2. The project must be on the Blaze (pay-as-you-go) plan for Cloud Functions.
+#   3. (Optional) For Telegram fan-out set the TELEGRAM_BOT_TOKEN secret in
+#      Secret Manager and bind it; for email install the "Trigger Email" extension.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "functions/**"
+      - "firestore.rules"
+      - "firestore.indexes.json"
+      - "firebase.json"
+      - ".firebaserc"
+  workflow_dispatch:
+    inputs:
+      hosting:
+        description: "Also deploy Hosting (docs/) to Firebase"
+        type: boolean
+        default: false
+
+concurrency:
+  group: firebase-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Guard — require a service account secret
+        id: guard
+        env:
+          SA: ${{ secrets.FARO_FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          if [ -z "$SA" ]; then
+            echo "No FARO_FIREBASE_SERVICE_ACCOUNT secret set — skipping deploy."
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up Node
+        if: steps.guard.outputs.ok == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Cloud Functions dependencies
+        if: steps.guard.outputs.ok == 'true'
+        run: npm --prefix functions ci || npm --prefix functions install
+
+      - name: Write service account credentials
+        if: steps.guard.outputs.ok == 'true'
+        env:
+          SA: ${{ secrets.FARO_FIREBASE_SERVICE_ACCOUNT }}
+        run: printf '%s' "$SA" > "$RUNNER_TEMP/sa.json"
+
+      - name: Deploy to Firebase
+        if: steps.guard.outputs.ok == 'true'
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/sa.json
+        run: |
+          npm i -g firebase-tools
+          TARGETS="firestore:rules,firestore:indexes,functions"
+          if [ "${{ github.event.inputs.hosting }}" = "true" ]; then
+            TARGETS="$TARGETS,hosting"
+          fi
+          echo "Deploying: $TARGETS"
+          firebase deploy --project flightproject-299a8 --only "$TARGETS" --non-interactive

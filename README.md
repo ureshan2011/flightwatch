@@ -326,9 +326,11 @@ data — see `redesign/UX_REVAMP.md`:
   its conformal band, a cheapest-day heatmap, and a trip finder over the route's
   slice of the ~1,900-itinerary grid (lazy-loaded from `explore.json`, kept off
   the Answer's critical path).
-- **Watch** — pin trips and get told when to buy. With **no Firebase config it
-  works out of the box** in demo mode (trips in `localStorage`); add a config and
-  the same code paths become real cross-device sync + per-user alerts (below).
+- **Watch** — pin trips and get told when to buy. Firebase is **wired and live**
+  (project `flightproject-299a8`): anonymous/Google `Auth`, Firestore-synced trips
+  across devices, and per-user alerts (below). If the config is ever absent or the
+  network drops, the same code paths fall back to device-only mode (`localStorage`)
+  so the page never breaks.
 
 Every "Book" button deep-links into a flight search for the exact route+dates via
 the `monetization:` providers in `config.yaml` — add your Travelpayouts marker and
