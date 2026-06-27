@@ -46,13 +46,17 @@ function compose(trip, v, why) {
   return `⏳ ${who}: book within ~${v.bestBuyWindowDays}d — the best-buy window is closing (${money(cur, v.fareNow)}).`;
 }
 
+// Where a push notification deep-links to. Defaults to this project's Firebase
+// Hosting URL; override with FARO_APP_URL (e.g. a custom domain).
+const APP_URL = process.env.FARO_APP_URL || "https://flightproject-299a8.web.app/";
+
 async function sendFcm(tokens, text) {
   const list = (tokens || []).filter(Boolean);
   if (!list.length) return;
   await getMessaging().sendEachForMulticast({
     tokens: list,
     notification: {title: "Faro", body: text},
-    webpush: {fcmOptions: {link: "https://faro.app/"}},
+    webpush: {fcmOptions: {link: APP_URL}},
   });
 }
 
