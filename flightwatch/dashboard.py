@@ -412,6 +412,40 @@ def _explore(ok, cap=4000):
     return out[:cap]
 
 
+def _flex_surface(explore):
+    """Compact per-route price surface for the client-side Flexibility Engine.
+
+    The Answer must answer "could I pay less by shifting my dates / length /
+    origin?" WITHOUT pulling the multi-MB finder grid (explore.json). So we
+    project the explore grid down to just the cheapest price per (departure date
+    x trip length) per corridor, encoded as tightly as possible so it stays in
+    the Answer's critical path:
+
+        { "CHC-CMB": {"base": "2026-06-22", "cells": [[depOffsetDays, len, price], ...]} }
+
+    `base` + `depOffset` + `len` reconstruct the exact alternative itinerary (and
+    its book deep-link) client-side (dep = base + offset, ret = dep + len). Richer
+    per-option detail (carrier, stops, via, times) lives in the Lab's lazy-loaded
+    surface view, so the Answer payload stays small.
+    """
+    from datetime import date as _date
+    grouped = {}
+    for e in explore:
+        if e.get("len") is None:
+            continue
+        grouped.setdefault(f'{e["o"]}-{e["d"]}', []).append(
+            (str(e["dep"]), int(e["len"]), int(e["min"])))
+    out = {}
+    for route, rows in grouped.items():
+        base = min(r[0] for r in rows)
+        b = _date.fromisoformat(base)
+        cells = sorted(
+            [[(_date.fromisoformat(dep) - b).days, ln, pr] for dep, ln, pr in rows],
+            key=lambda c: (c[0], c[1]))
+        out[route] = {"base": base, "cells": cells}
+    return out
+
+
 def _explore_meta(explore):
     """Bounds + option lists that seed the trip-finder's filter controls."""
     if not explore:
@@ -810,7 +844,7 @@ def build():
     ai = analytics.build(df, recs, bundle) if not df.empty and (df["status"] == "ok").any() else None
 
     history, insights, latest_offers, airline_market = {}, [], {}, []
-    explore, explore_meta, focus = [], {}, None
+    explore, explore_meta, focus, surface = [], {}, None, {}
     stats = {"scans": 0, "total_offers": 0, "routes": 0, "date_combos": 0,
              "airlines": 0, "avg_price": None, "fastest": None, "cheapest_ever": None}
     cities, primary = {}, None
@@ -857,6 +891,7 @@ def build():
         airline_market = _airline_market(ok)
         explore = _explore(ok)
         explore_meta = _explore_meta(explore)
+        surface = _flex_surface(explore)
 
         # Spotlight a configured carrier (default Singapore Airlines): its lowest
         # fare, a buy/wait call for it, and its next-3-months lows.
@@ -925,6 +960,7 @@ def build():
         "airline_market": airline_market,
         "explore": explore,
         "explore_meta": explore_meta,
+        "surface": surface,
         "focus": focus,
         "routes_overview": routes_overview,
         "highlights": highlights,
@@ -954,8 +990,8 @@ def build():
     # are guarded by their own tests) -- they're just not shipped to the browser,
     # which roughly halves the page. `ai` alone was ~170 KB of unused JSON.
     embed_keys = {"generated", "status", "recs", "history", "explore", "explore_meta",
-                  "routes_overview", "backtests", "monetization", "stats", "cities",
-                  "currency"}
+                  "surface", "routes_overview", "backtests", "monetization", "stats",
+                  "cities", "currency", "model"}
     embedded = {k: v for k, v in payload.items() if k in embed_keys}
     with open(os.path.join(DOCS_DIR, "index.html"), "w", encoding="utf-8") as f:
         f.write(_html(embedded))
@@ -1201,6 +1237,40 @@ input,select{font-family:inherit}
 svg.spark{width:100%;height:90px;display:block}
 .trust{margin-top:14px;font-size:12.5px;color:var(--dim);line-height:1.7;text-align:center}.trust b{color:var(--muted)}
 
+/* ── flexibility engine ─────────────────────────────────────────────────── */
+.flex-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-top:4px}
+.flexcard{position:relative;background:var(--card2);border:1px solid var(--line2);border-radius:var(--r-md);
+  padding:12px 13px;text-align:left;display:flex;flex-direction:column;gap:3px;transition:border-color .15s,transform .15s}
+.flexcard:hover{border-color:var(--buy);transform:translateY(-2px)}
+.flexcard .fx-save{font-family:'IBM Plex Mono',monospace;font-weight:700;font-size:18px;color:var(--buy)}
+.flexcard .fx-what{font-size:13px;font-weight:600;color:var(--ink)}
+.flexcard .fx-sub{font-size:11.5px;color:var(--muted)}
+.flexcard .fx-book{margin-top:6px;font-size:11.5px;color:var(--brand);display:inline-flex;align-items:center;gap:4px;align-self:flex-start}
+.flexcard .fx-book svg{width:11px;height:11px}
+.flex-none{font-size:12.5px;color:var(--muted);padding:4px 0}
+.flexbar-wrap{margin-top:14px}
+.flexbar-cap{font-size:10.5px;color:var(--dim);text-transform:uppercase;letter-spacing:.1em;margin-bottom:6px}
+.flexbar{display:flex;gap:3px;align-items:flex-end;height:64px}
+.flexbar .fb-col{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;min-width:0}
+.flexbar .fb-bar{width:100%;border-radius:3px 3px 0 0;background:var(--brand);transition:opacity .15s}
+.flexbar .fb-col:hover .fb-bar{opacity:.75}
+.flexbar .fb-col.anchor .fb-bar{background:var(--ink)}
+.flexbar .fb-col.cheap .fb-bar{background:var(--buy)}
+.flexbar .fb-d{font-size:8.5px;color:var(--dim);font-family:'IBM Plex Mono',monospace;white-space:nowrap}
+.flexbar-legend{display:flex;gap:14px;font-size:11px;color:var(--dim);margin-top:8px;flex-wrap:wrap}
+.flexbar-legend i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:4px;vertical-align:middle}
+
+/* ── price surface (Lab) ────────────────────────────────────────────────── */
+.surf-scroll{overflow-x:auto;margin-top:10px;padding-bottom:6px}
+.surf{display:grid;gap:2px;width:max-content}
+.surf-cell{width:11px;height:13px;border-radius:2px}
+.surf-cell.empty{background:var(--inset,#101015);opacity:.5}
+.surf-cell.best{outline:2px solid var(--brand);outline-offset:-1px}
+.surf-rowlabel,.surf-collabel{font-size:8.5px;color:var(--dim);font-family:'IBM Plex Mono',monospace}
+.surf-rowlabel{padding-right:6px;display:flex;align-items:center;justify-content:flex-end;white-space:nowrap}
+.surf-legend{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--dim);margin-top:10px;flex-wrap:wrap}
+.surf-ramp{height:8px;width:90px;border-radius:4px;background:linear-gradient(90deg,var(--buy),var(--brand),var(--up))}
+
 .watch-head{display:flex;justify-content:space-between;align-items:center;margin:6px 0 4px}
 .watch-head h2{font-size:20px;font-weight:700}
 .simbtn{border:1px solid var(--cloud);color:var(--cloud);background:none;border-radius:var(--r-pill);padding:7px 13px;font-size:12.5px;font-weight:600}
@@ -1325,6 +1395,7 @@ svg.fan{width:100%;height:150px;display:block;margin-top:8px}
       </div>
     </div>
     <div id="verdict">''' + prerender + r'''</div>
+    <div class="panel" id="flex"></div>
     <div class="panel" id="weather"></div>
     <div class="panel" id="story"></div>
     <p class="trust" id="trust"></p>
@@ -1422,6 +1493,46 @@ function verdictFor(o,d,depMonth,len){const r=nearestRec(o,d,depMonth,len);if(!r
     win:winOf(r),obs:r.points,hit:(b.hit_rate!=null?b.hit_rate:null),thin:(r.method!=='model'||r.points<5),
     out:outlookOf(r),reason:r.reason,why:whyOf(r,route),curve:r.curve||[],dtd:r.days_to_departure,
     movePct:now?Math.round((low-now)/now*100):0,itin,airline:ROUTE_CARDS[route]?ROUTE_CARDS[route].airline:''};}
+
+/* ══════════ Flexibility Engine — what flexibility is worth ══════════════════
+   Reads the compact per-route price surface (D.surface), and for the focused
+   trip finds the cheapest nearby alternatives across three levers: shift the
+   departure date (same length), change the trip length (same dates), or fly from
+   another NZ origin. Every suggested saving must clear a gate = max(material 4%,
+   the model's conformal band) so we surface real money, never sampling noise. */
+const SURFACE=D.surface||{};
+function isoAdd(iso,days){const d=new Date(iso+'T00:00:00Z');d.setUTCDate(d.getUTCDate()+days);return d.toISOString().slice(0,10);}
+function dayDiff(a,b){return Math.round((new Date(b+'T00:00:00Z')-new Date(a+'T00:00:00Z'))/86400000);}
+function surfaceCells(route){const s=SURFACE[route];if(!s)return null;
+  return s.cells.map(c=>({off:c[0],len:c[1],p:c[2],dep:isoAdd(s.base,c[0])}));}
+function flexFor(o,d,dep,len,fallbackPrice){
+  const route=o+'-'+d,S=SURFACE[route];if(!S)return null;
+  const cells=surfaceCells(route);const anchorOff=dayDiff(S.base,dep);
+  const anchorCell=cells.find(c=>c.dep===dep&&c.len===len);
+  const aPrice=anchorCell?anchorCell.p:(fallbackPrice||null);
+  if(aPrice==null)return null;
+  const band=(D.model&&D.model.conformal)||0;
+  const gate=Math.max(Math.round(aPrice*0.04),band,40);
+  const sug=[];
+  // (1) shift departure date, same length, within ±21 days
+  const sameLen=cells.filter(c=>c.len===len&&Math.abs(c.off-anchorOff)<=21&&c.dep!==dep);
+  const day=sameLen.filter(c=>aPrice-c.p>=gate).sort((a,b)=>a.p-b.p)[0];
+  if(day){const dd=day.off-anchorOff;
+    sug.push({kind:'date',dir:dd<0?'earlier':'later',days:Math.abs(dd),o,d,dep:day.dep,len,price:day.p,save:aPrice-day.p});}
+  // (2) change trip length, near the same departure (±3 days)
+  const nearDep=cells.filter(c=>Math.abs(c.off-anchorOff)<=3&&c.len!==len);
+  const lenAlt=nearDep.filter(c=>aPrice-c.p>=gate).sort((a,b)=>a.p-b.p)[0];
+  if(lenAlt){sug.push({kind:'len',delta:lenAlt.len-len,o,d,dep:lenAlt.dep,len:lenAlt.len,price:lenAlt.p,save:aPrice-lenAlt.p});}
+  // (3) fly from another NZ origin to the same destination, comparable dates/length
+  let alt=null;
+  Object.keys(SURFACE).forEach(rk=>{const p=rk.split('-');if(p[1]!==d||p[0]===o)return;
+    const s2=SURFACE[rk];const cand=s2.cells.map(c=>({len:c[1],p:c[2],dep:isoAdd(s2.base,c[0])}))
+      .filter(c=>c.len===len&&Math.abs(dayDiff(dep,c.dep))<=7).sort((a,b)=>a.p-b.p)[0];
+    if(cand&&aPrice-cand.p>=gate&&(!alt||cand.p<alt.price))alt={kind:'origin',o:p[0],d,dep:cand.dep,len:cand.len,price:cand.p,save:aPrice-cand.p};});
+  if(alt)sug.push(alt);
+  sug.sort((a,b)=>b.save-a.save);
+  return {route,o,d,dep,len,anchorPrice:aPrice,gate,cells,anchorOff,suggestions:sug};
+}
 
 /* ── monetization: real affiliate deep links from config (D.monetization) ───── */
 const MON=D.monetization||{enabled:false,providers:[],google_flights:true};
@@ -1583,13 +1694,46 @@ function renderAnswer(){
       toast(w?(Store.user.anon?'Watching ✓ — saved to this device. Sign in to sync + get alerts':'Watching ✓ — synced · we’ll alert you when it’s time'):'Removed from My trips');renderAnswer();},30);};
   const ab=$('auditBtn');ab.onclick=()=>{const a=$('audit');a.classList.toggle('open');
     ab.textContent=a.classList.contains('open')?'why we think this ▴':'why we think this ▾';};
-  renderWeather(v);renderStory(v);
+  renderFlex(v);renderWeather(v);renderStory(v);
   const st=D.status||{};const last=st.last_scan_iso?relTime(st.last_scan_iso):'recently';
   $('trust').innerHTML='Source: <b>Google Flights</b>, scraped several times a day · last scan <b>'+esc(last)+'</b> · '+v.obs+' observations on this route.'
     +'<br>Fares are <b>informational</b> — always confirm the live price before booking.';
 }
 function relTime(iso){const t=Date.parse(String(iso).replace(' ','T').replace(/Z?$/,'Z'));if(isNaN(t))return'recently';
   const m=Math.round((Date.now()-t)/60000);if(m<60)return m+'m ago';const h=Math.round(m/60);if(h<48)return h+'h ago';return Math.round(h/24)+'d ago';}
+
+function reanchor(o,d,dep,len){[A.o,A.d]=[o,d];A.depMonth=dep.slice(0,7);A.len=len;
+  fillComposer();syncURL();renderAnswer();}
+function renderFlex(v){const F=flexFor(v.o,v.d,v.dep,v.len,v.now);
+  const head='<div class="panel-head"><h3>Save by being flexible</h3><span>cheapest nearby trips, vs your '+money((F&&F.anchorPrice)||v.now)+'</span></div>';
+  if(!F){$('flex').innerHTML=head+'<p class="flex-none">Flexibility options appear once this route has more of the date grid scraped.</p>';return;}
+  let cards='';
+  if(F.suggestions.length){cards='<div class="flex-cards">'+F.suggestions.slice(0,3).map(s=>{
+    const itin=s.o+'-'+s.d+' '+s.dep+' -> '+isoAdd(s.dep,s.len);const L=bookLinks(itin);
+    let what,sub;
+    if(s.kind==='date'){what=s.days+' day'+(s.days>1?'s':'')+' '+s.dir;sub='leave '+fmtD(s.dep)+' · '+s.len+' nights';}
+    else if(s.kind==='len'){what=(s.delta>0?'+'+s.delta:s.delta)+' nights ('+s.len+'n)';sub='around '+fmtD(s.dep);}
+    else{what='fly from '+esc(s.o);sub=cityName(s.o)+' → '+cityName(s.d)+' · '+fmtD(s.dep)+' · '+s.len+'n';}
+    return '<div class="flexcard" data-o="'+s.o+'" data-d="'+s.d+'" data-dep="'+s.dep+'" data-len="'+s.len+'">'
+      +'<span class="fx-save">−'+money(s.save)+'</span>'
+      +'<span class="fx-what">'+esc(what)+'</span><span class="fx-sub">'+esc(sub)+' · '+money(s.price)+'</span>'
+      +(L?'<a class="fx-book" href="'+L.primary.href+'" target="_blank" rel="noopener sponsored nofollow" onclick="event.stopPropagation()">'+_EXT+'book this</a>':'')
+      +'</div>';}).join('')+'</div>';
+  }else{cards='<p class="flex-none">Your dates already look like the cheapest in this window — flexing nearby wouldn’t beat '+money(F.anchorPrice)+' by a meaningful margin.</p>';}
+  // mini surface bar: same length, departure dates within ±10 days, coloured by price
+  const win=F.cells.filter(c=>c.len===v.len&&Math.abs(c.off-F.anchorOff)<=10).sort((a,b)=>a.off-b.off);
+  let bar='';
+  if(win.length>=3){const ps=win.map(c=>c.p),mn=Math.min(...ps),mx=Math.max(...ps),rg=(mx-mn)||1,cheap=mn;
+    bar='<div class="flexbar-wrap"><div class="flexbar-cap">price by departure date (same '+v.len+'-night trip)</div><div class="flexbar">'
+      +win.map(c=>{const h=18+(1-(c.p-mn)/rg)*46;const cls=c.dep===v.dep?'anchor':(c.p===cheap?'cheap':'');
+        return '<div class="fb-col '+cls+'" data-o="'+v.o+'" data-d="'+v.d+'" data-dep="'+c.dep+'" data-len="'+v.len+'" title="'+fmtD(c.dep)+' — '+money(c.p)+'">'
+          +'<div class="fb-bar" style="height:'+h.toFixed(0)+'px"></div><div class="fb-d">'+(+c.dep.slice(8))+'</div></div>';}).join('')
+      +'</div><div class="flexbar-legend"><span><i style="background:var(--ink)"></i>your date</span><span><i style="background:var(--buy)"></i>cheapest</span><span>click a bar to explore it</span></div></div>';}
+  $('flex').innerHTML=head+cards+bar;
+  $('flex').querySelectorAll('[data-dep]').forEach(el=>el.onclick=()=>{
+    reanchor(el.dataset.o,el.dataset.d,el.dataset.dep,+el.dataset.len);
+    toast('Now showing '+el.dataset.o+'→'+el.dataset.d+' · '+fmtD(el.dataset.dep)+' · '+el.dataset.len+'n');});
+}
 
 function renderWeather(v){
   // Real near-term forecast from the model's conformal curve (next ~7 days).
@@ -1673,6 +1817,7 @@ function renderLabRoute(route){const[o,d]=route.split('-');
   $('labBody').innerHTML='<div class="changebar"><button class="focusbtn" id="labBack">← all routes</button><h2>'+o+' → '+d+'</h2>'
     +'<button class="focusbtn" id="labOpen" style="margin-left:auto">open in Answer →</button></div>'
     +'<div class="labsec" id="scoreSec"></div>'
+    +'<div class="labsec"><h3>Price surface <span>cheapest fare by departure date × trip length — flexibility at a glance</span></h3><div id="surfPanel"></div></div>'
     +'<div class="grid2"><div class="labsec"><h3>Forecast fan <span>conformal band</span></h3><div id="fanPanel"></div></div>'
     +'<div class="labsec"><h3>Cheapest day to fly <span>departure × return weekday</span></h3><div id="heatPanel"></div></div></div>'
     +'<div class="labsec"><h3>Find a trip on '+o+' → '+d+' <span id="finderCount"></span></h3>'
@@ -1682,7 +1827,33 @@ function renderLabRoute(route){const[o,d]=route.split('-');
     +'<div id="finderRes"><p style="font-size:12.5px;color:var(--muted);padding:12px 0">Loading the route’s slice of the full grid…</p></div></div>';
   $('labBack').onclick=()=>{location.hash='#/lab';};
   $('labOpen').onclick=()=>{[A.o,A.d]=[o,d];fillComposer();syncURL();location.hash='#/';toast('Opened '+o+'→'+d+' in the Answer');};
-  renderScorecard(route);renderFan(route);loadFinder(()=>{renderHeat(route);initFinderScoped(route);});}
+  renderScorecard(route);renderSurface(route);renderFan(route);loadFinder(()=>{renderHeat(route);initFinderScoped(route);});}
+
+/* the price surface: a real dep-date × trip-length heatmap straight from
+   D.surface — the visual heart of the flexibility story (cheaper = greener). */
+function renderSurface(route){const cells=surfaceCells(route);
+  if(!cells||cells.length<6){$('surfPanel').innerHTML='<p style="font-size:12.5px;color:var(--dim)">The price surface fills in as more of this route’s date grid is scraped.</p>';return;}
+  const lens=[...new Set(cells.map(c=>c.len))].sort((a,b)=>a-b);
+  const offs=[...new Set(cells.map(c=>c.off))].sort((a,b)=>a-b);
+  const base=SURFACE[route].base;
+  const map={};cells.forEach(c=>{map[c.off+'_'+c.len]=c.p;});
+  const ps=cells.map(c=>c.p),mn=Math.min(...ps),mx=Math.max(...ps);
+  let best=cells[0];cells.forEach(c=>{if(c.p<best.p)best=c;});
+  const col=p=>{if(p==null)return null;const t=(p-mn)/((mx-mn)||1);
+    return t<0.5?'color-mix(in srgb,var(--buy) '+((1-t*2)*100)+'%, var(--brand))':'color-mix(in srgb,var(--brand) '+((1-(t-0.5)*2)*100)+'%, var(--up))';};
+  // header row (departure dates) + one row per trip length
+  let grid='<div class="surf" style="grid-template-columns:auto repeat('+offs.length+',11px)">';
+  grid+='<div class="surf-rowlabel"></div>'+offs.map(o=>{const iso=isoAdd(base,o);const dd=+iso.slice(8);
+    return '<div class="surf-collabel" style="writing-mode:vertical-rl;height:34px;text-align:right">'+(dd===1||o===offs[0]?fmtD(iso):dd)+'</div>';}).join('');
+  lens.forEach(L=>{grid+='<div class="surf-rowlabel">'+L+'n</div>'+offs.map(o=>{const p=map[o+'_'+L];
+    if(p==null)return '<div class="surf-cell empty"></div>';const isBest=(o===best.off&&L===best.len);
+    return '<div class="surf-cell'+(isBest?' best':'')+'" style="background:'+col(p)+'" title="'+fmtD(isoAdd(base,o))+' · '+L+'n — '+money(p)+'" data-o="'+route.split('-')[0]+'" data-d="'+route.split('-')[1]+'" data-dep="'+isoAdd(base,o)+'" data-len="'+L+'"></div>';}).join('');});
+  grid+='</div>';
+  $('surfPanel').innerHTML='<div class="surf-scroll">'+grid+'</div>'
+    +'<div class="surf-legend">cheaper <span class="surf-ramp"></span> dearer · ★ cheapest: <b style="color:var(--brand)">'+money(best.p)+'</b> on '+fmtD(isoAdd(base,best.off))+' for '+best.len+' nights · rows = trip length, columns = departure date</div>';
+  $('surfPanel').querySelectorAll('.surf-cell[data-dep]').forEach(el=>el.onclick=()=>{
+    reanchor(el.dataset.o,el.dataset.d,el.dataset.dep,+el.dataset.len);location.hash='#/';
+    toast('Opened '+fmtD(el.dataset.dep)+' · '+el.dataset.len+'n in the Answer');});}
 
 function renderScorecard(route){const[o,d]=route.split('-');const v=verdictFor(o,d,A.depMonth,21);const b=BT[route]||{};
   const thin=b.hit_rate==null;const avg=(b.itineraries&&b.saved_vs_searchday!=null)?Math.round(b.saved_vs_searchday/Math.max(1,b.itineraries)):null;

@@ -52,6 +52,31 @@ def test_empty_explore_meta():
     assert DB._explore_meta([]) == {}
 
 
+def test_flex_surface_is_compact_and_reconstructable(synth):
+    # Two corridors so the per-route surface keys are exercised.
+    from datetime import date, timedelta
+    df = synth(itins=[("CHC", "CMB", "2026-09-01", "2026-09-22", 1200, 1),
+                      ("CHC", "CMB", "2026-09-08", "2026-10-15", 1350, 1),
+                      ("AKL", "CMB", "2026-09-01", "2026-09-22", 1100, 1)],
+               days=40, seed=8)
+    ok = DB._with_itin(df[df["status"] == "ok"])
+    explore = DB._explore(ok)
+    surf = DB._flex_surface(explore)
+    assert "CHC-CMB" in surf and "AKL-CMB" in surf
+    s = surf["CHC-CMB"]
+    assert "base" in s and isinstance(s["cells"], list) and s["cells"]
+    base = date.fromisoformat(s["base"])
+    # Every cell reconstructs to a real explore itinerary at the same price.
+    by_itin = {f'{e["o"]}-{e["d"]} {e["dep"]} -> {e["ret"]}': e["min"] for e in explore}
+    for off, ln, price in s["cells"]:
+        dep = (base + timedelta(days=off)).isoformat()
+        ret = (base + timedelta(days=off + ln)).isoformat()
+        assert by_itin.get(f"CHC-CMB {dep} -> {ret}") == price
+    # Compact tuples (no strings/objects per cell) + JSON-serialisable.
+    assert all(len(c) == 3 and all(isinstance(x, int) for x in c) for c in s["cells"])
+    json.dumps(surf)
+
+
 def test_clean_airline_rejects_noise():
     assert DB.clean_airline("706 kg CO2e") == ""
     assert DB.clean_airline("751 kg CO2e") == ""
