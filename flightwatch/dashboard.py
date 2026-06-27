@@ -1387,7 +1387,7 @@ svg.spark{width:100%;height:90px;display:block}
 
 .lab-intro{font-size:12.5px;color:var(--muted);margin:6px 0 0}
 .labsec{margin-top:14px;background:var(--card);border:1px solid var(--line2);border-radius:var(--r-lg);padding:16px 18px}
-.labsec > h3{font-size:13px;font-weight:600;display:flex;align-items:baseline;gap:8px;margin-bottom:4px}
+.labsec > h3{font-size:13px;font-weight:600;display:flex;align-items:baseline;gap:8px;margin-bottom:4px;flex-wrap:wrap}
 .labsec > h3 span{font-size:11.5px;color:var(--dim);font-weight:400}
 .minichip{font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:var(--r-pill)}
 .minichip.BUY{background:var(--buy-bg);color:var(--buy)} .minichip.WAIT{background:var(--wait-bg);color:var(--wait)} .minichip.WATCH{background:var(--watch-bg);color:var(--watch)}
@@ -1953,9 +1953,9 @@ function renderLabRoute(route){const[o,d]=route.split('-');
   $('labBody').innerHTML='<div class="changebar"><button class="focusbtn" id="labBack">← all routes</button><h2>'+o+' → '+d+'</h2>'
     +'<button class="focusbtn" id="labOpen" style="margin-left:auto">open in Answer →</button></div>'
     +'<div class="labsec" id="scoreSec"></div>'
-    +'<div class="labsec"><h3>Price surface <span>cheapest fare by departure date × trip length — flexibility at a glance</span></h3><div id="surfPanel"></div></div>'
-    +'<div class="grid2"><div class="labsec"><h3>Forecast fan <span>conformal band</span></h3><div id="fanPanel"></div></div>'
-    +'<div class="labsec"><h3>Cheapest day to fly <span>departure × return weekday</span></h3><div id="heatPanel"></div></div></div>'
+    +'<div class="labsec"><h3>Best dates to fly <span>each square = a departure date (across) and trip length (down) · greener = cheaper · tap one to use it</span></h3><div id="surfPanel"></div></div>'
+    +'<div class="grid2"><div class="labsec"><h3>Fare forecast <span>what we expect this fare to do over the coming weeks</span></h3><div id="fanPanel"></div></div>'
+    +'<div class="labsec"><h3>Cheapest day to fly <span>which weekday to leave (down) and fly home (across) · greener = cheaper</span></h3><div id="heatPanel"></div></div></div>'
     +'<div class="labsec"><h3>Find a trip on '+o+' → '+d+' <span id="finderCount"></span></h3>'
     +'<div class="finder-bar"><div class="ff"><label for="ff-stops">max stops</label><select id="ff-stops"><option value="2">any</option><option value="1">≤ 1 stop</option><option value="0">non-stop</option></select></div>'
     +'<div class="ff"><label for="ff-price">max price <span id="ff-pv" class="mono"></span></label><input type="range" id="ff-price"></div>'
@@ -1968,7 +1968,7 @@ function renderLabRoute(route){const[o,d]=route.split('-');
 /* the price surface: a real dep-date × trip-length heatmap straight from
    D.surface — the visual heart of the flexibility story (cheaper = greener). */
 function renderSurface(route){const cells=surfaceCells(route);
-  if(!cells||cells.length<6){$('surfPanel').innerHTML='<p style="font-size:12.5px;color:var(--dim)">The price surface fills in as more of this route’s date grid is scraped.</p>';return;}
+  if(!cells||cells.length<6){$('surfPanel').innerHTML='<p style="font-size:12.5px;color:var(--dim)">This grid fills in as we scrape more dates for this route.</p>';return;}
   const lens=[...new Set(cells.map(c=>c.len))].sort((a,b)=>a-b);
   const offs=[...new Set(cells.map(c=>c.off))].sort((a,b)=>a-b);
   const base=SURFACE[route].base;
@@ -1983,10 +1983,10 @@ function renderSurface(route){const cells=surfaceCells(route);
     return '<div class="surf-collabel" style="writing-mode:vertical-rl;height:34px;text-align:right">'+(dd===1||o===offs[0]?fmtD(iso):dd)+'</div>';}).join('');
   lens.forEach(L=>{grid+='<div class="surf-rowlabel">'+L+'n</div>'+offs.map(o=>{const p=map[o+'_'+L];
     if(p==null)return '<div class="surf-cell empty"></div>';const isBest=(o===best.off&&L===best.len);
-    return '<div class="surf-cell'+(isBest?' best':'')+'" style="background:'+col(p)+'" title="'+fmtD(isoAdd(base,o))+' · '+L+'n — '+money(p)+'" data-o="'+route.split('-')[0]+'" data-d="'+route.split('-')[1]+'" data-dep="'+isoAdd(base,o)+'" data-len="'+L+'"></div>';}).join('');});
+    return '<div class="surf-cell'+(isBest?' best':'')+'" style="background:'+col(p)+'" title="Leave '+fmtD(isoAdd(base,o))+', stay '+L+' nights — '+money(p)+'" data-o="'+route.split('-')[0]+'" data-d="'+route.split('-')[1]+'" data-dep="'+isoAdd(base,o)+'" data-len="'+L+'"></div>';}).join('');});
   grid+='</div>';
   $('surfPanel').innerHTML='<div class="surf-scroll">'+grid+'</div>'
-    +'<div class="surf-legend">cheaper <span class="surf-ramp"></span> dearer · ★ cheapest: <b style="color:var(--brand)">'+money(best.p)+'</b> on '+fmtD(isoAdd(base,best.off))+' for '+best.len+' nights · rows = trip length, columns = departure date</div>';
+    +'<div class="surf-legend">cheaper <span class="surf-ramp"></span> pricier · ★ cheapest is <b style="color:var(--brand)">'+money(best.p)+'</b> — leave '+fmtD(isoAdd(base,best.off))+', stay '+best.len+' nights · tap any square to open that trip</div>';
   $('surfPanel').querySelectorAll('.surf-cell[data-dep]').forEach(el=>el.onclick=()=>{
     reanchor(el.dataset.o,el.dataset.d,el.dataset.dep,+el.dataset.len);location.hash='#/';
     toast('Opened '+fmtD(el.dataset.dep)+' · '+el.dataset.len+'n in the Answer');});}
@@ -2016,7 +2016,7 @@ function stripFor(b){if(!b.calls)return'<span style="font-size:12px;color:var(--
 
 function renderFan(route){const[o,d]=route.split('-');const r=nearestRec(o,d,A.depMonth,21);
   const cv=(r&&r.curve||[]).slice().sort((a,b)=>b.dtd-a.dtd);
-  if(cv.length<3){$('fanPanel').innerHTML='<p style="font-size:12.5px;color:var(--dim)">Forecast fan appears once this route has a trained model curve.</p>';return;}
+  if(cv.length<3){$('fanPanel').innerHTML='<p style="font-size:12.5px;color:var(--dim)">This forecast appears once we have enough history to model the route.</p>';return;}
   const N=Math.min(cv.length,30),slice=cv.slice(0,N);
   const w=700,h=150,pad=8;const all=slice.flatMap(c=>[c.lo,c.hi]);const mn=Math.min(...all),mx=Math.max(...all),rg=(mx-mn)||1;
   const X=i=>pad+i/(N-1)*(w-2*pad),Y=val=>h-pad-(val-mn)/rg*(h-2*pad);
@@ -2024,15 +2024,15 @@ function renderFan(route){const[o,d]=route.split('-');const r=nearestRec(o,d,A.d
   const bandP=slice.map((c,i)=>(i?'L':'M')+X(i).toFixed(1)+' '+Y(c.hi).toFixed(1)).join(' ')+' '
     +slice.map((c,i)=>'L'+X(N-1-i).toFixed(1)+' '+Y(slice[N-1-i].lo).toFixed(1)).join(' ')+'Z';
   let bi=0,bp=1e9;slice.forEach((c,i)=>{if(c.p<bp){bp=c.p;bi=i;}});
-  $('fanPanel').innerHTML='<svg class="fan" viewBox="0 0 '+w+' '+h+'" preserveAspectRatio="none" role="img" aria-label="Forecast fan with conformal band">'
+  $('fanPanel').innerHTML='<svg class="fan" viewBox="0 0 '+w+' '+h+'" preserveAspectRatio="none" role="img" aria-label="Fare forecast: the expected price each day with its likely range">'
     +'<path d="'+bandP+'" fill="var(--brand)" opacity=".14"/><path d="'+lineP+'" fill="none" stroke="var(--brand)" stroke-width="2"/>'
     +'<line x1="'+X(bi)+'" y1="0" x2="'+X(bi)+'" y2="'+h+'" stroke="var(--brand)" stroke-dasharray="3 3" opacity=".55"/>'
     +'<circle cx="'+X(bi)+'" cy="'+Y(slice[bi].p)+'" r="4" fill="var(--brand)"/></svg>'
-    +'<div style="font-size:11.5px;color:var(--dim)">shaded = conformal band · dashed = model’s cheapest forecast point</div>';}
+    +'<div style="font-size:11.5px;color:var(--dim);line-height:1.55"><b style="color:var(--muted)">Line</b> = the fare we expect each day · <b style="color:var(--muted)">shaded</b> = the range it’s likely to stay in · <b style="color:var(--muted)">dashed</b> = the day we expect it cheapest</div>';}
 
 const DOW=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
 function renderHeat(route){const rows=(FINDER||[]).filter(f=>(f.o+'-'+f.d)===route);
-  if(rows.length<6){$('heatPanel').innerHTML='<p style="font-size:12.5px;color:var(--dim)">Cheapest-day heatmap appears once more dates are scraped for this route.</p>';return;}
+  if(rows.length<6){$('heatPanel').innerHTML='<p style="font-size:12.5px;color:var(--dim)">This fills in once we’ve scraped more dates for this route.</p>';return;}
   const g=Array.from({length:7},()=>Array(7).fill(null));
   rows.forEach(f=>{const di=(new Date(f.dep).getDay()+6)%7,ri=(new Date(f.ret).getDay()+6)%7;
     if(g[di][ri]==null||f.min<g[di][ri])g[di][ri]=f.min;});
@@ -2041,10 +2041,10 @@ function renderHeat(route){const rows=(FINDER||[]).filter(f=>(f.o+'-'+f.d)===rou
   for(let i=0;i<7;i++)for(let j=0;j<7;j++)if(g[i][j]===min)minij=[i,j];
   const col=v=>{if(v==null)return'var(--card2)';const t=(v-min)/((mx-min)||1);
     return t<0.5?'color-mix(in srgb,var(--buy) '+((1-t*2)*100)+'%, var(--brand))':'color-mix(in srgb,var(--brand) '+((1-(t-0.5)*2)*100)+'%, var(--up))';};
-  let html='<div class="heat"><div class="hlabel"></div>'+DOW.map(d=>'<div class="hlabel">'+d+'</div>').join('');
+  let html='<div class="heat"><div class="hlabel" style="font-size:8px;opacity:.85" title="rows = the day you leave, columns = the day you fly home">out↓</div>'+DOW.map(d=>'<div class="hlabel">'+d+'</div>').join('');
   for(let i=0;i<7;i++){html+='<div class="hlabel">'+DOW[i]+'</div>';for(let j=0;j<7;j++){const best=i===minij[0]&&j===minij[1];const val=g[i][j];
-    html+='<div class="hcell '+(best?'best':'')+'" style="background:'+col(val)+'" title="'+DOW[i]+' dep / '+DOW[j]+' ret'+(val!=null?' — '+money(val):'')+'">'+(best?'★':'')+'</div>';}}
-  html+='</div><div class="heat-legend">cheaper <span class="heat-ramp"></span> dearer · ★ '+DOW[minij[0]]+' out / '+DOW[minij[1]]+' back is cheapest ('+money(min)+')</div>';
+    html+='<div class="hcell '+(best?'best':'')+'" style="background:'+col(val)+'" title="Leave '+DOW[i]+', fly home '+DOW[j]+(val!=null?' — '+money(val):'')+'">'+(best?'★':'')+'</div>';}}
+  html+='</div><div class="heat-legend">cheaper <span class="heat-ramp"></span> pricier · ★ cheapest: leave <b style="color:var(--brand)">'+DOW[minij[0]]+'</b>, fly home <b style="color:var(--brand)">'+DOW[minij[1]]+'</b> ('+money(min)+')</div>';
   $('heatPanel').innerHTML=html;}
 
 function initFinderScoped(route){const rows=(FINDER||[]).filter(f=>(f.o+'-'+f.d)===route);
