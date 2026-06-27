@@ -12,10 +12,12 @@ The page is a self-contained, modern single-file dashboard. It shows:
      scan, with airline, stops and flight time per offer.
 
 Self-contained: embeds the data as JSON and loads Chart.js from a CDN. The page
-renders the "Faro" visual identity -- a dark canvas with a single gold accent
-(#E7B25A) and Sora + IBM Plex Mono type -- with scroll-reveal sections, count-up
-stats and charts, entirely client-side. Handles the empty / early-days case
-gracefully.
+renders the "Faro" visual identity -- a Linear-inspired cool-neutral dark canvas
+(dark by default) with a single restrained indigo accent (#5E6AD2), flat fills
+over gradients, and Sora + IBM Plex Mono type -- with restrained motion (and full
+prefers-reduced-motion support), entirely client-side. Semantic traffic-light
+colours stay distinct (green = buy, amber = wait, grey = watch). A cool-neutral
+light theme is one toggle away. Handles the empty / early-days case gracefully.
 """
 
 import os
@@ -1173,22 +1175,26 @@ def _html(p):
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
 :root{
-  --bg:#0B0B0E;--card:#16161c;--card2:#1c1c23;--ink:#ECECEF;--muted:#8b8b95;--dim:#6b6b75;
-  --line:#222227;--line2:#2a2a31;
-  --brand:#E7B25A;--brand2:#f3cd86;
-  --buy:#5fd08a;--buy-bg:rgba(95,208,138,.12);
-  --wait:#E7B25A;--wait-bg:rgba(231,178,90,.13);
-  --watch:#9b9384;--watch-bg:rgba(255,255,255,.06);
-  --down:#5fd08a;--up:#e0567d;--cloud:#6cb7ff;
+  /* Linear-inspired cool-neutral dark, dark by default. A single indigo accent
+     carries interactivity; semantic traffic-light hues stay distinct. */
+  --bg:#08090A;--card:#101216;--card2:#16181d;--ink:#E7E8EA;--muted:#8A8F98;--dim:#5b5f66;
+  --line:#1b1d22;--line2:#26282e;
+  --brand:#5E6AD2;--brand2:#7C87E8;--on-brand:#F4F5FD;
+  --buy:#4cb782;--buy-bg:rgba(76,183,130,.12);
+  --wait:#d8a23e;--wait-bg:rgba(216,162,62,.13);
+  --watch:#8b9098;--watch-bg:rgba(255,255,255,.05);
+  --down:#4cb782;--up:#e5484d;--cloud:#4ea7fc;
   --shadow:0 14px 38px -18px rgba(0,0,0,.6);--shadow-lg:0 30px 66px -24px rgba(0,0,0,.72);
   --r-sm:10px;--r-md:14px;--r-lg:20px;--r-pill:999px;
 }
 html[data-theme="light"]{
-  --bg:#fbfaf7;--card:#ffffff;--card2:#f4f1ea;--ink:#161410;--muted:#5d5a52;--dim:#86827a;
-  --line:#e8e3d8;--line2:#ded8c9;
-  --buy-bg:rgba(34,150,94,.12);--wait-bg:rgba(196,140,40,.14);--watch-bg:rgba(0,0,0,.05);
-  --brand:#b07d1f;--brand2:#c4922b;--buy:#22965e;--down:#22965e;--up:#cc4a6f;--cloud:#2f6bff;
-  --shadow:0 14px 30px -20px rgba(40,33,15,.25);--shadow-lg:0 26px 60px -28px rgba(40,33,15,.30);
+  /* Cool-neutral light (not warm cream), same indigo accent. */
+  --bg:#fbfbfc;--card:#ffffff;--card2:#f4f5f7;--ink:#15161a;--muted:#62666d;--dim:#8a8f98;
+  --line:#ececef;--line2:#e1e2e7;
+  --brand:#5E6AD2;--brand2:#4a55c0;--on-brand:#ffffff;
+  --buy-bg:rgba(31,157,99,.10);--wait-bg:rgba(180,130,40,.14);--watch-bg:rgba(0,0,0,.05);
+  --buy:#1f9d63;--down:#1f9d63;--up:#d83a3f;--cloud:#2f6bff;--watch:#71757c;
+  --shadow:0 14px 30px -20px rgba(20,22,30,.16);--shadow-lg:0 26px 60px -28px rgba(20,22,30,.20);
 }
 *{margin:0;box-sizing:border-box}
 body{background:var(--bg);color:var(--ink);font-family:'Sora',system-ui,sans-serif;
@@ -1199,7 +1205,8 @@ button{font-family:inherit;cursor:pointer}
 input,select{font-family:inherit}
 :focus-visible{outline:2px solid var(--brand);outline-offset:2px;border-radius:4px}
 .aurora{position:fixed;inset:0;z-index:-1;background:
-  radial-gradient(900px 520px at 50% -14%,rgba(231,178,90,.14) 0,rgba(231,178,90,.04) 44%,transparent 72%),var(--bg)}
+  radial-gradient(820px 460px at 50% -16%,color-mix(in srgb,var(--brand) 15%,transparent) 0,
+  color-mix(in srgb,var(--brand) 4%,transparent) 46%,transparent 72%),var(--bg)}
 .wrap{max-width:760px;margin:0 auto;padding:0 18px 110px}
 .hidden{display:none!important}
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
@@ -1207,12 +1214,12 @@ input,select{font-family:inherit}
 .shell{position:sticky;top:0;z-index:20;backdrop-filter:blur(10px);
   background:color-mix(in srgb,var(--bg) 82%,transparent);border-bottom:1px solid var(--line)}
 .shell-in{max-width:760px;margin:0 auto;display:flex;align-items:center;gap:12px;padding:11px 18px;flex-wrap:wrap}
-.brand{display:flex;align-items:center;gap:9px;font-weight:800;letter-spacing:.2px}
-.mark{width:24px;height:24px;border-radius:7px;background:linear-gradient(135deg,var(--brand),var(--brand2));
-  display:grid;place-items:center;color:#1a1305;font-weight:800;font-size:14px}
+.brand{display:flex;align-items:center;gap:9px;font-weight:700;letter-spacing:-.01em}
+.mark{width:24px;height:24px;border-radius:7px;background:var(--brand);
+  display:grid;place-items:center;color:var(--on-brand);font-weight:700;font-size:14px}
 .tabs{display:flex;gap:4px;background:var(--card);border:1px solid var(--line2);border-radius:var(--r-pill);padding:3px}
 .tab{border:none;background:none;color:var(--muted);font-size:13px;font-weight:600;padding:6px 14px;border-radius:var(--r-pill)}
-.tab.on{background:var(--brand);color:#1a1305}
+.tab.on{background:var(--brand);color:var(--on-brand)}
 .tab .badge{display:inline-block;min-width:17px;margin-left:5px;padding:0 4px;border-radius:9px;font-size:11px;
   background:color-mix(in srgb,var(--ink) 12%,transparent);font-family:'IBM Plex Mono',monospace}
 .tab.on .badge{background:rgba(0,0,0,.18)}
@@ -1252,14 +1259,14 @@ input,select{font-family:inherit}
 .verdict.s-BUY::before{background:var(--buy)} .verdict.s-WAIT::before{background:var(--wait)} .verdict.s-WATCH::before{background:var(--watch)}
 .ctx{font-size:12.5px;color:var(--muted)} .ctx b{color:var(--ink)}
 .sigrow{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin:8px 0 2px}
-.signal{font-size:46px;font-weight:800;letter-spacing:-1px;line-height:1}
+.signal{font-size:46px;font-weight:700;letter-spacing:-1.6px;line-height:1}
 .s-BUY .signal{color:var(--buy)} .s-WAIT .signal{color:var(--wait)} .s-WATCH .signal{color:var(--watch)}
 .window{display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:600;background:var(--card2);
   border:1px solid var(--line2);border-radius:var(--r-pill);padding:6px 13px}
 .window b{font-family:'IBM Plex Mono',monospace}
 .live{display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--cloud)}
-.live .dot{width:7px;height:7px;border-radius:50%;background:var(--cloud);animation:pulse 1.8s ease-in-out infinite}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+.live .dot{width:7px;height:7px;border-radius:50%;background:var(--cloud);animation:pulse 2.6s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
 .reason{font-size:18px;margin:10px 0 16px;max-width:46ch}
 .conf{display:flex;align-items:center;gap:10px;margin-bottom:18px;font-size:12.5px;color:var(--muted);flex-wrap:wrap}
 .track{display:flex;gap:3px}.pip{width:22px;height:7px;border-radius:3px;background:var(--line2)}
@@ -1271,7 +1278,9 @@ input,select{font-family:inherit}
 .arrow{color:var(--dim);align-self:center;font-size:18px}
 .cta{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px;align-items:center}
 .btn{border-radius:var(--r-md);padding:13px 18px;font-size:14.5px;font-weight:700;border:1px solid transparent;display:inline-flex;align-items:center;gap:8px}
-.btn-primary{background:linear-gradient(135deg,var(--brand),var(--brand2));color:#1a1305}
+.btn-primary{background:var(--brand);color:var(--on-brand);
+  border-color:color-mix(in srgb,var(--brand) 62%,#000)}
+.btn-primary:hover{background:color-mix(in srgb,var(--brand) 88%,#fff)}
 .btn-ghost{background:var(--card2);border-color:var(--line2);color:var(--ink)}
 .btn-pin.on{background:var(--buy-bg);border-color:var(--buy);color:var(--buy)}
 .auditlink{margin-left:auto;align-self:center;background:none;border:none;color:var(--muted);font-size:13px;display:inline-flex;align-items:center;gap:6px}
@@ -1967,7 +1976,7 @@ function renderScorecard(route){const[o,d]=route.split('-');const v=verdictFor(o
     +'<div class="s">following Faro vs booking when you first searched'+(avg!=null?' · ~'+money(avg)+'/trip':'')+'</div></div>'
     +'<div class="score-big now"><div class="v">'+money(nowSave)+'</div><div class="k">'+nowK+'</div><div class="s">'+nowSub+'</div></div></div>'
     +'<div class="bt-strip">'+stripFor(b)+'</div>'
-    +'<div style="font-size:11.5px;color:var(--dim);margin-top:6px">green = the call paid off · pink = it missed</div>'
+    +'<div style="font-size:11.5px;color:var(--dim);margin-top:6px">green = the call paid off · red = it missed</div>'
     +'<div class="honest">'+(thin
       ?'We’ve made only <b>'+(b.calls||0)+' calls</b> on this route — too few to headline an accuracy figure, so we don’t. Numbers fill in as the booking curve grows.'
       :'Following every Faro BUY/WAIT call instead of booking the day you first searched would have changed your spend by <b>'+savedStr+'</b> across '+(b.itineraries||0)+' tracked trips. <b>'+(b.calls-b.right)+' calls missed</b>'+(b.missed_cost?', costing about '+money(b.missed_cost)+' — counted against the total, because honesty is the product':'')+'.')+'</div>';}
