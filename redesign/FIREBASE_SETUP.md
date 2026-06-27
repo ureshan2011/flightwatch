@@ -48,9 +48,16 @@ present the site stays in localStorage **demo mode**.
 
 **Console → Authentication → Sign-in method**: enable **Anonymous** (every visitor
 gets a private, rules-protected trip list) and **Google** (so "Sign in with
-Google" links/upgrades that list). Add your site domain under **Authentication →
-Settings → Authorized domains** (`flightproject-299a8.web.app` is there by default;
-add a custom domain or your GitHub Pages domain if you use one).
+Google" links/upgrades that list). The site is hosted on **GitHub Pages**, so under
+**Authentication → Settings → Authorized domains** add **`ureshan2011.github.io`**
+(required for the Google sign-in popup to work) — alongside the default
+`flightproject-299a8.firebaseapp.com`.
+
+> Hosting = GitHub Pages (serving `docs/` from `main`). The push deep-link and the
+> `firebase-deploy.yml` workflow are set up for that: Hosting is **not** deployed
+> to Firebase by default (only via manual workflow dispatch). The Cloud Function's
+> notification link defaults to `https://ureshan2011.github.io/flightwatch/` —
+> override with `FARO_APP_URL` if you add a custom domain.
 
 ## Step 3 — Web push (optional)
 

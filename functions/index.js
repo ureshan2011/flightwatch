@@ -46,9 +46,9 @@ function compose(trip, v, why) {
   return `⏳ ${who}: book within ~${v.bestBuyWindowDays}d — the best-buy window is closing (${money(cur, v.fareNow)}).`;
 }
 
-// Where a push notification deep-links to. Defaults to this project's Firebase
-// Hosting URL; override with FARO_APP_URL (e.g. a custom domain).
-const APP_URL = process.env.FARO_APP_URL || "https://flightproject-299a8.web.app/";
+// Where a push notification deep-links to. The site is hosted on GitHub Pages;
+// override with FARO_APP_URL if you move to a custom domain or Firebase Hosting.
+const APP_URL = process.env.FARO_APP_URL || "https://ureshan2011.github.io/flightwatch/";
 
 async function sendFcm(tokens, text) {
   const list = (tokens || []).filter(Boolean);
