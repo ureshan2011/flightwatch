@@ -7,6 +7,7 @@ Command-line entry point so the project runs as a package:
     python -m flightwatch alert        # push fresh signals (Telegram/email)
     python -m flightwatch publish      # OPTIONAL: write route verdicts to Firestore
     python -m flightwatch backtest     # print how the engine's calls have fared
+    python -m flightwatch exo          # fetch FX + jet-fuel signals into data/exogenous/
     python -m flightwatch diag         # show what the scraper returns (debugging)
     python -m flightwatch sq-diag      # EXPERIMENTAL: scrape Singapore Airlines' site
 
@@ -21,7 +22,7 @@ from . import dashboard as dashboard_mod
 from . import alerts as alerts_mod
 
 USAGE = ("usage: python -m flightwatch "
-         "[collect|build|all|alert|publish|backtest|diag|sq-diag]")
+         "[collect|build|all|alert|publish|backtest|exo|diag|sq-diag]")
 
 
 def _print_backtest():
@@ -55,6 +56,9 @@ def main(argv=None):
         publish_mod.publish()
     elif cmd == "backtest":
         _print_backtest()
+    elif cmd in ("exo", "fetch-exo"):
+        from . import exogenous_fetch
+        exogenous_fetch.run(backfill="--backfill" in argv)
     elif cmd in ("diag", "diagnose"):
         collect_mod.diagnose()
     elif cmd in ("sq-diag", "sqdiag"):

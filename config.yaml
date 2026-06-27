@@ -3,10 +3,24 @@
 # Tip: keep this list dense (a handful of date-pairs on a corridor) rather than a
 # huge sparse grid -- intraday depth on a few routes beats thin coverage of many.
 
-currency: NZD
+currency: NZD               # the traveller always departs NZ and books in NZD
 market: nz                  # Google Flights region (gl=) -- match the route's country
 adults: 1
 max_offers_per_search: 50   # store up to this many fares per itinerary per scan (0 = all)
+
+# --------------------------------------------------------------------------- #
+# Route context (optional) -- per-route events & destination currency
+# --------------------------------------------------------------------------- #
+# The fare model treats each route's demand calendar SEPARATELY: it unions the
+# NZ-origin holiday seasons with the destination country's own festivals (e.g.
+# Sri Lankan New Year for CHC->CMB, Diwali for AKL->DEL). Sensible defaults for
+# NZ/LK/IN ship in flightwatch/exogenous.py; override or extend them here without
+# touching code. Destination-currency FX is read from optional offline CSVs in
+# data/exogenous/ (see that folder's README) -- absent => a neutral signal.
+route_context:
+  airport_country: {}        # e.g. {SIN: SG} to teach a new destination airport
+  country_currency: {}       # e.g. {SG: SGD}
+  country_peak_months: {}    # e.g. {LK: [4, 8, 12]} to retune a country's hot months
 
 # --------------------------------------------------------------------------- #
 # Monetization (affiliate links)

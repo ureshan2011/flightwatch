@@ -86,3 +86,65 @@ def test_backtests_by_route_shape(synth):
 
 def test_backtests_by_route_empty():
     assert P.backtests_by_route(pd.DataFrame()) == {}
+
+
+# --------------------------------------------------------------------------- #
+# Tier 1 & 2 upgrades: competition features, hierarchical pooling, per-route
+# calibration, exogenous hooks and the direct drop classifier.
+# --------------------------------------------------------------------------- #
+def test_daily_min_carries_competition(synth):
+    daily = P.daily_min(synth(days=60, seed=11, slots=2))
+    for col in ("n_offers", "n_carriers", "nonstop_avail", "nonstop_premium"):
+        assert col in daily.columns
+    assert (daily["n_carriers"] >= 1).all()
+
+
+def test_features_backcompat_and_new_columns(synth):
+    # Old two-arg call must still yield EVERY feature the model consumes, so
+    # callers/tests that predate the new features keep working.
+    df = P.daily_min(synth(days=60, seed=12))
+    d = _features(df, {"CHC-CMB": 1200.0}, 1200.0)
+    for f in _FEATS:
+        assert f in d.columns
+    # The new features are really there and route-aware.
+    assert {"route_peak", "route_dep_level", "scan_dow_sin",
+            "n_carriers", "fuel_z", "fx_z"}.issubset(set(_FEATS))
+
+
+def test_bundle_exposes_new_calibration(synth):
+    b = P.train_model(synth(days=170, seed=13))
+    assert b is not None
+    assert b["band_method"] in ("conformal", "quantile")
+    assert isinstance(b["route_conformal"], dict)
+    assert "exogenous" in b and "fuel" in b["exogenous"]
+    # Empirical coverage of the chosen band should sit near the 0.80 target.
+    if b["empirical_coverage"] is not None:
+        assert 0.5 <= b["empirical_coverage"] <= 1.0
+
+
+def test_drop_classifier_trains_and_is_used(synth):
+    df = synth(days=170, seed=14)
+    b = P.train_model(df)
+    assert b["drop_clf"] is not None
+    p = P._drop_probability(b, P.daily_min(df).iloc[-1])
+    assert p is None or 0.0 <= p <= 100.0
+    recs = P.recommendations(df, bundle=b)
+    model_recs = [r for r in recs if r.get("method") == "model"]
+    assert model_recs
+    assert all(r.get("prob_source") in ("classifier", "band") for r in model_recs)
+    assert any(r.get("prob_source") == "classifier" for r in model_recs)
+
+
+def test_per_route_conformal_band(synth):
+    # Two corridors with different price levels should each get their own width.
+    df = synth(itins=[("CHC", "CMB", "2026-09-01", "2026-09-22", 1200, 1),
+                      ("AKL", "DEL", "2026-10-03", "2026-10-24", 1900, 1)],
+               days=170, seed=15)
+    b = P.train_model(df)
+    if b["band_method"] == "conformal" and b["route_conformal"]:
+        # Forecast still produces a sane band for each route's latest row.
+        daily = P.daily_min(df)
+        for itin in daily["itin"].unique():
+            hist = daily[daily["itin"] == itin].sort_values("scan_date")
+            fc = P.forecast_curve(b, hist.iloc[-1])
+            assert fc["low_band"][0] <= fc["predicted_low"] <= fc["low_band"][1] + 1e-6

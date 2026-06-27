@@ -13,13 +13,25 @@ Design goals (a production, open-source decision engine):
   * Calibrated uncertainty. Predictions carry a SPLIT-CONFORMAL interval whose
     width is learned from real held-out residuals, so an "80% band" actually
     covers ~80% of outcomes -- not a raw guess.
-  * Seasonality-aware. Features include cyclical day-of-week / month / week-of-
-    year encodings, peak-season flags and a per-route price level, so the model
-    learns the shape of the booking curve, not just a flat average.
+  * Seasonality-aware AND market-aware. Features include cyclical day-of-week /
+    month / week-of-year and booking-day encodings; PER-ROUTE peak-season flags
+    (each route's NZ-origin seasons unioned with its own destination's festivals,
+    kept separate, not one blurred global set); a hierarchical (route x departure-
+    month) price level so thin nearby dates borrow strength from each other;
+    live competition/supply (carriers, offers, nonstop availability + premium);
+    and offline exogenous hooks (jet-fuel index, destination-currency FX) that are
+    neutral until a data file is present. So the model learns the shape of the
+    booking curve and the market around it, not just a flat average.
+  * A direct "will it drop?" classifier estimates P(the fare falls meaningfully
+    before departure) instead of only inferring it from the quantile spread.
   * Every recommendation exposes its reasoning: the full predicted forward curve,
     the expected future low, expected savings from waiting, the probability the
     fare drops, and a 0-100% confidence combining data sufficiency with signal
     strength.
+
+NB: the traveller always departs New Zealand and pays in NZD, so the booking
+currency is fixed; what varies by route is the foreign end, which is why FX and
+the event calendar are keyed on each route's DESTINATION (see `exogenous`).
 
 The raw CSV stores every offer; here we collapse to one cheapest fare per
 itinerary per day (what a traveller would actually pay) before modelling.
@@ -27,6 +39,8 @@ itinerary per day (what a traveller would actually pay) before modelling.
 
 import numpy as np
 import pandas as pd
+
+from . import exogenous
 
 # Total cheapest-per-day observations before the ML model is trusted over the
 # heuristic. Below this we still show a heuristic signal, flagged low-confidence.
@@ -36,9 +50,16 @@ QUANTILES = (0.1, 0.5, 0.9)
 FLOOR_DTD = 7                    # we never advise waiting past ~a week out
 CONFORMAL_COVERAGE = 0.80        # target coverage of the calibrated price band
 
-# Months that run hot on the Christchurch <-> Colombo corridor: NZ summer/festive
-# (Dec-Jan), Sinhala/Tamil new year + school holidays (Apr), NZ winter school
-# holidays (Jul). Used as a coarse demand signal; safe to tune.
+# Meaningful-drop threshold for the direct "will it drop?" classifier and the
+# decision layer: a fall of more than this fraction is what counts as worth
+# waiting for (smaller moves are noise a traveller shouldn't chase).
+DROP_TOL = 0.04
+MIN_OBS_FOR_CLF = 80             # labelled decision-points before we trust the classifier
+
+# Coarse GLOBAL fallback demand months (NZ summer/festive, Apr, NZ winter school
+# holidays). Kept for back-compat and as a default when a route has no mapped
+# destination; the per-route calendar in `exogenous` is the sharper signal and is
+# what the `route_peak` feature uses.
 PEAK_MONTHS = {12, 1, 4, 7}
 
 # Days-to-departure bucket edges -> ordinal lead-time bucket (captures the
@@ -53,7 +74,10 @@ def daily_min(df):
     """
     Collapse raw fares (many offers per itinerary, possibly several scans per
     day) to ONE point per itinerary per scan_date: the cheapest fare that day --
-    what a traveller pays. Adds `itin` (full date-pair id) and `route` (O-D).
+    what a traveller pays. Adds `itin` (full date-pair id) and `route` (O-D), plus
+    that day's COMPETITION/SUPPLY snapshot (how many carriers and offers were on
+    sale, whether a nonstop existed and its premium) -- computed BEFORE we collapse
+    to the cheapest, since the collapse would otherwise throw that context away.
     """
     df = df[df["status"] == "ok"].copy()
     if df.empty:
@@ -61,8 +85,37 @@ def daily_min(df):
     df["route"] = df["origin"] + "-" + df["destination"]
     df["itin"] = df["route"] + " " + df["depart_date"].astype(str) + \
                  " -> " + df["return_date"].astype(str)
-    df = df.sort_values("price").drop_duplicates(["itin", "scan_date"], keep="first")
-    return df.sort_values("scan_date")
+    comp = _competition(df)
+    daily = df.sort_values("price").drop_duplicates(["itin", "scan_date"], keep="first")
+    if not comp.empty:
+        daily = daily.merge(comp, on=["itin", "scan_date"], how="left")
+    return daily.sort_values("scan_date")
+
+
+def _competition(df):
+    """Per (itinerary, scan_date) market-structure snapshot from the full offer
+    list: number of distinct carriers + offers, nonstop availability and the
+    nonstop premium (cheapest nonstop minus the cheapest fare overall). These are
+    a real, model-relevant driver of price (more competition / more seats on sale
+    tends to mean softer fares) that the per-day cheapest point alone can't see.
+    """
+    d = df.copy()
+    d["price"] = pd.to_numeric(d["price"], errors="coerce")
+    d["stops"] = pd.to_numeric(d.get("stops", 0), errors="coerce").fillna(0)
+    d["_air"] = d.get("airline", "").astype(str).str.strip()
+    base = d.groupby(["itin", "scan_date"]).agg(
+        n_offers=("price", "size"), overall_min=("price", "min")).reset_index()
+    carriers = (d[d["_air"] != ""].groupby(["itin", "scan_date"])["_air"]
+                .nunique().rename("n_carriers").reset_index())
+    nonstop = (d[d["stops"] == 0].groupby(["itin", "scan_date"])["price"]
+               .min().rename("nonstop_min").reset_index())
+    out = base.merge(carriers, on=["itin", "scan_date"], how="left") \
+              .merge(nonstop, on=["itin", "scan_date"], how="left")
+    out["n_carriers"] = out["n_carriers"].fillna(1).astype(int)
+    out["nonstop_avail"] = out["nonstop_min"].notna().astype(int)
+    out["nonstop_premium"] = (out["nonstop_min"] - out["overall_min"]).clip(lower=0).fillna(0.0)
+    return out[["itin", "scan_date", "n_offers", "n_carriers",
+                "nonstop_avail", "nonstop_premium"]]
 
 
 # --------------------------------------------------------------------------- #
@@ -71,43 +124,130 @@ def daily_min(df):
 _FEATS = [
     "days_to_departure", "lead_bucket", "trip_length",
     "dep_dow_sin", "dep_dow_cos", "ret_dow_sin", "ret_dow_cos",
-    "mon_sin", "mon_cos", "woy_sin", "woy_cos", "is_peak",
-    "stops", "route_level",
+    "scan_dow_sin", "scan_dow_cos",
+    "mon_sin", "mon_cos", "woy_sin", "woy_cos",
+    "is_peak", "route_peak",
+    "stops", "route_level", "route_dep_level",
+    "n_carriers", "nonstop_avail", "nonstop_premium", "log_offers",
+    "fuel_z", "fx_z",
 ]
 
 
-def _features(df, route_levels=None, global_level=None):
-    """Engineer the model's structural features (no current-price leakage)."""
+def _features(df, route_levels=None, global_level=None, route_dep_levels=None):
+    """Engineer the model's structural features (no current-price leakage).
+
+    Beyond the calendar/lead-time shape, this layer adds, per ROUTE separately:
+      * `route_peak`  -- demand months for THIS route's NZ-origin + destination
+        festivals/holidays (e.g. Sri Lankan New Year for CHC->CMB, Diwali for
+        AKL->DEL), not one blurred global set;
+      * `route_dep_level` -- a date-neighbourhood price level (route x departure
+        month) shrunk toward the route's overall level, so thin nearby dates
+        borrow strength from each other (the hierarchical-pooling feature);
+      * competition/supply (`n_carriers`, `nonstop_avail`, `nonstop_premium`,
+        `log_offers`); and
+      * exogenous `fuel_z` / `fx_z` -- jet-fuel and the destination-currency-per-
+        NZD level, as of the pricing day (neutral 0 until a data file is present).
+    The traveller always departs NZ and pays in NZD, so FX is keyed on the route's
+    DESTINATION currency, never the booking currency.
+    """
     df = df.copy()
     dep = pd.to_datetime(df["depart_date"], errors="coerce")
     ret = pd.to_datetime(df["return_date"], errors="coerce")
     dep_dow, ret_dow = dep.dt.dayofweek, ret.dt.dayofweek
     mon = dep.dt.month
+    mon_i = mon.fillna(0).astype(int)
     woy = dep.dt.isocalendar().week.astype(float)
+
+    dtd = pd.to_numeric(df["days_to_departure"], errors="coerce").fillna(0).astype(float)
+    # The pricing day = departure minus days-to-departure. Derived (not the raw
+    # scan_date column) so it's identical when training and when sweeping the
+    # forward curve, and it captures any "book on a weekend" effect.
+    scan = dep - pd.to_timedelta(dtd, unit="D")
+    scan_dow = scan.dt.dayofweek.fillna(0)
 
     df["dep_dow_sin"] = np.sin(2 * np.pi * dep_dow / 7)
     df["dep_dow_cos"] = np.cos(2 * np.pi * dep_dow / 7)
     df["ret_dow_sin"] = np.sin(2 * np.pi * ret_dow / 7)
     df["ret_dow_cos"] = np.cos(2 * np.pi * ret_dow / 7)
+    df["scan_dow_sin"] = np.sin(2 * np.pi * scan_dow / 7)
+    df["scan_dow_cos"] = np.cos(2 * np.pi * scan_dow / 7)
     df["mon_sin"] = np.sin(2 * np.pi * mon / 12)
     df["mon_cos"] = np.cos(2 * np.pi * mon / 12)
     df["woy_sin"] = np.sin(2 * np.pi * woy / 52)
     df["woy_cos"] = np.cos(2 * np.pi * woy / 52)
     df["is_peak"] = mon.isin(PEAK_MONTHS).astype(int)
 
-    dtd = pd.to_numeric(df["days_to_departure"], errors="coerce").fillna(0).astype(float)
     df["lead_bucket"] = np.digitize(dtd, _LEAD_EDGES).astype(int)
 
     if "route" not in df.columns:
         df["route"] = df["origin"].astype(str) + "-" + df["destination"].astype(str)
+    routes = df["route"].astype(str)
+
+    # Route-specific peak months (NZ origin season U destination season).
+    peak_map = exogenous.route_peak_map(routes.unique())
+    df["route_peak"] = [int(m in peak_map.get(r, set()))
+                        for r, m in zip(routes, mon_i)]
+
+    gl = global_level
+    if gl is None and route_levels:
+        gl = float(np.median(list(route_levels.values())))
+    if gl is None:
+        gl = 0.0
     if route_levels:
-        gl = global_level if global_level is not None else float(np.median(list(route_levels.values())))
-        df["route_level"] = df["route"].map(route_levels).fillna(gl)
+        df["route_level"] = routes.map(route_levels).fillna(gl)
     else:
-        df["route_level"] = global_level if global_level is not None else 0.0
+        df["route_level"] = gl
+
+    # Hierarchical (route x departure-month) level, falling back to the route
+    # level wherever a neighbourhood wasn't seen in training.
+    if route_dep_levels:
+        df["route_dep_level"] = [route_dep_levels.get((r, m), np.nan)
+                                 for r, m in zip(routes, mon_i)]
+        df["route_dep_level"] = pd.to_numeric(df["route_dep_level"], errors="coerce") \
+            .fillna(df["route_level"])
+    else:
+        df["route_dep_level"] = df["route_level"]
+
+    # Competition / supply -- default to a lone-carrier, nonstop-less snapshot when
+    # the frame predates these columns (e.g. a bare forecast row).
+    df["n_carriers"] = pd.to_numeric(df.get("n_carriers", 1), errors="coerce").fillna(1)
+    df["nonstop_avail"] = pd.to_numeric(df.get("nonstop_avail", 0), errors="coerce").fillna(0)
+    df["nonstop_premium"] = pd.to_numeric(df.get("nonstop_premium", 0), errors="coerce").fillna(0.0)
+    df["log_offers"] = np.log1p(pd.to_numeric(df.get("n_offers", 0), errors="coerce").fillna(0))
+
+    # Exogenous signals as of the pricing day (neutral 0 unless a CSV is present).
+    scan_arr = scan.to_numpy()
+    df["fuel_z"] = exogenous.fuel_z(scan_arr)
+    row_cur = routes.map(lambda r: exogenous.dest_currency(*r.split("-", 1))
+                         if "-" in r else "")
+    fx = np.zeros(len(df), dtype=float)
+    for cur in pd.unique(row_cur.dropna()):
+        if not cur:
+            continue
+        m = (row_cur == cur).to_numpy()
+        fx[m] = exogenous.fx_z(cur, scan_arr[m])
+    df["fx_z"] = fx
 
     df["stops"] = pd.to_numeric(df.get("stops", 0), errors="coerce").fillna(0)
     return df
+
+
+def _route_dep_levels(daily, route_levels, global_level, k=8):
+    """Empirical-Bayes (route x departure-month) median price, each shrunk toward
+    its route level by a pseudo-count `k`. This is the hierarchical-pooling step:
+    a thinly observed departure month borrows from the whole route instead of
+    overfitting its handful of points.
+    """
+    d = daily.copy()
+    d["_m"] = pd.to_datetime(d["depart_date"], errors="coerce").dt.month
+    d = d.dropna(subset=["_m"])
+    out = {}
+    for (route, m), g in d.groupby(["route", "_m"]):
+        n = len(g)
+        grp_med = float(g["price"].astype(float).median())
+        base = float(route_levels.get(route, global_level))
+        out[(route, int(m))] = (n * grp_med + k * base) / (n + k)
+    return out
 
 
 # --------------------------------------------------------------------------- #
@@ -122,10 +262,27 @@ def _gbr(alpha=None):
     return GradientBoostingRegressor(loss="quantile", alpha=alpha, **common)
 
 
+def _gbc():
+    """Gradient-boosting classifier for the direct 'will it drop?' target."""
+    from sklearn.ensemble import GradientBoostingClassifier
+    return GradientBoostingClassifier(n_estimators=200, max_depth=3,
+                                      learning_rate=0.05, min_samples_leaf=10,
+                                      subsample=0.9, random_state=42)
+
+
 def train_model(df: pd.DataFrame):
     """
     Fit gradient-boosting models over the booking curve and report honest,
-    time-series cross-validated error plus a split-conformal band width.
+    time-series cross-validated error plus calibrated prediction bands.
+
+    On top of the median + quantile regressors it now also fits:
+      * a hierarchical (route x departure-month) price level used as a feature;
+      * a PER-ROUTE split-conformal band, with the global band as the fallback,
+        and an automatic choice between the conformal band and the quantile band
+        based on which actually achieves the target coverage on held-out data;
+      * a direct "fare drops > DROP_TOL before departure" classifier, so the
+        decision layer can read a real probability instead of inferring one from
+        the quantile spread.
 
     Returns a bundle dict, or None if there is not yet enough history.
     """
@@ -136,17 +293,20 @@ def train_model(df: pd.DataFrame):
     daily = daily.sort_values("scan_date")
     route_levels = daily.groupby("route")["price"].median().to_dict()
     global_level = float(daily["price"].median())
+    route_dep_levels = _route_dep_levels(daily, route_levels, global_level)
 
-    d = _features(daily, route_levels, global_level).dropna(subset=["price"])
+    d = _features(daily, route_levels, global_level, route_dep_levels) \
+        .dropna(subset=["price"])
     X = d[_FEATS].fillna(0)
     y = d["price"].astype(float)
+    routes = d["route"].astype(str)
 
     # Honest error: forward-chaining CV of the median model (no future leakage).
     mae = _timeseries_mae(X, y)
 
-    # Calibrated band: fit on the first 70% (by time), measure residuals on the
-    # last 30%, take the target-coverage quantile of |residual| as the half-width.
-    conformal = _conformal_halfwidth(X, y, CONFORMAL_COVERAGE)
+    # Calibration: per-route conformal half-widths + a global fallback, and a
+    # data-driven choice of which band (conformal vs quantile) to actually use.
+    calib = _calibrate(X, y, routes, CONFORMAL_COVERAGE)
 
     median = _gbr(0.5)
     median.fit(X, y)
@@ -156,10 +316,19 @@ def train_model(df: pd.DataFrame):
         m.fit(X, y)
         models[q] = m
 
+    drop_clf = _train_drop_classifier(daily, route_levels, global_level,
+                                       route_dep_levels)
+
     return {"models": models, "mae": float(mae), "n": int(len(d)),
             "features": _FEATS, "route_levels": route_levels,
-            "global_level": global_level, "conformal": conformal,
-            "coverage": CONFORMAL_COVERAGE}
+            "global_level": global_level, "route_dep_levels": route_dep_levels,
+            "conformal": (calib["global"] if calib else None),
+            "route_conformal": (calib["by_route"] if calib else {}),
+            "band_method": (calib["method"] if calib else "conformal"),
+            "empirical_coverage": (calib["coverage"] if calib else None),
+            "drop_clf": drop_clf, "drop_tol": DROP_TOL,
+            "coverage": CONFORMAL_COVERAGE,
+            "exogenous": exogenous.available()}
 
 
 def _timeseries_mae(X, y):
@@ -180,15 +349,101 @@ def _timeseries_mae(X, y):
 
 
 def _conformal_halfwidth(X, y, coverage):
-    """Split-conformal half-width: the `coverage` quantile of held-out |resid|."""
+    """Split-conformal half-width: the `coverage` quantile of held-out |resid|.
+
+    Kept as a thin wrapper over `_calibrate` for callers/tests that just want the
+    one global number.
+    """
+    calib = _calibrate(X, y, None, coverage)
+    return calib["global"] if calib else None
+
+
+def _calibrate(X, y, routes, coverage):
+    """Split calibration: fit on the first 70% by time, then on the last 30%
+    measure (a) per-route + global conformal half-widths and (b) whether the
+    conformal band or the quantile band better hits the target coverage.
+
+    Returns {global, by_route, method, coverage} or None if too little holdout.
+    """
     n = len(X)
     cut = int(n * 0.7)
     if cut < 20 or n - cut < 10:
         return None
-    m = _gbr(0.5)
-    m.fit(X.iloc[:cut], y.iloc[:cut])
-    resid = np.abs(y.iloc[cut:].values - m.predict(X.iloc[cut:]))
-    return float(np.quantile(resid, coverage))
+    Xtr, ytr = X.iloc[:cut], y.iloc[:cut]
+    Xte, yte = X.iloc[cut:], y.iloc[cut:].to_numpy()
+
+    med = _gbr(0.5)
+    med.fit(Xtr, ytr)
+    resid = np.abs(yte - med.predict(Xte))
+    g_width = float(np.quantile(resid, coverage))
+
+    by_route = {}
+    if routes is not None:
+        rte = routes.iloc[cut:].to_numpy()
+        for r in pd.unique(rte):
+            m = rte == r
+            if m.sum() >= 8:
+                by_route[str(r)] = float(np.quantile(resid[m], coverage))
+
+    conf_cov = float(np.mean(resid <= g_width))
+    # Quantile-band empirical coverage on the same holdout.
+    lo_m, hi_m = _gbr(0.1), _gbr(0.9)
+    lo_m.fit(Xtr, ytr)
+    hi_m.fit(Xtr, ytr)
+    lo_p, hi_p = lo_m.predict(Xte), hi_m.predict(Xte)
+    q_cov = float(np.mean((yte >= np.minimum(lo_p, hi_p)) &
+                          (yte <= np.maximum(lo_p, hi_p))))
+
+    method = ("conformal" if abs(conf_cov - coverage) <= abs(q_cov - coverage)
+              else "quantile")
+    return {"global": g_width, "by_route": by_route, "method": method,
+            "coverage": (conf_cov if method == "conformal" else q_cov)}
+
+
+def _train_drop_classifier(daily, route_levels, global_level, route_dep_levels):
+    """Direct P(fare drops > DROP_TOL before departure) model.
+
+    Walk every itinerary forward; at each day with a future, label whether the
+    fare went on to fall by more than DROP_TOL, and pair that with the same
+    structural features the regressor sees. Returns a fitted classifier, or None
+    if there aren't yet enough labelled points (or only one class).
+    """
+    feats, labels = [], []
+    for _, h in daily.groupby("itin"):
+        h = h.sort_values("scan_date").reset_index(drop=True)
+        prices = h["price"].astype(float).to_numpy()
+        for i in range(len(h) - 1):
+            future = prices[i + 1:]
+            if future.size == 0:
+                continue
+            cur = float(prices[i])
+            drop = (cur - float(future.min())) / max(cur, 1.0)
+            feats.append(h.iloc[i])
+            labels.append(int(drop > DROP_TOL))
+    if len(labels) < MIN_OBS_FOR_CLF or len(set(labels)) < 2:
+        return None
+    fdf = pd.DataFrame(feats)
+    d = _features(fdf, route_levels, global_level, route_dep_levels)
+    X = d[_FEATS].fillna(0)
+    try:
+        clf = _gbc()
+        clf.fit(X, np.asarray(labels))
+        return clf
+    except Exception:
+        return None
+
+
+def _drop_probability(bundle, latest_row):
+    """Classifier P(meaningful drop) for one row, as a 0-100 number, or None."""
+    clf = bundle.get("drop_clf")
+    if clf is None:
+        return None
+    d = _features(pd.DataFrame([dict(latest_row)]), bundle["route_levels"],
+                  bundle["global_level"], bundle.get("route_dep_levels"))
+    try:
+        return float(clf.predict_proba(d[_FEATS].fillna(0))[0, 1]) * 100
+    except Exception:
+        return None
 
 
 def forecast_curve(bundle, latest_row):
@@ -202,16 +457,28 @@ def forecast_curve(bundle, latest_row):
     grid = list(range(dtd_now, FLOOR_DTD - 1, -1)) or [dtd_now]
 
     rows = [{**base, "days_to_departure": dtd} for dtd in grid]
-    d = _features(pd.DataFrame(rows), bundle["route_levels"], bundle["global_level"])
+    d = _features(pd.DataFrame(rows), bundle["route_levels"], bundle["global_level"],
+                  bundle.get("route_dep_levels"))
     X = d[_FEATS].fillna(0)
 
     med = bundle["models"][0.5].predict(X)
-    cw = bundle.get("conformal")
-    if cw is not None:
-        lo_arr, hi_arr = med - cw, med + cw
-    else:
+    method = bundle.get("band_method", "conformal")
+    if method == "quantile" and 0.1 in bundle["models"] and 0.9 in bundle["models"]:
         lo_arr = bundle["models"][0.1].predict(X)
         hi_arr = bundle["models"][0.9].predict(X)
+    else:
+        # Per-route conformal half-width, falling back to the global one, then to
+        # the quantile band if calibration produced no width at all.
+        route = str(base.get("route", ""))
+        cw = (bundle.get("route_conformal", {}).get(route)
+              if bundle.get("route_conformal") else None)
+        if cw is None:
+            cw = bundle.get("conformal")
+        if cw is not None:
+            lo_arr, hi_arr = med - cw, med + cw
+        else:
+            lo_arr = bundle["models"][0.1].predict(X)
+            hi_arr = bundle["models"][0.9].predict(X)
 
     curve = [{"dtd": int(grid[i]), "p": float(med[i]),
               "lo": float(min(lo_arr[i], hi_arr[i])),
@@ -299,7 +566,13 @@ def _model_decision(bundle, hist):
     fc = forecast_curve(bundle, hist.iloc[-1])
     lo_band, predicted_low = fc["low_band"], fc["predicted_low"]
 
-    prob_drop = _prob_below(lo_band[0], predicted_low, lo_band[1], price) * 100
+    # Prefer the direct "will it drop?" classifier; fall back to inferring the
+    # probability from the forecast band's implied CDF when it isn't trained yet.
+    prob_drop = _drop_probability(bundle, hist.iloc[-1])
+    prob_source = "classifier"
+    if prob_drop is None:
+        prob_drop = _prob_below(lo_band[0], predicted_low, lo_band[1], price) * 100
+        prob_source = "band"
     expected_savings = max(0.0, price - predicted_low)
     band_width = max(lo_band[1] - lo_band[0], 1.0)
 
@@ -332,7 +605,7 @@ def _model_decision(bundle, hist):
             "curve": [{"dtd": c["dtd"], "p": round(c["p"]),
                        "lo": round(c["lo"]), "hi": round(c["hi"])} for c in fc["curve"]],
             "expected_savings": round(expected_savings if sig == "WAIT" else 0),
-            "prob_drop": round(prob_drop),
+            "prob_drop": round(prob_drop), "prob_source": prob_source,
             "trailing_min": round(s["min"]),
             "momentum": round(s["momentum"]), "volatility": round(s["volatility"]),
             "percentile": round(s["percentile"]), "days_to_departure": dtd}
