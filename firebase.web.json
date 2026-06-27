@@ -1,10 +1,11 @@
 {
-  "_comment": "PUBLIC Firebase web config for project flightproject-299a8. Not a secret (it ships in client JS); security is enforced by Firestore rules + Auth. The build (flightwatch/dashboard.py) reads this when FARO_FIREBASE_CONFIG is unset. Until apiKey + appId are filled, the site stays in localStorage demo mode. Get apiKey + appId from Firebase console -> Project settings -> your Web app (register one if needed). Get vapidKey from console -> Project settings -> Cloud Messaging -> Web Push certificates.",
-  "apiKey": "",
+  "_comment": "PUBLIC Firebase web config for project flightproject-299a8. Not a secret (it ships in client JS); security is enforced by Firestore rules + Auth. The build (flightwatch/dashboard.py) reads this when FARO_FIREBASE_CONFIG is unset. vapidKey is optional and only needed for web push (console -> Project settings -> Cloud Messaging -> Web Push certificates).",
+  "apiKey": "AIzaSyBy5aiWXbasuFmfMdj3gSUU7Ska8rw2qnk",
   "authDomain": "flightproject-299a8.firebaseapp.com",
   "projectId": "flightproject-299a8",
   "storageBucket": "flightproject-299a8.firebasestorage.app",
   "messagingSenderId": "634681815971",
-  "appId": "",
+  "appId": "1:634681815971:web:9d8f80135d9a1bf0396016",
+  "measurementId": "G-CLKMY8MV19",
   "vapidKey": ""
 }
