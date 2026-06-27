@@ -12,7 +12,7 @@ give you, and (optionally) turning on deploys.
 | Piece | File | Status |
 |-------|------|--------|
 | Default project | `.firebaserc` | ✅ `flightproject-299a8` |
-| Public web config | `firebase.web.json` | ⚠️ needs `apiKey` + `appId` |
+| Public web config | `firebase.web.json` | ✅ live (`apiKey` + `appId` filled) |
 | Firestore rules | `firestore.rules` | ✅ owner-only trips, public route reads |
 | Firestore indexes | `firestore.indexes.json` | ✅ none required |
 | Cloud Function (alert fan-out) | `functions/index.js` | ✅ deep-links to `flightproject-299a8.web.app` |

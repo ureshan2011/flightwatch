@@ -1106,8 +1106,8 @@ def _load_firebase_config():
 def _write_firebase_sw():
     """Emit docs/firebase-messaging-sw.js for FCM web push -- ONLY when a real
     Firebase config is provided (env or firebase.web.json). Without it the site
-    stays in demo mode and no service worker is shipped (so the $0, no-account
-    build is unchanged)."""
+    runs in device-only mode and no service worker is shipped (so the $0,
+    no-account build is unchanged)."""
     cfg, _ = _load_firebase_config()
     sw_path = os.path.join(DOCS_DIR, "firebase-messaging-sw.js")
     if not cfg.get("apiKey"):
@@ -1142,9 +1142,9 @@ def _firebase_config_js():
     """Inline ``window.FARO_FIREBASE`` (+ optional VAPID) from the resolved config.
 
     Empty when no real apiKey is configured, so the page omits the global and the
-    Watch falls back to localStorage demo mode -- the $0, no-account promise
-    survives. The Admin service-account JSON is never read here; it only lives in
-    CI (see publish.py)."""
+    Watch falls back to localStorage device-only mode -- the $0, no-account
+    promise survives. The Admin service-account JSON is never read here; it only
+    lives in CI (see publish.py)."""
     cfg, vapid = _load_firebase_config()
     if not cfg.get("apiKey"):
         return ""
@@ -1297,9 +1297,6 @@ input,select{font-family:inherit}
 .window{display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:600;background:var(--card2);
   border:1px solid var(--line2);border-radius:var(--r-pill);padding:6px 13px}
 .window b{font-family:'IBM Plex Mono',monospace}
-.live{display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--cloud)}
-.live .dot{width:7px;height:7px;border-radius:50%;background:var(--cloud);animation:pulse 2.6s ease-in-out infinite}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
 .reason{font-size:18px;margin:10px 0 16px;max-width:46ch}
 .conf{display:flex;align-items:center;gap:10px;margin-bottom:18px;font-size:12.5px;color:var(--muted);flex-wrap:wrap}
 .track{display:flex;gap:3px}.pip{width:22px;height:7px;border-radius:3px;background:var(--line2)}
@@ -1386,7 +1383,6 @@ svg.spark{width:100%;height:90px;display:block}
 
 .watch-head{display:flex;justify-content:space-between;align-items:center;margin:6px 0 4px}
 .watch-head h2{font-size:20px;font-weight:700}
-.simbtn{border:1px solid var(--cloud);color:var(--cloud);background:none;border-radius:var(--r-pill);padding:7px 13px;font-size:12.5px;font-weight:600}
 .empty{margin-top:18px;padding:34px 22px;text-align:center;border:1px dashed var(--line2);border-radius:var(--r-lg);color:var(--muted)}
 .tcard{margin-top:14px;background:var(--card);border:1px solid var(--line2);border-radius:var(--r-lg);padding:16px 18px;
   border-left:3px solid var(--brand)}
@@ -1543,7 +1539,6 @@ svg.fan{width:100%;height:150px;display:block;margin-top:8px}
   <section id="view-watch" class="hidden" aria-label="Watch">
     <div class="watch-head">
       <h2>My trips</h2>
-      <button class="simbtn" id="simBtn">&#8635; simulate a new scan</button>
     </div>
     <p style="font-size:12.5px;color:var(--muted);margin-top:2px">Pinned trips, kept in sync. We watch each one and tell you the moment it's time to buy.</p>
     <div id="tripList"></div>
@@ -1692,15 +1687,15 @@ const _EXT='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-wi
 function bookRowLink(itin,label){const L=bookLinks(itin);if(!L)return'';
   return '<a class="bookrow" href="'+L.primary.href+'" target="_blank" rel="noopener sponsored nofollow">'+_EXT+esc(label||'Book')+'</a>';}
 
-/* ══════════ FaroStore — Firebase data layer (demo localStorage / real cloud) ══ */
+/* ══════════ FaroStore — Firebase data layer (cloud, with offline fallback) ══ */
 const CFG=window.FARO_FIREBASE||null;
 const Store={
-  cloud:!!CFG, user:null, _trips:[], _subs:[], _scan:0,
+  cloud:!!CFG, user:null, _trips:[], _subs:[],
   async init(){
-    if(this.cloud){try{await this._initCloud();}catch(e){console.warn('Firebase init failed, demo mode',e);this.cloud=false;this._initDemo();}}
-    else this._initDemo();
+    if(this.cloud){try{await this._initCloud();}catch(e){console.warn('Firebase init failed — falling back to offline mode',e);this.cloud=false;this._initOffline();}}
+    else this._initOffline();
   },
-  _initDemo(){
+  _initOffline(){
     this.user=JSON.parse(localStorage.getItem('faro.user')||'null')||{uid:'anon-'+Math.random().toString(36).slice(2,8),anon:true};
     localStorage.setItem('faro.user',JSON.stringify(this.user));
     this._trips=JSON.parse(localStorage.getItem(this._key())||'[]');
@@ -1709,7 +1704,7 @@ const Store={
   _persist(){if(!this.cloud)localStorage.setItem(this._key(),JSON.stringify(this._trips));this._emit();},
   onChange(cb){this._subs.push(cb);cb(this._trips,this.user);},
   _emit(){setTimeout(()=>this._subs.forEach(cb=>cb(this._trips,this.user)),0);},
-  trips(){return this._trips;}, scanOffset(){return this._scan*-42;},
+  trips(){return this._trips;},
   tripId(t){return t.o+'-'+t.d+'-'+t.dep+'-'+t.len;},
   isWatched(t){const id=this.tripId(t);return this._trips.some(x=>x.id===id);},
   _tripDoc(t){return {o:t.o,d:t.d,dep:t.dep,ret:t.ret||'',len:t.len,
@@ -1727,16 +1722,8 @@ const Store={
     const t=this._trips.find(x=>x.id===id);if(t){t.alerts[ch]=on;this._persist();}},
   async setTarget(id,v){if(this.cloud){await this._F.updateDoc(this._F.doc(this._db,'users/'+this.user.uid+'/trips/'+id),{priceTarget:v||null});return;}
     const t=this._trips.find(x=>x.id===id);if(t){t.priceTarget=v||null;this._persist();}},
-  async signIn(){if(this.cloud)return this._cloudSignIn();
-    const prev=this._trips;this.user={uid:'u-demo',email:'you@gmail.com',name:'You',anon:false};
-    localStorage.setItem('faro.user',JSON.stringify(this.user));
-    const existing=JSON.parse(localStorage.getItem(this._key())||'[]');const ids=new Set(existing.map(t=>t.id));
-    this._trips=existing.concat(prev.filter(t=>!ids.has(t.id)));this._persist();this._emit();},
-  async signOut(){if(this.cloud)return this._cloudSignOut();
-    this.user={uid:'anon-'+Math.random().toString(36).slice(2,8),anon:true};
-    localStorage.setItem('faro.user',JSON.stringify(this.user));
-    this._trips=JSON.parse(localStorage.getItem(this._key())||'[]');this._emit();},
-  simulateScan(){this._scan++;this._emit();},
+  async signIn(){if(this.cloud)return this._cloudSignIn();},
+  async signOut(){if(this.cloud)return this._cloudSignOut();},
   /* — real cloud backend — */
   async _initCloud(){
     const A=await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js');
@@ -1805,12 +1792,11 @@ function renderAnswer(){
     ?'based on <b>'+v.obs+' observations</b> and a backtest that called this route right <b>'+v.hit+'% of the time</b>'
     :'based on <b>'+v.obs+' observations</b> — still learning this route';
   const watching=Store.isWatched({o:A.o,d:A.d,dep:v.dep,len:v.len});
-  const liveTag=Store._scan>0?'<span class="live"><span class="dot"></span>live · scan #'+(Store._scan+1)+'</span>':'';
   const L=bookLinks(v.itin);
   const compare=L&&L.compare.length?'<span class="altbook">or compare on '+L.compare.map(p=>'<a href="'+p.href+'" target="_blank" rel="noopener sponsored nofollow">'+esc(p.name)+'</a>').join(' · ')+'</span>':'';
   $('verdict').innerHTML=
    '<div class="verdict s-'+v.sig+'">'
-   +'<div class="ctx mono">'+esc(A.o)+' → '+esc(A.d)+' · <b>'+fmtD(v.dep)+' – '+fmtD(v.ret)+'</b> · '+v.len+' nights'+(A.flex?' · ±3d':'')+' '+liveTag+'</div>'
+   +'<div class="ctx mono">'+esc(A.o)+' → '+esc(A.d)+' · <b>'+fmtD(v.dep)+' – '+fmtD(v.ret)+'</b> · '+v.len+' nights'+(A.flex?' · ±3d':'')+'</div>'
    +'<div class="sigrow"><div class="signal">'+v.sig+'</div>'+win+'</div>'
    +'<div class="reason">'+esc(v.reason)+'</div>'
    +'<div class="conf"><span>Confidence</span><span class="track">'+[0,1,2,3,4].map(i=>'<span class="pip '+(i<pips?'on':'')+'"></span>').join('')+'</span>'
@@ -1926,14 +1912,17 @@ function renderStory(v){let data=v.story;
     +'<circle cx="'+pts[pts.length-1][0].toFixed(1)+'" cy="'+pts[pts.length-1][1].toFixed(1)+'" r="3.5" fill="var(--brand)"/></svg>';}
 
 /* ══════════ identity + Watch ══════════ */
-function renderIdentity(){const u=Store.user;if(!u)return;const cloud=!u.anon;
-  $('idstrip').innerHTML=cloud
+function renderIdentity(){const u=Store.user;if(!u)return;const signedIn=!u.anon;
+  if(!Store.cloud){
+    $('idstrip').innerHTML='<span class="iddot anon"></span><span>Offline — trips saved on <b>this device</b> only. They’ll sync once you’re back online.</span>';
+    return;}
+  $('idstrip').innerHTML=signedIn
     ?'<span class="iddot cloud"></span><span>Synced as <b>'+esc(u.email||u.name||'you')+'</b> · trips &amp; alerts follow you across devices</span>'
       +'<button class="btn-sm" id="authBtn">Sign out</button>'
     :'<span class="iddot anon"></span><span>Trips saved on <b>this device</b> only. Sign in to sync everywhere &amp; get alerts.</span>'
       +'<button class="btn-sm cloud" id="authBtn"><span class="gicon"></span> Sign in with Google</button>';
-  $('authBtn').onclick=async()=>{cloud?await Store.signOut():await Store.signIn();
-    toast(cloud?'Signed out — back to device-only':'Signed in '+(Store.cloud?'':'(demo) ')+'— your trips now sync');};}
+  $('authBtn').onclick=async()=>{signedIn?await Store.signOut():await Store.signIn();
+    toast(signedIn?'Signed out — back to device-only':'Signed in — your trips now sync across devices');};}
 
 function renderWatch(){const list=Store.trips();$('tabN').textContent=list.length;
   if(!list.length){$('tripList').innerHTML='<div class="empty">No pinned trips yet.<br>Open the <b>Answer</b> tab, find your trip, and hit <b>Pin &amp; watch</b>.<br>We’ll keep an eye on it and tell you the moment it’s time to buy.</div>';return;}
@@ -2110,7 +2099,6 @@ function bind(el,key,num){el.onchange=e=>{A[key]=num?+e.target.value:e.target.va
 bind($('f-o'),'o');bind($('f-d'),'d');bind($('f-dep'),'depMonth');bind($('f-len'),'len',true);
 $('f-flex').onchange=e=>{A.flex=e.target.checked;syncURL();renderAnswer();};
 $('copyLink').onclick=()=>{navigator.clipboard&&navigator.clipboard.writeText(location.href);toast('Link copied — share this exact verdict');};
-$('simBtn').onclick=()=>{Store.simulateScan();toast(Store.cloud?'Listening for the next scan (Firestore onSnapshot)':'New scan landed — verdicts updated live');};
 const tb=$('themeBtn');function applyTheme(){tb.textContent=document.documentElement.dataset.theme==='dark'?'☾':'☀';}
 tb.onclick=()=>{const c=document.documentElement.dataset.theme;document.documentElement.dataset.theme=c==='dark'?'light':'dark';
   localStorage.setItem('faro.theme',document.documentElement.dataset.theme);applyTheme();};
@@ -2118,8 +2106,8 @@ if(localStorage.getItem('faro.theme'))document.documentElement.dataset.theme=loc
 let toastT;function toast(m){const el=$('toast');el.textContent=m;el.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>el.classList.remove('show'),3600);}
 
 $('fbBody').innerHTML=(Store.cloud
-  ?'<b>Cloud mode is live.</b> Identity is Firebase <code>Auth</code> (anonymous, upgradable to Google); pinned trips live in Firestore <code>users/{uid}/trips</code> and sync across devices via <code>onSnapshot</code>; alert toggles + price target are fields a scheduled <code>Cloud Function</code> reads to push <code>FCM</code>/Telegram/email when your trip hits BUY, a new low, or a closing window.'
-  :'This build runs in <b>demo mode</b> — trips live in <code>localStorage</code> and alerts are simulated. Set <code>window.FARO_FIREBASE</code> (a public web config) and the same code paths become real <code>Auth</code> + Firestore + a scheduled alert <code>Cloud Function</code>. See <code>redesign/FIREBASE.md</code>.');
+  ?'Identity is Firebase <code>Auth</code> — every visitor starts anonymous and can upgrade to Google to sync. Pinned trips live in Firestore <code>users/{uid}/trips</code> and follow you across devices in real time via <code>onSnapshot</code>. Your alert toggles and price target are fields a scheduled <code>Cloud Function</code> reads to push <code>FCM</code> / Telegram / email the moment a trip hits BUY, a new low, or a closing best-buy window.'
+  :'You’re offline — trips are saved on <b>this device</b> only and will sync once you’re back online.');
 $('footnote').innerHTML='<b style="color:var(--muted)">Faro</b> — one honest <b style="color:var(--muted)">Answer</b> (buy / wait / watch with provenance), a synced <b style="color:var(--muted)">Watch</b> (pinned trips + per-trip alert channels + price target), and a route-first <b style="color:var(--muted)">Lab</b> (accuracy, money saved, forecast, cheapest days, raw grid). Built from real scraped Google Flights fares — informational only.';
 (function(){const el=$('affdisc');if(el&&MON.enabled&&MON.disclosure)el.textContent=MON.disclosure;})();
 
