@@ -1186,6 +1186,7 @@ def _html(p):
   --down:#4cb782;--up:#e5484d;--cloud:#4ea7fc;
   --shadow:0 14px 38px -18px rgba(0,0,0,.6);--shadow-lg:0 30px 66px -24px rgba(0,0,0,.72);
   --r-sm:10px;--r-md:14px;--r-lg:20px;--r-pill:999px;
+  --wrap:760px;          /* reading-width single column; widened on large displays */
 }
 html[data-theme="light"]{
   /* Cool-neutral light (not warm cream), same indigo accent. */
@@ -1207,13 +1208,17 @@ input,select{font-family:inherit}
 .aurora{position:fixed;inset:0;z-index:-1;background:
   radial-gradient(820px 460px at 50% -16%,color-mix(in srgb,var(--brand) 15%,transparent) 0,
   color-mix(in srgb,var(--brand) 4%,transparent) 46%,transparent 72%),var(--bg)}
-.wrap{max-width:760px;margin:0 auto;padding:0 18px 110px}
+.wrap{max-width:var(--wrap);margin:0 auto;padding:0 18px 110px}
 .hidden{display:none!important}
+/* Below the large breakpoint the Answer columns are transparent wrappers, so the
+   page stacks exactly as a single column (unchanged on mobile/tablet). They turn
+   into a real two-column layout only when there's room -- see the @media below. */
+.answer-grid,.answer-main,.answer-aside{display:contents}
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
 
 .shell{position:sticky;top:0;z-index:20;backdrop-filter:blur(10px);
   background:color-mix(in srgb,var(--bg) 82%,transparent);border-bottom:1px solid var(--line)}
-.shell-in{max-width:760px;margin:0 auto;display:flex;align-items:center;gap:12px;padding:11px 18px;flex-wrap:wrap}
+.shell-in{max-width:var(--wrap);margin:0 auto;display:flex;align-items:center;gap:12px;padding:11px 18px;flex-wrap:wrap}
 .brand{display:flex;align-items:center;gap:9px;font-weight:700;letter-spacing:-.01em}
 .mark{width:24px;height:24px;border-radius:7px;background:var(--brand);
   display:grid;place-items:center;color:var(--on-brand);font-weight:700;font-size:14px}
@@ -1440,6 +1445,25 @@ svg.fan{width:100%;height:150px;display:block;margin-top:8px}
   .shell-in{gap:8px}.outlook{order:5;width:100%}
 }
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}html{scroll-behavior:auto}}
+
+/* --- Large displays: use the extra width meaningfully ----------------------- *
+ * Widen the content column and split the Answer into a sticky two-column view:
+ * the DECISION (composer + verdict) pinned on the left while the supporting
+ * EVIDENCE (flights, flexibility, fare weather, story) scrolls on the right --
+ * so the buy/wait call stays in sight as you read the detail. The Watch list
+ * also flows into a responsive multi-column grid; Lab's two-up panels get room. */
+@media(min-width:1120px){
+  :root{--wrap:1120px}
+  .answer-grid{display:grid;grid-template-columns:minmax(360px,420px) minmax(0,1fr);
+    gap:28px;align-items:start}
+  .answer-main{display:flex;flex-direction:column;gap:14px;position:sticky;top:74px}
+  .answer-aside{display:flex;flex-direction:column;gap:14px;min-width:0}
+  .answer-main>*,.answer-aside>*{margin-top:0}
+  #tripList{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));
+    gap:14px;align-items:start}
+  #tripList>*{margin-top:0}.empty{grid-column:1/-1}
+}
+@media(min-width:1500px){:root{--wrap:1280px}}
 </style>
 </head>
 <body>
@@ -1463,8 +1487,10 @@ svg.fan{width:100%;height:150px;display:block;margin-top:8px}
   <div class="idstrip" id="idstrip"></div>
 
   <section id="view-answer" aria-label="Answer">
-    <div class="kicker">Tell me your trip</div>
-    <div class="composer">
+   <div class="answer-grid">
+    <div class="answer-main">
+     <div class="kicker">Tell me your trip</div>
+     <div class="composer">
       <div class="field"><label for="f-o">From</label><select id="f-o"></select></div>
       <div class="field"><label for="f-d">To</label><select id="f-d"></select></div>
       <div class="field"><label for="f-dep">Leave around</label><select id="f-dep"></select></div>
@@ -1473,13 +1499,17 @@ svg.fan{width:100%;height:150px;display:block;margin-top:8px}
         <label><input type="checkbox" id="f-flex" checked> dates flexible &plusmn;3 days</label>
         <button class="linkbtn" id="copyLink">&#128279; copy link to this trip</button>
       </div>
+     </div>
+     <div id="verdict">''' + prerender + r'''</div>
     </div>
-    <div id="verdict">''' + prerender + r'''</div>
-    <div class="panel" id="options"></div>
-    <div class="panel" id="flex"></div>
-    <div class="panel" id="weather"></div>
-    <div class="panel" id="story"></div>
-    <p class="trust" id="trust"></p>
+    <div class="answer-aside">
+     <div class="panel" id="options"></div>
+     <div class="panel" id="flex"></div>
+     <div class="panel" id="weather"></div>
+     <div class="panel" id="story"></div>
+     <p class="trust" id="trust"></p>
+    </div>
+   </div>
   </section>
 
   <section id="view-watch" class="hidden" aria-label="Watch">
