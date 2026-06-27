@@ -57,6 +57,9 @@ jobs:
           FLIGHTWATCH_HEADFUL: "1"
           FARO_FIREBASE_CONFIG: ${{ vars.FARO_FIREBASE_CONFIG }}
           FARO_FCM_VAPID_KEY: ${{ vars.FARO_FCM_VAPID_KEY }}
+          # Optional: switches the fuel proxy to EIA's official Brent spot. Unset
+          # -> the free, key-less Yahoo source. `collect` refreshes FX/fuel too.
+          EIA_API_KEY: ${{ secrets.EIA_API_KEY }}
         run: xvfb-run -a python -m flightwatch all
 
       - name: Publish route verdicts to Firestore (optional)

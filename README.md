@@ -70,6 +70,29 @@ fresh alerts, and commits everything back to the repo. Over weeks, the per-itine
 history becomes an intraday *booking curve* — which is what makes a real "should I book
 now?" prediction (and an honest backtest of it) possible.
 
+### When does the prediction run? (scheduled, not per-request)
+
+**All modelling is precomputed on a schedule and baked into a static site** — it does
+**not** run when a visitor opens the page. Each CI run trains the model once, writes the
+forecasts/analytics into `docs/index.html` (plus a lazy-loaded `explore.json`), and
+commits them; visitors just download that static JSON from GitHub Pages. This is the
+right design for a $0/static stack: training gradient-boosting models + cross-validation
++ conformal calibration per visitor would need an always-on server, cost money, add
+latency, and recompute identical numbers for everyone. Precompute-once, serve-static is
+cheaper, faster and reproducible.
+
+Two cadences keep it fresh:
+
+| Workflow | Cadence | Does | Cost |
+|----------|---------|------|------|
+| `scan` (`daily-scan.yml`) | every 6 h (+ on merge) | scrape fares → retrain → rebuild → commit | heavy (real browsers) |
+| `exogenous` (`exogenous.yml`) | **hourly** | refresh FX + jet-fuel → rebuild predictions (no scrape) → commit | tiny (a few HTTP calls) |
+
+So fares (the rate-limited, browser-heavy part) refresh every 6 h, while the cheap
+exogenous signals — and the predictions that fold them in — refresh **hourly**. Bump the
+`scan` cron for fresher fares (watch CI minutes / soft-block risk), or the `exogenous`
+cron toward `*/30` for an even fresher fuel proxy.
+
 ---
 
 ## Project layout
@@ -85,7 +108,9 @@ flightwatch/            # the Python package (importable, no path hacks)
   dashboard.py          #   renders docs/index.html
   alerts.py             #   optional free Telegram / email pushes
   publish.py            #   OPTIONAL scan -> Firestore writer (no-op without creds)
-  __main__.py           #   CLI:  python -m flightwatch [collect|build|all|alert|publish|backtest|diag]
+  exogenous.py          #   route-aware events + offline FX/jet-fuel features (per-route, NZD-based)
+  exogenous_fetch.py    #   pulls FX + Brent (jet-fuel proxy) from free, key-less sources
+  __main__.py           #   CLI:  python -m flightwatch [collect|build|all|alert|publish|backtest|exo|diag]
 config.yaml             # what to track + concurrency + monetization
 data/                   # the open dataset (monthly CSVs)
 docs/                   # the published three-view app (GitHub Pages)
@@ -214,13 +239,33 @@ observations (~120) it trains gradient-boosting models over the booking curve wi
 - **Honest validation** — error is **time-series cross-validated** (`TimeSeriesSplit`,
   forward-chaining), never a shuffled split that would leak the future and overstate skill.
 - **Calibrated bands** — a **split-conformal** interval whose width is learned from real
-  held-out residuals, so an "80% band" actually covers ~80% of outcomes.
-- **Seasonality features** — cyclical day-of-week / month / week-of-year encodings,
-  peak-season flags, lead-time buckets and a per-route price level.
+  held-out residuals, and now **per route** (a thin corridor gets its own wider band),
+  with the engine **auto-picking** conformal vs quantile bands by whichever actually hits
+  the target coverage on held-out data, so an "80% band" really covers ~80% of outcomes.
+- **Seasonality + market features** — cyclical day-of-week / month / week-of-year and
+  **booking-day** encodings, lead-time buckets, a per-route price level, plus:
+  - **Per-route demand calendar** — each route's NZ-origin holidays unioned with its *own
+    destination's* festivals (Sri Lankan New Year for CHC↔CMB, Diwali for AKL↔DEL), kept
+    **separate per route**, not one blurred global set.
+  - **Hierarchical pooling** — a shrunk (route × departure-month) price level so thin
+    nearby dates borrow strength from each other instead of overfitting.
+  - **Competition / supply** — carriers and offers on sale, nonstop availability and the
+    nonstop premium, fed straight into the model.
+  - **Exogenous hooks (offline)** — a jet-fuel index and **destination-currency FX** read
+    from optional CSVs in `data/exogenous/` (the traveller always books in NZD, so FX is
+    keyed on the foreign end); absent ⇒ a neutral signal, present ⇒ it sharpens
+    automatically. See [`data/exogenous/README.md`](data/exogenous/README.md).
+- **Direct drop probability** — a gradient-boosting **classifier** estimates P(the fare
+  falls meaningfully before departure), instead of only inferring it from the quantile
+  spread.
 
 Each recommendation exposes its full reasoning — **signal** (BUY / WAIT / WATCH),
 **confidence** (0–100%), the **whole predicted forward curve** with bands, the expected
 **forecast low**, **expected savings** from waiting and the **drop probability**.
+
+> Route context (which airports map to which country/currency, and each country's hot
+> months) ships with sensible NZ/LK/IN defaults and is overridable in `config.yaml` under
+> `route_context:` — no code changes needed to add a destination.
 
 **Offline AI layer** (`flightwatch/analytics.py`, no LLM or API) adds, on the dashboard:
 

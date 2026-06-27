@@ -256,6 +256,15 @@ def collect():
     slot = storage.slot_from_datetime(now.strftime("%Y-%m-%dT%H:%M:%SZ"))
     market = cfg.get("market", "nz")
 
+    # Best-effort: refresh the offline exogenous signals (FX + jet-fuel proxy) on
+    # the same cadence as the scan. Idempotent and fully non-fatal -- a network
+    # hiccup here must never stop fares being collected.
+    try:
+        from . import exogenous_fetch
+        exogenous_fetch.run()
+    except Exception as e:
+        print(f"Exogenous refresh skipped: {type(e).__name__}: {e}")
+
     rows = asyncio.run(_collect_async(cfg, now, scan_date, slot, market))
 
     storage.append_rows(rows)

@@ -1,0 +1,72 @@
+name: exogenous
+
+# Lightweight, HIGH-FREQUENCY refresh of the offline exogenous signals (FX +
+# jet-fuel proxy) and a dashboard rebuild -- WITHOUT the expensive browser scrape.
+#
+# Why a separate workflow from `scan`:
+#   * The fare scrape drives several real browsers and is the costly, rate-limited
+#     part, so it stays on its slower 6-hourly cadence. Fetching FX/fuel is just a
+#     few HTTP calls (seconds, no browsers), so it can run far more often.
+#   * Re-running `build` here folds the freshest fuel/FX into the model's
+#     predictions every hour, using the fares already on file -- so the published
+#     numbers track the market without re-scraping Google.
+#
+# Commits are tiny: only data/exogenous/*.csv and the rebuilt docs change, and the
+# heavy lazy-loaded explore.json only changes when fares do (6-hourly), so an
+# hourly run that finds no fare change produces a small index.html-only diff.
+
+on:
+  schedule:
+    # Hourly. Brent (BZ=F) moves intraday, so an hourly pull keeps the fuel proxy
+    # genuinely fresh; FX references update ~daily and are simply re-confirmed.
+    # Tune toward */30 if you want it even fresher (GitHub throttles <5-min crons).
+    - cron: "0 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: exogenous
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies (no browsers needed)
+        run: pip install -r requirements.txt
+
+      - name: Fetch exogenous signals and rebuild predictions
+        # EIA_API_KEY (optional secret) switches the fuel proxy to EIA's official
+        # daily Brent spot; unset -> the free, key-less Yahoo source is used.
+        env:
+          FARO_FIREBASE_CONFIG: ${{ vars.FARO_FIREBASE_CONFIG }}
+          FARO_FCM_VAPID_KEY: ${{ vars.FARO_FCM_VAPID_KEY }}
+          EIA_API_KEY: ${{ secrets.EIA_API_KEY }}
+        run: |
+          python -m flightwatch exo
+          python -m flightwatch build
+
+      - name: Commit refreshed signals + dashboard
+        run: |
+          git config user.name  "flightwatch-bot"
+          git config user.email "actions@github.com"
+          git add data/exogenous/ docs/
+          git diff --staged --quiet && { echo "no changes"; exit 0; }
+          git commit -m "Exogenous refresh: $(date -u +%Y-%m-%dT%H:%MZ)"
+          # Land cleanly even if the 6-hourly scan pushed while we built.
+          if ! git pull --rebase --autostash origin "${GITHUB_REF_NAME}"; then
+            echo "Rebase failed — aborting and falling back to merge"
+            git rebase --abort
+            git pull --no-edit origin "${GITHUB_REF_NAME}"
+          fi
+          git push

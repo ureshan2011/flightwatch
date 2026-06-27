@@ -1026,7 +1026,13 @@ def build():
         "ai": ai,
         "model": ({"mae": round(bundle["mae"]), "n": bundle["n"],
                    "conformal": (round(bundle["conformal"]) if bundle.get("conformal") else None),
-                   "coverage": round(bundle.get("coverage", 0.8) * 100)} if bundle else None),
+                   "coverage": round(bundle.get("coverage", 0.8) * 100),
+                   "band_method": bundle.get("band_method", "conformal"),
+                   "empirical_coverage": (round(bundle["empirical_coverage"] * 100)
+                                          if bundle.get("empirical_coverage") is not None else None),
+                   "features": len(bundle.get("features", [])),
+                   "drop_classifier": bool(bundle.get("drop_clf") is not None),
+                   "exogenous": bundle.get("exogenous")} if bundle else None),
         "currency": (df[df["status"] == "ok"]["currency"].iloc[0]
                      if not df.empty and (df["status"] == "ok").any() else "NZD"),
     }
