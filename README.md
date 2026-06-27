@@ -260,13 +260,27 @@ data — see `redesign/UX_REVAMP.md`:
   *with provenance* (observations + this route's backtested hit-rate), a 7-day
   **fare-weather** strip built from the model's conformal forecast curve, and the
   fare story from real daily history. The headline verdict is pre-rendered as
-  static HTML so it reads before any JavaScript runs.
+  static HTML so it reads before any JavaScript runs. Below it:
+  - **Flights on this trip** — the *distinct* flights tracked on that exact trip
+    in the latest scan: operating carrier(s), stops, the real connection
+    airport(s) and total duration, with the cheapest tagged. The same airline can
+    appear more than once (different routing/timing) — we show each, never
+    collapsing it to one line. **Exact flight numbers and departure times are
+    confirmed on the booking page** (the data source doesn't expose them, so we
+    don't invent them — the Book CTA deep-links there).
+  - **Save by being flexible** — the *Flexibility Engine*: for your trip it finds
+    the cheapest nearby alternative across three levers — shift the departure date,
+    change the trip length, or fly from another NZ origin — each with the saving
+    and a real Book link, plus a price-by-departure-date bar. Every suggested
+    saving must clear a gate of `max(4%, the model's conformal band)`, so it only
+    surfaces real money, never sampling noise.
 - **Lab** — pick a route, then dig into *that corridor*: a real, auditable
   walk-forward **backtest scorecard** (accuracy + money saved vs booking on the
-  day you first searched), the forecast fan with its conformal band, a
-  cheapest-day heatmap, and a trip finder over the route's slice of the
-  ~1,900-itinerary grid (lazy-loaded from `explore.json`, kept off the Answer's
-  critical path).
+  day you first searched), a **price surface** (a departure-date × trip-length
+  heatmap — flexibility at a glance, cheapest cell starred), the forecast fan with
+  its conformal band, a cheapest-day heatmap, and a trip finder over the route's
+  slice of the ~1,900-itinerary grid (lazy-loaded from `explore.json`, kept off
+  the Answer's critical path).
 - **Watch** — pin trips and get told when to buy. With **no Firebase config it
   works out of the box** in demo mode (trips in `localStorage`); add a config and
   the same code paths become real cross-device sync + per-user alerts (below).
